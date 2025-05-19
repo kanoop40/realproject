@@ -10,11 +10,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// connect MongoDB (local) -- เปลี่ยนเป็น MongoDB Atlas ได้
-mongoose.connect('mongodb://localhost:27017/chatapp', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => console.log('MongoDB connected'))
+// connect MongoDB Atlas
+mongoose.connect('mongodb+srv://punchkan2547:et3C4uENs8wqwnpH@cluster0.pco8lhg.mongodb.net/chatapp?retryWrites=true&w=majority&appName=Cluster0')
+  .then(() => console.log('MongoDB connected'))
   .catch(err => console.log('MongoDB connection error:', err));
 
 // Routes
