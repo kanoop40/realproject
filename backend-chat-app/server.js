@@ -23,7 +23,10 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/group', require('./routes/group'));
-
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/chat', require('./routes/chat'));
+app.use('/api/group', require('./routes/group'));
+app.use('/uploads', express.static('uploads'));
 // Socket.IO
 io.on('connection', (socket) => {
   console.log('a user connected');
@@ -32,3 +35,18 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
+io.on('connection', (socket) => {
+  console.log('user connected:', socket.id);
+
+  // user join room
+  socket.on('joinRoom', (roomId) => {
+    socket.join(roomId);
+  });
+
+  // ส่งข้อความ
+  socket.on('sendMessage', (data) => {
+    // บันทึกลง DB ด้วย model Chat (optionally)
+    // แจ้งไปยังทุกคนในห้อง
+    io.to(data.chatRoom).emit('receiveMessage', data);
+  });
+});
