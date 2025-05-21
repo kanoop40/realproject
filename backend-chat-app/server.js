@@ -22,11 +22,12 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/chat', require('./routes/chat'));
-app.use('/api/group', require('./routes/group'));
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/chat', require('./routes/chat'));
-app.use('/api/group', require('./routes/group'));
+
 app.use('/uploads', express.static('uploads'));
+app.use('/api/group', require('./routes/group'));
 // Socket.IO
 io.on('connection', (socket) => {
   console.log('a user connected');
