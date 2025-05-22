@@ -42,3 +42,5 @@ router.post('/send', auth, async (req, res) => {
   });
   res.json(chat);
 });
+
+module.exports = router;
