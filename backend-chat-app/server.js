@@ -19,6 +19,8 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err=>console.error(err));
 
 // Routes
+const profileRouter = require('./routes/profile');
+app.use(profileRouter); // หรือ app.use('/user', profileRouter);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/uploads', express.static('uploads'));

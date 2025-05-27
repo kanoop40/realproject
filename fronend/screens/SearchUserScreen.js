@@ -17,30 +17,41 @@ const ProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // ดึงข้อมูลโปรไฟล์จาก backend
   useEffect(() => {
-  const fetchProfile = async () => {
-    try {
-      const res = await api.get('/user/profile');
-      setProfile(res.data);
-    } catch (e) {
-      // เพิ่ม log เพื่อดูรายละเอียด error
-      console.log('Profile fetch error:', e?.response?.data || e.message || e);
-      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลโปรไฟล์");
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchProfile();
-}, []);
+    const fetchProfile = async () => {
+      try {
+        const res = await api.get('/user/profile');
+        // ตรวจสอบ response
+        if (res.data && res.data.username) {
+          setProfile(res.data);
+        } else {
+          throw new Error('Invalid profile data');
+        }
+      } catch (e) {
+  console.log('PROFILE FETCH ERROR:', e?.response?.data || e.message || e);
+  Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลโปรไฟล์");
+} finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       const res = await api.put('/user/profile', profile);
-      setProfile(res.data);
-      setEditMode(false);
-      Alert.alert("สำเร็จ", "บันทึกโปรไฟล์แล้ว");
+      // ตรวจสอบ response
+      if (res.data && res.data.username) {
+        setProfile(res.data);
+        setEditMode(false);
+        Alert.alert("สำเร็จ", "บันทึกโปรไฟล์แล้ว");
+      } else {
+        throw new Error('Invalid save response');
+      }
     } catch (e) {
+      console.log('PROFILE SAVE ERROR:', e?.response?.data || e.message || e);
       Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถบันทึกข้อมูลได้");
     } finally {
       setSaving(false);
