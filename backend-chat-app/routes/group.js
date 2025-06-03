@@ -7,7 +7,7 @@ const User = require('../models/User');
 // ดึงสมาชิกในกลุ่ม
 router.get('/:groupId/members', auth, async (req, res) => {
   try {
-    const group = await Group.findById(req.params.groupId).populate('members', 'name username role');
+    const group = await Group.findById(req.params.groupId).populate('members', 'firstName lastName username role');
     if (!group) return res.status(404).json({ msg: 'Group not found' });
     res.json(group.members);
   } catch (err) {
@@ -20,8 +20,6 @@ router.post('/:groupId/add-member', auth, async (req, res) => {
   try {
     const group = await Group.findById(req.params.groupId);
     if (!group) return res.status(404).json({ msg: 'Group not found' });
-
-    // ต้องเป็น admin หรือหัวหน้ากลุ่มเท่านั้น
     if (group.admin.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ msg: 'Permission denied' });
 
@@ -41,8 +39,6 @@ router.post('/:groupId/remove-member', auth, async (req, res) => {
   try {
     const group = await Group.findById(req.params.groupId);
     if (!group) return res.status(404).json({ msg: 'Group not found' });
-
-    // ต้องเป็น admin หรือหัวหน้ากลุ่มเท่านั้น
     if (group.admin.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ msg: 'Permission denied' });
 
@@ -60,8 +56,6 @@ router.post('/:groupId/transfer-admin', auth, async (req, res) => {
   try {
     const group = await Group.findById(req.params.groupId);
     if (!group) return res.status(404).json({ msg: 'Group not found' });
-
-    // ต้องเป็นหัวหน้ากลุ่มเท่านั้น (หรือ admin)
     if (group.admin.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ msg: 'Permission denied' });
 
@@ -82,8 +76,6 @@ router.delete('/:groupId', auth, async (req, res) => {
   try {
     const group = await Group.findById(req.params.groupId);
     if (!group) return res.status(404).json({ msg: 'Group not found' });
-
-    // ต้องเป็นหัวหน้ากลุ่มเท่านั้น (หรือ admin)
     if (group.admin.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ msg: 'Permission denied' });
 
@@ -99,8 +91,6 @@ router.post('/:groupId/set-send-permission', auth, async (req, res) => {
   try {
     const group = await Group.findById(req.params.groupId);
     if (!group) return res.status(404).json({ msg: 'Group not found' });
-
-    // ต้องเป็นหัวหน้ากลุ่มเท่านั้น (หรือ admin)
     if (group.admin.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ msg: 'Permission denied' });
 
@@ -118,8 +108,6 @@ router.post('/:groupId/auto-add-members', auth, async (req, res) => {
     const { role } = req.body; // 'student', 'staff'
     const group = await Group.findById(req.params.groupId);
     if (!group) return res.status(404).json({ msg: 'Group not found' });
-
-    // ต้องเป็นหัวหน้ากลุ่มเท่านั้น (หรือ admin)
     if (group.admin.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ msg: 'Permission denied' });
 

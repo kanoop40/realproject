@@ -4,7 +4,7 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 
 // GET /user/profile
-router.get('/user/profile', auth, async (req, res) => {
+router.get('/profile', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -12,12 +12,13 @@ router.get('/user/profile', auth, async (req, res) => {
     res.json({
       username: user.username,
       email: user.email || "",
-      firstName: user.firstName || user.name || "",
+      firstName: user.firstName || "",
       lastName: user.lastName || "",
-      faculty: user.faculty || user.department || "",
+      faculty: user.faculty || "",
       major: user.major || "",
       groupCode: user.groupCode || "",
-      avatar: user.avatar || user.image || "",
+      avatar: user.avatar || "",
+      role: user.role || "", // <-- เพิ่ม
     });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
@@ -25,7 +26,7 @@ router.get('/user/profile', auth, async (req, res) => {
 });
 
 // PUT /user/profile
-router.put('/user/profile', auth, async (req, res) => {
+router.put('/profile', auth, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -37,12 +38,13 @@ router.put('/user/profile', auth, async (req, res) => {
     res.json({
       username: user.username,
       email: user.email || "",
-      firstName: user.firstName || user.name || "",
+      firstName: user.firstName || "",
       lastName: user.lastName || "",
-      faculty: user.faculty || user.department || "",
+      faculty: user.faculty || "",
       major: user.major || "",
       groupCode: user.groupCode || "",
-      avatar: user.avatar || user.image || "",
+      avatar: user.avatar || "",
+      role: user.role || "", // <-- เพิ่ม
     });
   } catch (err) {
     res.status(500).json({ error: "Server error" });

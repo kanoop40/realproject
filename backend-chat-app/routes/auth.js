@@ -6,15 +6,22 @@ const jwt = require('jsonwebtoken');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { username, password, name, role, studentId, department } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const { username, password, email, firstName, lastName, faculty, major, groupCode } = req.body;
   try {
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({
-      username, password: hashedPassword, name, role, studentId, department
+      username,
+      password: hashedPassword,
+      email,
+      firstName,
+      lastName,
+      faculty,
+      major,
+      groupCode
     });
     res.json({ user });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ message: err.message });
   }
 });
 
@@ -22,11 +29,20 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username });
-  if (!user) return res.status(400).json({ msg: 'User not found' });
+  if (!user) return res.status(400).json({ message: 'Invalid credentials' });
   const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
-  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+  if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user });
 });
-
+router.post('/register', async (req, res) => {
+  try {
+    // ...register logic...
+    res.json({ user });
+  } catch (err) {
+    console.error('Register error:', err); // เพิ่ม log error
+    res.status(400).json({ message: err.message || "Register failed" });
+  }
+});
 module.exports = router;

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import api from '../api/api';
+import { launchImageLibrary } from 'react-native-image-picker';
 
 const ProfileScreen = ({ navigation }) => {
   const [profile, setProfile] = useState({
@@ -12,32 +13,62 @@ const ProfileScreen = ({ navigation }) => {
     major: "",
     groupCode: "",
     avatar: "",
+    role: "",
   });
   const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-  const fetchProfile = async () => {
-    try {
-      const res = await api.get('/user/profile');
-      setProfile(res.data);
-    } catch (e) {
-      // เพิ่ม log เพื่อดูรายละเอียด error
-      console.log('Profile fetch error:', e?.response?.data || e.message || e);
-      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลโปรไฟล์");
-    } finally {
-      setLoading(false);
+    const fetchProfile = async () => {
+      try {
+        const res = await api.get('/user/profile');
+        setProfile(res.data);
+      } catch (e) {
+        console.log('Profile fetch error:', e?.response?.data || e.message || e);
+        Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลโปรไฟล์");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const handlePickImage = async () => {
+    const result = await launchImageLibrary({ mediaType: 'photo' });
+    if (result.didCancel) return;
+    if (result.assets && result.assets.length > 0) {
+      const image = result.assets[0];
+      const data = new FormData();
+      data.append('avatar', {
+        uri: image.uri,
+        name: image.fileName || 'avatar.jpg',
+        type: image.type || 'image/jpeg',
+      });
+      try {
+        const res = await api.post('/user/upload-avatar', data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setProfile(prev => ({ ...prev, avatar: res.data.avatar }));
+        Alert.alert('สำเร็จ', 'เปลี่ยนรูปโปรไฟล์แล้ว');
+      } catch (e) {
+        Alert.alert('อัปโหลดรูปไม่สำเร็จ', e?.response?.data?.error || e.message);
+      }
     }
   };
-  fetchProfile();
-}, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await api.put('/user/profile', profile);
-      setProfile(res.data);
+      // ส่งเฉพาะ field ที่อนุญาตให้แก้ไข
+      const sendData = {
+        email: profile.email,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        avatar: profile.avatar,
+      };
+      const res = await api.put('/user/profile', sendData);
+      setProfile({ ...profile, ...res.data });
       setEditMode(false);
       Alert.alert("สำเร็จ", "บันทึกโปรไฟล์แล้ว");
     } catch (e) {
@@ -45,6 +76,14 @@ const ProfileScreen = ({ navigation }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ฟังก์ชันแปลง role เป็นข้อความสถานะ
+  const getRoleDisplay = (role) => {
+    if (!role) return 'ยังไม่ได้ระบุสถานะ';
+    if (role === 'teacher') return 'อาจารย์';
+    if (role === 'student') return 'นักศึกษา';
+    return role;
   };
 
   if (loading) {
@@ -58,12 +97,17 @@ const ProfileScreen = ({ navigation }) => {
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.profileBox}>
-        <View style={styles.avatarBox}>
+        <TouchableOpacity
+          onPress={editMode ? handlePickImage : undefined}
+          style={styles.avatarBox}
+          disabled={!editMode}
+        >
           <Image
             source={profile.avatar ? { uri: profile.avatar } : require('../assets/avatar-default.jpg')}
             style={styles.avatar}
           />
-        </View>
+          {editMode && <Text style={styles.changeAvatar}>เปลี่ยนรูป</Text>}
+        </TouchableOpacity>
         <Text style={styles.label}>รหัสนักศึกษา/พนักงาน</Text>
         <TextInput
           value={profile.username}
@@ -91,26 +135,30 @@ const ProfileScreen = ({ navigation }) => {
           editable={editMode}
           style={styles.input}
         />
+        <Text style={styles.label}>สถานะ</Text>
+        <TextInput
+          value={getRoleDisplay(profile.role)}
+          editable={false}
+          style={[styles.input, { backgroundColor: "#ececec" }]}
+        />
+        {/* ไม่อนุญาตให้แก้ไขข้อมูลด้านล่าง */}
         <Text style={styles.label}>คณะ</Text>
         <TextInput
           value={profile.faculty}
-          onChangeText={text => setProfile({ ...profile, faculty: text })}
-          editable={editMode}
-          style={styles.input}
+          editable={false}
+          style={[styles.input, { backgroundColor: "#ececec" }]}
         />
         <Text style={styles.label}>สาขา</Text>
         <TextInput
           value={profile.major}
-          onChangeText={text => setProfile({ ...profile, major: text })}
-          editable={editMode}
-          style={styles.input}
+          editable={false}
+          style={[styles.input, { backgroundColor: "#ececec" }]}
         />
         <Text style={styles.label}>รหัสกลุ่มเรียน</Text>
         <TextInput
           value={profile.groupCode}
-          onChangeText={text => setProfile({ ...profile, groupCode: text })}
-          editable={editMode}
-          style={styles.input}
+          editable={false}
+          style={[styles.input, { backgroundColor: "#ececec" }]}
         />
 
         <View style={styles.buttonRow}>
@@ -175,6 +223,12 @@ const styles = StyleSheet.create({
     borderRadius: 55,
     backgroundColor: '#cfd8dc',
     marginBottom: 6,
+  },
+  changeAvatar: {
+    color: '#1976d2',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 2,
   },
   label: {
     alignSelf: 'flex-start',

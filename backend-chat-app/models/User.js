@@ -11,6 +11,7 @@ const UserSchema = new mongoose.Schema({
   groupCode: String,
   avatar: String, // URL รูปโปรไฟล์
   role: { type: String, enum: ['admin', 'teacher', 'staff', 'student'], default: 'student' },
+  status: { type: String, enum: ['active', 'suspended'], default: 'active' },
 });
 
 module.exports = mongoose.model('User', UserSchema);

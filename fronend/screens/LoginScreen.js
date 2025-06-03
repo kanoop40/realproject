@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, KeyboardAvoidingView, Platform, Image, TouchableOpacity, StyleSheet } from 'react-native';
-
+import { View, TextInput, Text, KeyboardAvoidingView, Platform, Image, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import api from '../api/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
@@ -11,9 +11,16 @@ const LoginScreen = ({ navigation }) => {
   const onLogin = async () => {
     try {
       const res = await api.post('/auth/login', { username, password });
-      navigation.replace('Chat');
+      const token = res.data.token; // สมมุติ backend ส่ง {token: "..."}
+      if (token) {
+        await AsyncStorage.setItem('token', token);
+        navigation.replace('Chat');
+      } else {
+        setError('เข้าสู่ระบบไม่สำเร็จ (ไม่พบ token)');
+      }
     } catch (err) {
       setError('เข้าสู่ระบบไม่สำเร็จ');
+      Alert.alert("เข้าสู่ระบบไม่สำเร็จ", err?.response?.data?.message || 'กรุณาตรวจสอบรหัสผ่านและชื่อผู้ใช้');
     }
   };
 
@@ -24,7 +31,7 @@ const LoginScreen = ({ navigation }) => {
     >
       <View style={styles.innerContainer}>
         <Image
-          source={require('../assets/login-image.png')} // ใส่ไฟล์รูปภาพไว้ที่ assets/login-image.png
+          source={require('../assets/login-image.png')}
           style={styles.logo}
           resizeMode="contain"
         />

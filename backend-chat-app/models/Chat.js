@@ -7,7 +7,8 @@ const ChatSchema = new mongoose.Schema({
   fileUrl: { type: String }, // ถ้าเป็นไฟล์
   chatRoom: { type: mongoose.Schema.Types.ObjectId, ref: 'Group' }, // group หรือห้องแชท
   createdAt: { type: Date, default: Date.now },
-  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }] // สำหรับแสดงว่าใครอ่านแล้ว
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],// สำหรับแสดงว่าใครอ่านแล้ว
+  is_deleted: { type: Boolean, default: false }, 
 });
 
 module.exports = mongoose.model('Chat', ChatSchema);

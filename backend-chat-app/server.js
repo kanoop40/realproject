@@ -9,7 +9,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-
 app.use(cors());
 app.use(express.json());
 
@@ -19,12 +18,15 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err=>console.error(err));
 
 // Routes
-const profileRouter = require('./routes/profile');
-app.use(profileRouter); // หรือ app.use('/user', profileRouter);
+app.use('/api/user', require('./routes/profile'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/uploads', express.static('uploads'));
 app.use('/api/group', require('./routes/group'));
+app.use('/api/invite', require('./routes/invite'));
+app.use('/api/log', require('./routes/log'));
+app.use('/api/file', require('./routes/file'));
+app.use('/api/notification', require('./routes/notification'));
 
 // Socket.IO
 io.on('connection', (socket) => {
