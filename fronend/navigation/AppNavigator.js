@@ -4,10 +4,10 @@ import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ChatScreen from '../screens/ChatScreen';
-import ProfileScreen from '../screens/ProfileScreen'; // เพิ่ม import
-import CreateGroupScreen from '../screens/CreateGroupScreen'; // เพิ่ม import ถ้ามี
-import SearchUserScreen from '../screens/SearchUserScreen.js'; // เพิ่ม import ถ้ามี
-import ChatRoomScreen from '../screens/ChatRoomScreen'; // เพิ่ม import ถ้ามี
+import ProfileScreen from '../screens/ProfileScreen';
+import CreateGroupScreen from '../screens/CreateGroupScreen';
+import SearchUserScreen from '../screens/SearchUserScreen.js';
+import ChatRoomScreen from '../screens/ChatRoomScreen';
 
 const Stack = createStackNavigator();
 
@@ -17,7 +17,7 @@ const AppNavigator = () => (
       <Stack.Screen
         name="Login"
         component={LoginScreen}
-        options={{ headerShown: false }} // ซ่อน header
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Register"
@@ -32,7 +32,7 @@ const AppNavigator = () => (
       <Stack.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: 'โปรไฟล์ของฉัน' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="CreateGroup"

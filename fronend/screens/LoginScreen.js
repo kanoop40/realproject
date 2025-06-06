@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, KeyboardAvoidingView, Platform, Image, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  TextInput,
+  Text,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ImageBackground,
+  Dimensions,
+} from 'react-native';
 import api from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// ดึงขนาดจอ
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
@@ -11,7 +26,7 @@ const LoginScreen = ({ navigation }) => {
   const onLogin = async () => {
     try {
       const res = await api.post('/auth/login', { username, password });
-      const token = res.data.token; // สมมุติ backend ส่ง {token: "..."}
+      const token = res.data.token;
       if (token) {
         await AsyncStorage.setItem('token', token);
         navigation.replace('Chat');
@@ -25,118 +40,156 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+    <ImageBackground
+      source={require('../assets/login-image.png')}
+      style={styles.bg}
+      imageStyle={styles.bgImage}
+      resizeMode="cover" // เปลี่ยนเป็น cover เพื่อให้เต็มจอจริงๆ
     >
-      <View style={styles.innerContainer}>
-        <Image
-          source={require('../assets/login-image.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.label}>รหัสนักศึกษา/พนักงาน</Text>
-        <TextInput
-          value={username}
-          onChangeText={setUsername}
-          style={styles.input}
-          placeholder="Username"
-        />
-        <Text style={styles.label}>รหัสผ่าน</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          style={styles.input}
-          placeholder="Password"
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <View style={styles.buttonRow}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.innerContainer}>
+          <Text style={styles.title}>LOGIN</Text>
+          <View style={styles.inputSection}>
+            <View style={styles.inputRow}>
+              <View style={styles.inputLabelBox}>
+                <Text style={styles.inputLabel}>Username</Text>
+              </View>
+              <TextInput
+                value={username}
+                onChangeText={setUsername}
+                style={styles.input}
+                placeholder="Username"
+                placeholderTextColor="#ad8b34"
+                autoCapitalize="none"
+              />
+            </View>
+            <View style={styles.inputRow}>
+              <View style={styles.inputLabelBox}>
+                <Text style={styles.inputLabel}>Password</Text>
+              </View>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#ad8b34"
+              />
+            </View>
+          </View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity
-            style={[styles.button, styles.loginButton]}
+            style={styles.loginButton}
             onPress={onLogin}
           >
-            <Text style={styles.buttonText}>เข้าสู่ระบบ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.regisButton]}
-            onPress={() => navigation.navigate('Register')}
-          >
-            <Text style={styles.buttonText}>สมัครสมาชิก</Text>
+            <Text style={styles.loginButtonText}>Login</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  bg: {
+    flex: 1,
+    width: screenWidth,
+    height: screenHeight,
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  bgImage: {
+    width: screenWidth,
+    height: screenHeight,
+    opacity: 0.22,
+    position: 'absolute',
+    resizeMode: 'cover', // สำคัญสุด
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: '#f6f8fa',
   },
   innerContainer: {
-    marginHorizontal: 24,
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 24,
-    borderRadius: 16,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    width: '100%',
   },
-  logo: {
-    width: 140,
-    height: 140,
-    marginBottom: 20,
-  },
-  label: {
-    alignSelf: 'flex-start',
+  title: {
+    fontSize: 32,
     fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 2,
-    fontSize: 16,
-    color: '#333',
+    color: '#ffb700',
+    marginBottom: 32,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  inputSection: {
+    width: '100%',
+    marginBottom: 18,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    width: '100%',
+  },
+  inputLabelBox: {
+    backgroundColor: '#ffb700',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 88,
+  },
+  inputLabel: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
   input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-    backgroundColor: '#f3f3f3',
+    flex: 1,
+    backgroundColor: '#fff7df',
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    borderWidth: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    color: '#ad8b34',
+    fontWeight: '500',
   },
   error: {
     color: 'red',
-    marginBottom: 8,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    marginTop: 16,
-    width: '100%',
-    justifyContent: 'space-between',
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 4,
-    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: -6,
+    textAlign: 'center',
   },
   loginButton: {
-    backgroundColor: '#1976d2',
+    backgroundColor: '#ffb700',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    marginTop: 8,
+    alignItems: 'center',
+    width: '100%',
+    elevation: 2,
+    shadowColor: '#ddd',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
-  regisButton: {
-    backgroundColor: '#43a047',
-  },
-  buttonText: {
-    color: 'white',
+  loginButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 20,
+    letterSpacing: 1,
   },
 });
 
