@@ -9,6 +9,10 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { socket, socketEvents } from '../utils/socket';
 import { getMessage, sendMessage } from '../services/messageService';
+import VirtualizedMessageList from '../components/Chat/VirtualizedMessageList';
+import OptimizedImage from '../components/Common/OptimizedImage';
+import { MessageCacheService } from '../services/messageCacheService';
+import { usePerformance } from '../hooks/usePerformance';
 
 // Components
 import MessageBubble from '../components/Chat/MessageBubble';
@@ -31,9 +35,34 @@ const ChatScreen = () => {
   const [failedMessages, setFailedMessages] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  
+  const { scheduleFrameCallback, clearAllFrameCallbacks } = usePerformance();
   const flatListRef = useRef(null);
   const messageRetryQueue = useRef(new Map());
+
+ useEffect(() => {
+    const loadCachedMessages = async () => {
+      const cached = await MessageCacheService.getCachedMessages(chatId);
+      if (cached) {
+        setMessages(cached);
+        setLoading(false);
+      }
+      loadMessages(); // Load fresh messages
+    };
+
+
+    loadCachedMessages();
+    return () => clearAllFrameCallbacks();
+  }, [chatId]);
+
+
+ useEffect(() => {
+    if (messages.length > 0) {
+      scheduleFrameCallback(() => {
+        MessageCacheService.cacheMessages(chatId, messages);
+      });
+    }
+  }, [messages]);
+
 
   // Load initial messages
   useEffect(() => {
@@ -216,7 +245,13 @@ const ChatScreen = () => {
         onBack={() => navigation.goBack()}
         online={!offline}
       />
-      
+        <VirtualizedMessageList
+        messages={messages}
+        onRetry={retryMessage}
+        onEndReached={handleLoadMore}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+      />
       {offline && <OfflineNotice />}
       
       {failedMessages.length > 0 && (
@@ -266,6 +301,7 @@ const ChatScreen = () => {
       />
     </View>
   );
+  
 };
 
 export default ChatScreen;
