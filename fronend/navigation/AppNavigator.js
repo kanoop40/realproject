@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createSharedElementStackNavigator } from 'react-navigation-shared-element'; // Use Shared Element Navigator
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
-
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 const Stack = createSharedElementStackNavigator();
 
 const AppNavigator = () => (
@@ -35,7 +35,11 @@ const AppNavigator = () => (
           return [{ id: 'sharedLogo', animation: 'fade' }]; // Shared element transition for logo
         }}
       />
-      
+      <Stack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{ title: 'Admin Dashboard' }}
+      />
     </Stack.Navigator>
   </NavigationContainer>
 );
