@@ -1,38 +1,66 @@
 const multer = require('multer');
 const path = require('path');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// กำหนดขนาดไฟล์สูงสุด (5MB)
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+// กำหนดประเภทไฟล์ที่อนุญาต
+const ALLOWED_FILE_TYPES = {
+  'application/pdf': ['pdf'],
+  'application/msword': ['doc'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx'],
+  'image/jpeg': ['jpg', 'jpeg'],
+  'image/png': ['png']
+};
+
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'image/jpeg',
-    'image/png'
-  ];
-
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type'), false);
+  const fileType = ALLOWED_FILE_TYPES[file.mimetype];
+  
+  if (!fileType) {
+    return cb(new Error('ประเภทไฟล์ไม่ได้รับอนุญาต'), false);
   }
+
+  const extension = path.extname(file.originalname).toLowerCase();
+  if (!fileType.includes(extension.substring(1))) {
+    return cb(new Error('นามสกุลไฟล์ไม่ถูกต้อง'), false);
+  }
+
+  cb(null, true);
 };
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: MAX_FILE_SIZE
   },
   fileFilter: fileFilter
 });
 
-module.exports = upload;
+// Middleware สำหรับจัดการ error จาก multer
+const handleUploadError = (error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        message: 'ขนาดไฟล์เกิน 5MB'
+      });
+    }
+    return res.status(400).json({
+      message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์'
+    });
+  }
+  
+  if (error.message.includes('ประเภทไฟล์')) {
+    return res.status(400).json({
+      message: error.message
+    });
+  }
+  
+  next(error);
+};
+
+module.exports = {
+  upload,
+  handleUploadError
+};
