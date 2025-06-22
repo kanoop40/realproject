@@ -6,6 +6,15 @@ const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
 
+const express = require('express');
+const http = require('http');
+const initializeSocket = require('./config/socket');
+
+
+
+// Share io instance
+app.set('io', io);
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
@@ -48,4 +57,15 @@ socketHandler(io);
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+app.use('/uploads', express.static('uploads'));
+
+// สร้างโฟลเดอร์สำหรับเก็บไฟล์ถ้ายังไม่มี
+const fs = require('fs');
+const uploadDirs = ['uploads', 'uploads/thumbnails'];
+
+uploadDirs.forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 });
