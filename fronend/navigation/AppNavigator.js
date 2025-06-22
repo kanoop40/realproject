@@ -15,6 +15,9 @@ const AppNavigator = () => (
       initialRouteName="Welcome"
       screenOptions={{
         headerShown: false,
+        gestureEnabled: true,
+        cardOverlayEnabled: true,
+        cardStyle: { backgroundColor: 'transparent' },
       }}
     >
       <Stack.Screen
@@ -22,6 +25,7 @@ const AppNavigator = () => (
         component={WelcomeScreen}
         options={{
           headerShown: false,
+          cardStyle: { backgroundColor: '#f8f9fa' },
         }}
       />
       <Stack.Screen
@@ -29,29 +33,69 @@ const AppNavigator = () => (
         component={LoginScreen}
         options={{
           headerShown: false,
+          cardStyle: { backgroundColor: '#f8f9fa' },
           transitionSpec: {
-            open: { animation: 'timing', config: { duration: 800 } },
-            close: { animation: 'timing', config: { duration: 800 } },
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 1000,
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 800,
+              },
+            },
+          },
+          cardStyleInterpolator: ({ current, next, layouts }) => {
+            return {
+              cardStyle: {
+                opacity: current.progress,
+              },
+            };
           },
         }}
         sharedElements={(route, otherRoute, showing) => {
-          return [{ id: 'sharedLogo', animation: 'fade' }];
+          return [
+            {
+              id: 'logo',
+              animation: 'move',
+              resize: 'clip',
+              align: 'center-top',
+            },
+            {
+              id: 'loginButton',
+              animation: 'fade',
+              resize: 'clip',
+              align: 'center-bottom',
+            },
+          ];
         }}
       />
       <Stack.Screen
         name="AdminDashboard"
         component={AdminDashboardScreen}
-        options={{ headerShown: false }}
+        options={{ 
+          headerShown: false,
+          cardStyle: { backgroundColor: '#f5f5f5' },
+        }}
       />
       <Stack.Screen
         name="AddUser"
         component={AddUserScreen}
-        options={{ headerShown: false }}
+        options={{ 
+          headerShown: false,
+          cardStyle: { backgroundColor: '#f5f5f5' },
+        }}
       />
       <Stack.Screen
         name="UserDashboard"
         component={UserDashboardScreen}
-        options={{ headerShown: false }}
+        options={{ 
+          headerShown: false,
+          cardStyle: { backgroundColor: '#f5f5f5' },
+        }}
       />
     </Stack.Navigator>
   </NavigationContainer>
