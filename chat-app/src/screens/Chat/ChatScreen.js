@@ -1,226 +1,270 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform
+  ActivityIndicator,
+  RefreshControl,
+  Alert
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { useAuth } from '../../context/AuthContext';
-import MessageItem from '../../components/Message/MessageItem';
-import FileAttachment from '../../components/Message/FileAttachment';
-import { socket } from '../../utils/socket';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { socket, socketEvents } from '../utils/socket';
+import { getMessage, sendMessage } from '../services/messageService';
 
-const ChatScreen = ({ route, navigation }) => {
-  const { chatId, roomName } = route.params;
-  const { user } = useAuth();
+// Components
+import MessageBubble from '../components/Chat/MessageBubble';
+import MessageInput from '../components/Chat/MessageInput';
+import TypingIndicator from '../components/Chat/TypingIndicator';
+import ChatHeader from '../components/Chat/ChatHeader';
+import OfflineNotice from '../components/Common/OfflineNotice';
+import RetryBanner from '../components/Common/RetryBanner';
+
+const ChatScreen = () => {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const { chatId, chatName } = route.params;
+  
   const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const flatListRef = useRef();
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [offline, setOffline] = useState(!socket.connected);
+  const [failedMessages, setFailedMessages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  
+  const flatListRef = useRef(null);
+  const messageRetryQueue = useRef(new Map());
 
+  // Load initial messages
   useEffect(() => {
-    // ตั้งค่าชื่อห้องแชทใน header
-    navigation.setOptions({
-      title: roomName,
-      headerRight: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('ChatInfo', { chatId })}
-          className="mr-4"
-        >
-          <Icon name="information-circle-outline" size={24} color="#000" />
-        </TouchableOpacity>
-      )
-    });
-
-    // โหลดข้อความเก่า
     loadMessages();
-
-    // เข้าร่วมห้องแชท
-    socket.emit('join_chat', chatId);
-
-    // รับข้อความใหม่
-    socket.on('new_message', handleNewMessage);
-    
-    // รับสถานะการพิมพ์
-    socket.on('typing_status', handleTypingStatus);
+    socketEvents.joinChats([chatId]);
 
     return () => {
-      socket.off('new_message');
-      socket.off('typing_status');
+      socket.emit('leave_chat', chatId);
+    };
+  }, [chatId]);
+
+  // Socket event listeners
+  useEffect(() => {
+    const handleNewMessage = (data) => {
+      setMessages(prev => [data.message, ...prev]);
+      markMessageAsRead(data.message._id);
+    };
+
+    const handleTypingUpdate = ({ users }) => {
+      setTypingUsers(users);
+    };
+
+    const handleConnectionChange = (isConnected) => {
+      setOffline(!isConnected);
+      if (isConnected) {
+        retryFailedMessages();
+      }
+    };
+
+    socket.on('new_message', handleNewMessage);
+    socket.on('typing_update', handleTypingUpdate);
+    socket.on('connect', () => handleConnectionChange(true));
+    socket.on('disconnect', () => handleConnectionChange(false));
+
+    return () => {
+      socket.off('new_message', handleNewMessage);
+      socket.off('typing_update', handleTypingUpdate);
+      socket.off('connect');
+      socket.off('disconnect');
     };
   }, []);
 
-  const loadMessages = async () => {
+  const loadMessages = async (pageToLoad = 1) => {
     try {
-      const response = await fetch(
-        `${process.env.API_URL}/api/messages/${chatId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${user.token}`
-          }
-        }
-      );
-      const data = await response.json();
-      setMessages(data);
-    } catch (error) {
-      console.error('Load messages error:', error);
-    }
-  };
-
-  const handleNewMessage = (message) => {
-    setMessages(prev => [message, ...prev]);
-  };
-
-  const handleTypingStatus = ({ userId, isTyping }) => {
-    if (userId !== user.id) {
-      setIsTyping(isTyping);
-    }
-  };
-
-  const handleSend = async () => {
-    if (!inputMessage.trim()) return;
-
-    try {
-      const response = await fetch(
-        `${process.env.API_URL}/api/messages/send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${user.token}`
-          },
-          body: JSON.stringify({
-            chatId,
-            content: inputMessage
-          })
-        }
-      );
-
-      if (response.ok) {
-        setInputMessage('');
-        socket.emit('send_message', {
-          chatId,
-          content: inputMessage
-        });
+      setLoading(pageToLoad === 1);
+      const response = await getMessage(chatId, { page: pageToLoad });
+      
+      if (pageToLoad === 1) {
+        setMessages(response.messages);
+      } else {
+        setMessages(prev => [...prev, ...response.messages]);
       }
+      
+      setHasMore(response.hasMore);
+      setPage(pageToLoad);
     } catch (error) {
-      console.error('Send message error:', error);
+      Alert.alert('Error', 'ไม่สามารถโหลดข้อความได้');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const handleAttachment = async () => {
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadMessages(1);
+  };
+
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      loadMessages(page + 1);
+    }
+  };
+
+  const markMessageAsRead = (messageId) => {
+    socketEvents.markRead(chatId, [messageId]);
+  };
+
+  const handleSendMessage = async (content, file = null) => {
+    const tempId = Date.now().toString();
+    const newMessage = {
+      _id: tempId,
+      content,
+      file_id: null,
+      user_id: {
+        _id: 'kanoop40', // Current user from context
+      },
+      createdAt: new Date().toISOString(),
+      sending: true,
+    };
+
+    // Add to messages optimistically
+    setMessages(prev => [newMessage, ...prev]);
+
     try {
-      const result = await DocumentPicker.pick({
-        type: [
-          DocumentPicker.types.images,
-          DocumentPicker.types.pdf,
-          DocumentPicker.types.doc,
-          DocumentPicker.types.docx
-        ]
+      let fileId = null;
+      if (file) {
+        fileId = await uploadFile(file);
+      }
+
+      const sentMessage = await sendMessage({
+        chatId,
+        content,
+        fileId,
       });
 
-      const formData = new FormData();
-      formData.append('file', {
-        uri: result.uri,
-        type: result.type,
-        name: result.name
-      });
-      formData.append('chatId', chatId);
-
-      const response = await fetch(
-        `${process.env.API_URL}/api/files/upload`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${user.token}`
-          },
-          body: formData
-        }
+      // Replace temp message with actual message
+      setMessages(prev =>
+        prev.map(msg =>
+          msg._id === tempId ? sentMessage : msg
+        )
+      );
+    } catch (error) {
+      // Mark message as failed
+      setMessages(prev =>
+        prev.map(msg =>
+          msg._id === tempId
+            ? { ...msg, failed: true, sending: false }
+            : msg
+        )
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        socket.emit('send_message', {
-          chatId,
-          content: 'Sent a file',
-          fileId: data.file._id
-        });
-      }
-    } catch (error) {
-      console.error('File upload error:', error);
+      // Add to retry queue
+      messageRetryQueue.current.set(tempId, {
+        content,
+        file,
+        retryCount: 0,
+      });
+
+      setFailedMessages(prev => [...prev, tempId]);
     }
+  };
+
+  const retryMessage = async (messageId) => {
+    const messageData = messageRetryQueue.current.get(messageId);
+    if (!messageData) return;
+
+    // Update retry count
+    messageRetryQueue.current.set(messageId, {
+      ...messageData,
+      retryCount: messageData.retryCount + 1,
+    });
+
+    // Remove from failed messages
+    setFailedMessages(prev =>
+      prev.filter(id => id !== messageId)
+    );
+
+    // Retry sending
+    try {
+      setMessages(prev =>
+        prev.map(msg =>
+          msg._id === messageId
+            ? { ...msg, sending: true, failed: false }
+            : msg
+        )
+      );
+
+      await handleSendMessage(
+        messageData.content,
+        messageData.file
+      );
+
+      // Remove from retry queue on success
+      messageRetryQueue.current.delete(messageId);
+    } catch (error) {
+      // Will be handled by handleSendMessage
+      console.error('Retry failed:', error);
+    }
+  };
+
+  const retryFailedMessages = () => {
+    failedMessages.forEach(retryMessage);
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
-    >
-      <View className="flex-1">
-        {isTyping && (
-          <View className="p-2">
-            <Text className="text-gray-500">กำลังพิมพ์...</Text>
-          </View>
-        )}
+    <View className="flex-1 bg-white">
+      <ChatHeader
+        title={chatName}
+        onBack={() => navigation.goBack()}
+        online={!offline}
+      />
+      
+      {offline && <OfflineNotice />}
+      
+      {failedMessages.length > 0 && (
+        <RetryBanner
+          count={failedMessages.length}
+          onRetry={retryFailedMessages}
+        />
+      )}
 
+      {loading ? (
+        <ActivityIndicator size="large" className="mt-4" />
+      ) : (
         <FlatList
           ref={flatListRef}
           data={messages}
-          inverted
           keyExtractor={item => item._id}
+          inverted
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+            />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
           renderItem={({ item }) => (
-            <MessageItem
+            <MessageBubble
               message={item}
-              isOwnMessage={item.user_id === user.id}
-              onDelete={() => handleDeleteMessage(item._id)}
+              onRetry={() => retryMessage(item._id)}
+              onLongPress={() => handleMessageOptions(item)}
             />
           )}
+          ListFooterComponent={
+            loading && page > 1 ? (
+              <ActivityIndicator size="small" className="my-4" />
+            ) : null
+          }
         />
+      )}
 
-        <View className="border-t border-gray-200 p-2">
-          <View className="flex-row items-center">
-            <TouchableOpacity 
-              onPress={handleAttachment}
-              className="p-2"
-            >
-              <Icon name="attach" size={24} color="#666" />
-            </TouchableOpacity>
-
-            <TextInput
-              className="flex-1 bg-gray-100 rounded-full px-4 py-2 mx-2"
-              placeholder="พิมพ์ข้อความ..."
-              value={inputMessage}
-              onChangeText={text => {
-                setInputMessage(text);
-                socket.emit('typing', {
-                  chatId,
-                  isTyping: text.length > 0
-                });
-              }}
-              multiline
-            />
-
-            <TouchableOpacity 
-              onPress={handleSend}
-              disabled={!inputMessage.trim()}
-              className={`p-2 rounded-full ${
-                inputMessage.trim() ? 'bg-blue-500' : 'bg-gray-300'
-              }`}
-            >
-              <Icon 
-                name="send" 
-                size={20} 
-                color="#fff"
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+      <TypingIndicator users={typingUsers} />
+      
+      <MessageInput
+        chatId={chatId}
+        onSend={handleSendMessage}
+        disabled={offline}
+      />
+    </View>
   );
 };
 
