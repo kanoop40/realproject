@@ -5,7 +5,6 @@ import {
   Text,
   KeyboardAvoidingView,
   Platform,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -24,32 +23,33 @@ const LoginScreen = ({ navigation }) => {
   const [error, setError] = useState('');
 
   const onLogin = async () => {
-    try {
-      const res = await api.post('/auth/login', { username, password });
-      const { token, role } = res.data; // Assume the response includes the user's role
+  try {
+    const res = await api.post('/auth/login', { username, password });
+    const { token, role } = res.data; // Backend must return role accurately
 
-      if (token) {
-        await AsyncStorage.setItem('token', token);
+    if (token) {
+      await AsyncStorage.setItem('token', token);
 
-        // Navigate based on role
-        if (role === 'admin') {
-          navigation.replace('Dashboard');
-        } else if (role === 'student' || role === 'teacher') {
-          navigation.replace('Chat');
-        } else {
-          setError('Role ไม่ถูกต้อง');
-        }
+      // Normalize role to lowercase to avoid case sensitivity issues
+      const normalizedRole = role.toLowerCase();
+
+      // Navigate based on role
+      if (normalizedRole === 'admin') {
+        navigation.replace('AdminDashboard'); // Ensure route name matches AppNavigator
       } else {
-        setError('เข้าสู่ระบบไม่สำเร็จ (ไม่พบ token)');
+        navigation.replace('Dashboard'); // For other roles
       }
-    } catch (err) {
-      setError('เข้าสู่ระบบไม่สำเร็จ');
-      Alert.alert(
-        'เข้าสู่ระบบไม่สำเร็จ',
-        err?.response?.data?.message || 'กรุณาตรวจสอบรหัสผ่านและชื่อผู้ใช้'
-      );
+    } else {
+      setError('เข้าสู่ระบบไม่สำเร็จ (ไม่พบ token)');
     }
-  };
+  } catch (err) {
+    setError('เข้าสู่ระบบไม่สำเร็จ');
+    Alert.alert(
+      'เข้าสู่ระบบไม่สำเร็จ',
+      err?.response?.data?.message || 'กรุณาตรวจสอบรหัสผ่านและชื่อผู้ใช้'
+    );
+  }
+};
 
   return (
     <ImageBackground
