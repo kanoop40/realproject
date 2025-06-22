@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createSharedElementStackNavigator } from 'react-navigation-shared-element'; // Use Shared Element Navigator
+import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ChatScreen from '../screens/ChatScreen';
@@ -9,20 +10,44 @@ import CreateGroupScreen from '../screens/CreateGroupScreen';
 import SearchUserScreen from '../screens/SearchUserScreen.js';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 
-const Stack = createStackNavigator();
+const Stack = createSharedElementStackNavigator();
 
 const AppNavigator = () => (
   <NavigationContainer>
-    <Stack.Navigator initialRouteName="Login">
+    <Stack.Navigator
+      initialRouteName="Welcome"
+      screenOptions={{
+        headerShown: false, // Hide headers globally
+      }}
+    >
+      <Stack.Screen
+        name="Welcome"
+        component={WelcomeScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
       <Stack.Screen
         name="Login"
         component={LoginScreen}
-        options={{ headerShown: false }}
+        options={{
+          headerShown: false,
+          transitionSpec: {
+            open: { animation: 'timing', config: { duration: 800 } }, // Customize transition duration
+            close: { animation: 'timing', config: { duration: 800 } },
+          },
+        }}
+        sharedElements={(route, otherRoute, showing) => {
+          return [{ id: 'sharedLogo', animation: 'fade' }]; // Shared element transition for logo
+        }}
       />
       <Stack.Screen
         name="Register"
         component={RegisterScreen}
-        options={{ title: 'สมัครสมาชิก' }}
+        options={{
+          title: 'สมัครสมาชิก',
+          headerShown: true,
+        }}
       />
       <Stack.Screen
         name="Chat"

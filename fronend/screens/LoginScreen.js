@@ -26,25 +26,37 @@ const LoginScreen = ({ navigation }) => {
   const onLogin = async () => {
     try {
       const res = await api.post('/auth/login', { username, password });
-      const token = res.data.token;
+      const { token, role } = res.data; // Assume the response includes the user's role
+
       if (token) {
         await AsyncStorage.setItem('token', token);
-        navigation.replace('Chat');
+
+        // Navigate based on role
+        if (role === 'admin') {
+          navigation.replace('Dashboard');
+        } else if (role === 'student' || role === 'teacher') {
+          navigation.replace('Chat');
+        } else {
+          setError('Role ไม่ถูกต้อง');
+        }
       } else {
         setError('เข้าสู่ระบบไม่สำเร็จ (ไม่พบ token)');
       }
     } catch (err) {
       setError('เข้าสู่ระบบไม่สำเร็จ');
-      Alert.alert("เข้าสู่ระบบไม่สำเร็จ", err?.response?.data?.message || 'กรุณาตรวจสอบรหัสผ่านและชื่อผู้ใช้');
+      Alert.alert(
+        'เข้าสู่ระบบไม่สำเร็จ',
+        err?.response?.data?.message || 'กรุณาตรวจสอบรหัสผ่านและชื่อผู้ใช้'
+      );
     }
   };
 
   return (
     <ImageBackground
-      source={require('../assets/login-image.png')}
+      source={require('../assets/logo.png')}
       style={styles.bg}
       imageStyle={styles.bgImage}
-      resizeMode="cover" // เปลี่ยนเป็น cover เพื่อให้เต็มจอจริงๆ
+      resizeMode="cover"
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -81,10 +93,7 @@ const LoginScreen = ({ navigation }) => {
             </View>
           </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={onLogin}
-          >
+          <TouchableOpacity style={styles.loginButton} onPress={onLogin}>
             <Text style={styles.loginButtonText}>Login</Text>
           </TouchableOpacity>
         </View>
@@ -106,7 +115,7 @@ const styles = StyleSheet.create({
     height: screenHeight,
     opacity: 0.22,
     position: 'absolute',
-    resizeMode: 'cover', // สำคัญสุด
+    resizeMode: 'cover',
   },
   container: {
     flex: 1,
