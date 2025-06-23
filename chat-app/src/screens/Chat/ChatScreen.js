@@ -13,7 +13,7 @@ import { MessageCacheService } from '../../services/messageCacheService';
 import { usePerformance } from '../../hooks/usePerformance';
 
 
-import OptimizedImage from '../../components/Common/optimizedImage';
+import OptimizedImage from '../../components/Common/OptimizedImage';
 
 import VirtualizedMessageList from '../../components/Chat/VirtualizedMessageList';
 import MessageBubble from '../../components/Chat/MessageBubble';
