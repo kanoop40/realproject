@@ -5,12 +5,16 @@ const cors = require('cors');
 const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
-
-const express = require('express');
-const http = require('http');
 const initializeSocket = require('./config/socket');
 
-
+const app = express();
+const server = http.createServer(app);
+const io = socketIO(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"]
+  }
+});
 
 // Share io instance
 app.set('io', io);
@@ -25,22 +29,13 @@ const notificationRoutes = require('./routes/notification');
 // Import socket handler
 const socketHandler = require('./socket/socketHandler');
 
-const app = express();
-const server = http.createServer(app);
-const io = socketIO(server, {
-  cors: {
-    origin: process.env.CLIENT_URL,
-    methods: ["GET", "POST"]
-  }
-});
-
 // Middlewares
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/chatapp')
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -58,9 +53,11 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// Static file serving
 app.use('/uploads', express.static('uploads'));
 
-// สร้างโฟลเดอร์สำหรับเก็บไฟล์ถ้ายังไม่มี
+// Create upload directories if they don't exist
 const fs = require('fs');
 const uploadDirs = ['uploads', 'uploads/thumbnails'];
 

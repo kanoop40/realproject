@@ -1,17 +1,12 @@
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
-  messages_id: {
+  chatId: {
     type: mongoose.Schema.Types.ObjectId,
-    auto: true,
-    primary: true
-  },
-  chat_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Chatroom',
+    ref: 'Chat',
     required: true
   },
-  user_id: {
+  sender: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
@@ -20,13 +15,20 @@ const messageSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  time: {
+  messageType: {
+    type: String,
+    enum: ['text', 'image', 'file'],
+    default: 'text'
+  },
+  fileUrl: String,
+  fileName: String,
+  readBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  createdAt: {
     type: Date,
     default: Date.now
-  },
-  file_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'File'
   }
 });
 
