@@ -2,35 +2,44 @@ const express = require('express');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const userRoutes = require('./routes/userRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+const fileRoutes = require('./routes/fileRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const classroomRoutes = require('./routes/classroomRoutes');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const path = require('path');
 
-// เรียกใช้ dotenv เพื่อให้สามารถอ่านค่าจากไฟล์ .env ได้
+// Load env vars
 dotenv.config();
 
-// เชื่อมต่อกับ MongoDB
+// Connect to database
 connectDB();
 
 const app = express();
 
-// ทำให้ Express สามารถอ่านข้อมูลแบบ JSON จาก body ของ request ได้
+// Body parser
 app.use(express.json());
 
-// Route หลักสำหรับทดสอบ
-app.get('/', (req, res) => {
-    res.send('API is running...');
-});
+// Static folder
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// นำ User Routes เข้ามาใช้ โดยให้มี prefix เป็น /api/users
+// Mount routes
 app.use('/api/users', userRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/classrooms', classroomRoutes);
 
-// ใช้ Error Middleware ที่เราสร้างขึ้น
-// ต้องอยู่หลังจาก app.use(routes) เสมอ
+// Error handlers
 app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(
-    PORT,
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`)
-);
+const server = app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Setup Socket.io
+const setupSocket = require('./socket/socket');
+setupSocket(server);

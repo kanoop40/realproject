@@ -1,15 +1,20 @@
 const express = require('express');
 const router = express.Router();
-// นำเข้า authUser จาก controller
-const { registerUser, authUser } = require('../controllers/userController');
+const { 
+  registerUser, 
+  authUser,
+  getUserProfile,
+  updateUserProfile 
+} = require('../controllers/userController');
+const { protect } = require('../middleware/authMiddleware');
 
-// Route เดิมสำหรับการลงทะเบียน
-// POST /api/users
-router.route('/').post(registerUser);
-
-// Route ใหม่สำหรับการเข้าสู่ระบบ
-// POST /api/users/login
+// Authentication routes
+router.post('/register', registerUser);
 router.post('/login', authUser);
 
+// Profile routes
+router.route('/profile')
+  .get(protect, getUserProfile)
+  .put(protect, updateUserProfile);
 
 module.exports = router;
