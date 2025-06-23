@@ -2,8 +2,6 @@ import 'react-native-gesture-handler';
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-
-// แก้ path การ import ให้ตรงกับโครงสร้างโฟลเดอร์จริง
 import LoginScreen from './src/screens/Auth/LoginScreen';
 import ChatListScreen from './src/screens/Chat/ChatListScreen';
 import ChatScreen from './src/screens/Chat/ChatScreen';

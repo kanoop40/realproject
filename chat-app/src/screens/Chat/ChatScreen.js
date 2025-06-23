@@ -9,12 +9,13 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { socket, socketEvents, initializeSocketListeners } from '../../utils/socket';
 import { getMessage, sendMessage } from '../../services/messageService';
-import VirtualizedMessageList from '../../components/Chat/VirtualizedMessageList';
-import OptimizedImage from '../../../components/Common/OptimizedImage';
 import { MessageCacheService } from '../../services/messageCacheService';
 import { usePerformance } from '../../hooks/usePerformance';
 
-// Components
+
+import OptimizedImage from '../../components/Common/optimizedImage';
+
+import VirtualizedMessageList from '../../components/Chat/VirtualizedMessageList';
 import MessageBubble from '../../components/Chat/MessageBubble';
 import MessageInput from '../../components/Chat/MessageInput';
 import TypingIndicator from '../../components/Chat/TypingIndicator';

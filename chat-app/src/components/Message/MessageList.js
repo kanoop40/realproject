@@ -8,6 +8,7 @@ import {
 import { useMessageCache } from '../../hooks/useMessageCache';
 import MessageItem from './MessageItem';
 import { useAuth } from '../../context/AuthContext';
+import { socket } from '../../utils/socket';
 
 const MESSAGES_PER_PAGE = 30;
 
