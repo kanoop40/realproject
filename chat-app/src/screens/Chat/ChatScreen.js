@@ -7,20 +7,20 @@ import {
   Alert
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { socket, socketEvents } from '../utils/socket';
-import { getMessage, sendMessage } from '../services/messageService';
-import VirtualizedMessageList from '../components/Chat/VirtualizedMessageList';
-import OptimizedImage from '../components/Common/OptimizedImage';
-import { MessageCacheService } from '../services/messageCacheService';
-import { usePerformance } from '../hooks/usePerformance';
+import { socket, socketEvents, initializeSocketListeners } from '../../utils/socket';
+import { getMessage, sendMessage } from '../../services/messageService';
+import VirtualizedMessageList from '../../components/Chat/VirtualizedMessageList';
+import OptimizedImage from '../../../components/Common/OptimizedImage';
+import { MessageCacheService } from '../../services/messageCacheService';
+import { usePerformance } from '../../hooks/usePerformance';
 
 // Components
-import MessageBubble from '../components/Chat/MessageBubble';
-import MessageInput from '../components/Chat/MessageInput';
-import TypingIndicator from '../components/Chat/TypingIndicator';
-import ChatHeader from '../components/Chat/ChatHeader';
-import OfflineNotice from '../components/Common/OfflineNotice';
-import RetryBanner from '../components/Common/RetryBanner';
+import MessageBubble from '../../components/Chat/MessageBubble';
+import MessageInput from '../../components/Chat/MessageInput';
+import TypingIndicator from '../../components/Chat/TypingIndicator';
+import ChatHeader from '../../components/Chat/ChatHeader';
+import OfflineNotice from '../../components/Common/OfflineNotice';
+import RetryBanner from '../../components/Common/RetryBanner';
 
 const ChatScreen = () => {
   const route = useRoute();
