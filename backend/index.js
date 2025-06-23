@@ -29,7 +29,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/classrooms', classroomRoutes);
-
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Error handlers
 app.use(notFound);
 app.use(errorHandler);

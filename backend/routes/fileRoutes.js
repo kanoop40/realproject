@@ -1,16 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
-const { 
-  upload, 
-  uploadFile, 
-  downloadFile, 
-  deleteFile 
+const {
+    uploadFile,
+    downloadFile,
+    deleteFile,
+    getFileInfo
 } = require('../controllers/fileController');
 
-// Routes สำหรับจัดการไฟล์
-router.post('/upload', protect, upload.single('file'), uploadFile);
-router.get('/download/:fileId', protect, downloadFile);
+// File routes
+router.post('/upload', protect, uploadFile);
+router.get('/:fileId', protect, downloadFile);
 router.delete('/:fileId', protect, deleteFile);
+router.get('/info/:fileId', protect, getFileInfo);
 
 module.exports = router;
