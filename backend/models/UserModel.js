@@ -1,65 +1,72 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const userSchema = mongoose.Schema(
-  {
+const userSchema = mongoose.Schema({
     user_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      auto: true,
-      primary: true
+        type: mongoose.Schema.Types.ObjectId,
+        required: true,
+        auto: true,
+        primary: true
     },
-    username: { 
-      type: String, 
-      required: true, 
-      unique: true 
+    username: {
+        type: String,
+        required: true,
+        unique: true
     },
-    password: { 
-      type: String, 
-      required: true 
+    email: {
+        type: String,
+        required: true,
+        unique: true
     },
-    email: { 
-      type: String, 
-      required: true, 
-      unique: true 
+    password: {
+        type: String,
+        required: true
     },
-    firstName: { 
-      type: String, 
-      required: true 
+    firstName: {
+        type: String,
+        required: true
     },
-    lastName: { 
-      type: String, 
-      required: true 
+    lastName: {
+        type: String,
+        required: true
     },
-    faculty: { 
-      type: String 
+    faculty: {
+        type: String,
+        required: true
     },
-    major: { 
-      type: String 
+    major: {
+        type: String,
+        required: true
     },
-    groupCode: { 
-      type: String 
-    },
-    avatar: {
-      type: String,
-      default: "default-avatar-url"
+    groupCode: {
+        type: String,
+        required: true
     },
     role: {
-      type: String,
-      required: true,
-      enum: ['student', 'teacher', 'staff', 'admin'],
-      default: 'student'
+        type: String,
+        enum: ['admin', 'teacher', 'student'],
+        default: 'student'
     },
-    status: {
-      type: String,
-      enum: ['active', 'inactive'],
-      default: 'active'
+    avatar: {
+        type: String,
+        default: null
     }
-  },
-  {
-    timestamps: {
-      createdAt: 'createdAt',
-      updatedAt: 'updatedAt'
+}, {
+    timestamps: true
+});
+
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+    if (!this.isModified('password')) {
+        next();
     }
-  }
-);
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Match password method
+userSchema.methods.matchPassword = async function(enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
+};
+
+module.exports = mongoose.model('User', userSchema);

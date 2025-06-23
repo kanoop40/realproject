@@ -4,32 +4,39 @@ const User = require('../models/UserModel');
 
 const protect = asyncHandler(async (req, res, next) => {
     let token;
-
+    
     if (
         req.headers.authorization &&
         req.headers.authorization.startsWith('Bearer')
     ) {
         try {
-            // Get token from header
             token = req.headers.authorization.split(' ')[1];
+            console.log('Token:', token);
 
-            // Verify token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            console.log('Decoded token:', decoded);
+            console.log('Looking for user with ID:', decoded.id);
 
-            // Get user from token
-            req.user = await User.findById(decoded.id).select('-password');
+            const user = await User.findById(decoded.id);
+            console.log('Found user:', user);
 
+            if (!user) {
+                console.log('User not found in database');
+                res.status(401);
+                throw new Error('User not found');
+            }
+
+            req.user = user;
             next();
-        } catch (error) {
-            console.error(error);
-            res.status(401);
-            throw new Error('Not authorized, token failed');
-        }
-    }
 
-    if (!token) {
+        } catch (error) {
+            console.error('Error in auth middleware:', error);
+            res.status(401);
+            throw new Error('Not authorized: ' + error.message);
+        }
+    } else {
         res.status(401);
-        throw new Error('Not authorized, no token');
+        throw new Error('Not authorized, no token provided');
     }
 });
 
