@@ -2,10 +2,14 @@ import 'react-native-gesture-handler';
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import LoginScreen from './src/screens/LoginScreen';
-import RegisterScreen from './src/screens/RegisterScreen';
-import ChatListScreen from './src/screens/ChatListScreen';
-import ChatScreen from './src/screens/ChatScreen';
+
+// แก้ path การ import ให้ตรงกับโครงสร้างโฟลเดอร์จริง
+import LoginScreen from './src/screens/Auth/LoginScreen';
+import ChatListScreen from './src/screens/Chat/ChatListScreen';
+import ChatScreen from './src/screens/Chat/ChatScreen';
+import SearchScreen from './src/screens/Search/SearchScreen';
+import ProfileScreen from './src/screens/Profile/ProfileScreen';
+import GroupInfoScreen from './src/screens/Group/GroupInfoScreen';
 
 const Stack = createStackNavigator();
 
@@ -30,19 +34,29 @@ export default function App() {
           options={{ headerShown: false }}
         />
         <Stack.Screen 
-          name="Register" 
-          component={RegisterScreen} 
-          options={{ title: 'Sign Up' }}
-        />
-        <Stack.Screen 
           name="ChatList" 
           component={ChatListScreen} 
-          options={{ title: 'Conversations' }}
+          options={{ title: 'การสนทนา' }}
         />
         <Stack.Screen 
           name="Chat" 
           component={ChatScreen}
           options={({ route }) => ({ title: route.params?.userName })}
+        />
+        <Stack.Screen 
+          name="Search" 
+          component={SearchScreen}
+          options={{ title: 'ค้นหา' }}
+        />
+        <Stack.Screen 
+          name="Profile" 
+          component={ProfileScreen}
+          options={{ title: 'โปรไฟล์' }}
+        />
+        <Stack.Screen 
+          name="GroupInfo" 
+          component={GroupInfoScreen}
+          options={{ title: 'ข้อมูลกลุ่ม' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
