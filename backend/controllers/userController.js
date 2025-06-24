@@ -221,6 +221,54 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     }
 });
 
+const createUser = asyncHandler(async (req, res) => {
+  const {
+    username,
+    password,
+    firstName,
+    lastName,
+    email,
+    role,
+    faculty,
+    major,
+    groupCode
+  } = req.body;
+
+  const userExists = await User.findOne({ 
+    $or: [
+      { email },
+      { username }
+    ]
+  });
+
+  if (userExists) {
+    res.status(400);
+    throw new Error('ผู้ใช้นี้มีอยู่ในระบบแล้ว');
+  }
+
+  const user = await User.create({
+    username,
+    password,
+    firstName,
+    lastName,
+    email,
+    role,
+    faculty,
+    major,
+    groupCode
+  });
+
+  if (user) {
+    res.status(201).json({
+      message: 'สร้างผู้ใช้สำเร็จ'
+    });
+  } else {
+    res.status(400);
+    throw new Error('ข้อมูลผู้ใช้ไม่ถูกต้อง');
+  }
+});
+
+
 module.exports = {
     authUser,
     registerUser,
@@ -228,5 +276,6 @@ module.exports = {
     updateUserProfile,
     getUsers,      // เพิ่ม getUsers
     deleteUser,
+    createUser,
     updateUser     // เพิ่ม deleteUser
 };

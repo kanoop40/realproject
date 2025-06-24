@@ -7,12 +7,12 @@ const {
     updateUserProfile,
     getUsers,
     deleteUser,
-    updateUser
+    updateUser,
+    createUser // เพิ่ม controller สำหรับสร้างผู้ใช้
 } = require('../controllers/userController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 // Public routes
-router.post('/register', registerUser);
 router.post('/login', authUser);
 
 // Protected routes
@@ -21,7 +21,10 @@ router.route('/profile')
     .put(protect, updateUserProfile);
 
 // Admin routes
-router.get('/', protect, admin, getUsers); // แก้ไขลำดับ middleware
+router.route('/')
+    .get(protect, admin, getUsers)
+    .post(protect, admin, createUser); // เพิ่ม route สำหรับสร้างผู้ใช้
+
 router.route('/:id')
     .delete(protect, admin, deleteUser)
     .put(protect, admin, updateUser);

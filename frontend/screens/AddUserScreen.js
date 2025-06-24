@@ -67,6 +67,13 @@ const AddUserScreen = ({ navigation }) => {
     return;
   }
 
+  // ตรวจสอบรูปแบบอีเมล
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(formData.email)) {
+    setErrors(prev => ({...prev, email: 'รูปแบบอีเมลไม่ถูกต้อง'}));
+    return;
+  }
+
   try {
     setIsLoading(true);
     const token = await AsyncStorage.getItem('userToken');
@@ -82,6 +89,49 @@ const AddUserScreen = ({ navigation }) => {
         'Content-Type': 'application/json'
       }
     };
+
+    // เพิ่ม console.log เพื่อตรวจสอบ
+    console.log('Sending data:', formData);
+
+    const response = await axios.post(`${API_URL}/api/users`, formData, config);
+    
+    console.log('Response:', response.data);
+
+    Alert.alert('สำเร็จ', 'เพิ่มผู้ใช้เรียบร้อยแล้ว', [
+      {
+        text: 'ตกลง',
+        onPress: () => navigation.goBack()
+      }
+    ]);
+  } catch (error) {
+    console.error('Error adding user:', error.response || error);
+    let errorMessage = 'ไม่สามารถเพิ่มผู้ใช้ได้';
+    
+    if (error.response) {
+      switch (error.response.status) {
+        case 400:
+          errorMessage = 'ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบข้อมูลที่กรอก';
+          break;
+        case 401:
+          errorMessage = 'กรุณาเข้าสู่ระบบใหม่';
+          navigation.replace('Login');
+          break;
+        case 403:
+          errorMessage = 'คุณไม่มีสิทธิ์ในการเพิ่มผู้ใช้';
+          break;
+        case 409:
+          errorMessage = 'มีผู้ใช้นี้ในระบบแล้ว';
+          break;
+        default:
+          errorMessage = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเพิ่มผู้ใช้';
+      }
+    }
+    
+    Alert.alert('ผิดพลาด', errorMessage);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
