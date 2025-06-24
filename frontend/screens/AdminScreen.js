@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = 'http://10.0.2.2:5000';
 
@@ -24,11 +25,33 @@ const AdminScreen = ({ navigation }) => {
     try {
       setIsLoading(true);
       setError('');
-      const response = await axios.get(`${API_URL}/api/users`);
+
+      // ดึง token จาก AsyncStorage
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        navigation.replace('Login');
+        return;
+      }
+
+      // เพิ่ม token ใน headers
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      };
+
+      const response = await axios.get(`${API_URL}/api/users`, config);
       setUsers(response.data);
     } catch (error) {
-      console.error('Error fetching users:', error);
-      setError('Failed to load users');
+      console.error('Error fetching users:', error.response?.data || error);
+      if (error.response?.status === 401) {
+        // ถ้า token ไม่ถูกต้องหรือหมดอายุ ให้กลับไปหน้า login
+        await AsyncStorage.removeItem('userToken');
+        navigation.replace('Login');
+      } else {
+        setError(error.response?.data?.message || 'Failed to load users');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -39,37 +62,77 @@ const AdminScreen = ({ navigation }) => {
   }, []);
 
   // ลบผู้ใช้
-  const handleDeleteUser = (userId, username) => {
-    Alert.alert(
-      'Delete User',
-      `Are you sure you want to delete ${username}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(`${API_URL}/api/users/${userId}`);
-              fetchUsers(); // โหลดข้อมูลใหม่
-              Alert.alert('Success', 'User deleted successfully');
-            } catch (error) {
-              console.error('Error deleting user:', error);
-              Alert.alert('Error', 'Failed to delete user');
+  const handleDeleteUser = async (userId, username) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        navigation.replace('Login');
+        return;
+      }
+
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      };
+
+      Alert.alert(
+        'Delete User',
+        `Are you sure you want to delete ${username}?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await axios.delete(`${API_URL}/api/users/${userId}`, config);
+                fetchUsers(); // โหลดข้อมูลใหม่
+                Alert.alert('Success', 'User deleted successfully');
+              } catch (error) {
+                console.error('Error deleting user:', error.response?.data || error);
+                Alert.alert('Error', error.response?.data?.message || 'Failed to delete user');
+              }
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error:', error);
+      Alert.alert('Error', 'Failed to process request');
+    }
   };
 
   // ออกจากระบบ
-  const handleLogout = () => {
-    navigation.replace('Login');
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('userToken');
+      navigation.replace('Login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
+
+  // แสดงข้อมูลพื้นฐานของผู้ใช้
+  const renderUserInfo = (user) => (
+    <View style={styles.userInfo}>
+      <Text style={styles.username}>{user.username}</Text>
+      <Text style={styles.userDetail}>{user.firstName} {user.lastName}</Text>
+      <Text style={styles.userDetail}>{user.email}</Text>
+      {user.faculty && <Text style={styles.userDetail}>คณะ: {user.faculty}</Text>}
+      {user.major && <Text style={styles.userDetail}>สาขา: {user.major}</Text>}
+      {user.groupCode && <Text style={styles.userDetail}>กลุ่ม: {user.groupCode}</Text>}
+      <View style={styles.roleContainer}>
+        <Text style={[styles.roleText, styles[`role_${user.role}`]]}>
+          {user.role}
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -95,17 +158,7 @@ const AdminScreen = ({ navigation }) => {
         <ScrollView style={styles.content}>
           {users.map((user) => (
             <View key={user._id} style={styles.userCard}>
-              <View style={styles.userInfo}>
-                <Text style={styles.username}>{user.username}</Text>
-                <Text style={styles.userDetail}>{user.firstName} {user.lastName}</Text>
-                <Text style={styles.userDetail}>{user.email}</Text>
-                <View style={styles.roleContainer}>
-                  <Text style={[styles.roleText, styles[`role_${user.role}`]]}>
-                    {user.role}
-                  </Text>
-                </View>
-              </View>
-              
+              {renderUserInfo(user)}
               <View style={styles.actionButtons}>
                 <TouchableOpacity 
                   style={[styles.actionButton, styles.editButton]}
@@ -135,7 +188,6 @@ const AdminScreen = ({ navigation }) => {
     </SafeAreaView>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -278,5 +330,6 @@ const styles = StyleSheet.create({
     elevation: 5
   }
 });
+// styles ยังคงเหมือนเดิม
 
 export default AdminScreen;
