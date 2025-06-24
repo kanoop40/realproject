@@ -42,5 +42,16 @@ const protect = asyncHandler(async (req, res, next) => {
         throw new Error('No token provided');
     }
 });
+const admin = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        res.status(401);
+        throw new Error('Not authorized as an admin');
+    }
+};
 
-module.exports = { protect };
+module.exports = { 
+    protect,
+    admin  // เพิ่ม admin middleware
+};

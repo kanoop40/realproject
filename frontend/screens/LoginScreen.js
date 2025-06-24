@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axios from 'axios'; // ต้องติดตั้ง axios ก่อน: npm install axios
+import axios from 'axios';
 
 const API_URL = 'http://10.0.2.2:5000'; // สำหรับ Android Emulator
 // const API_URL = 'http://localhost:5000'; // สำหรับ iOS Simulator
@@ -10,64 +18,85 @@ const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-const handleLogin = async () => {
-  try {
-    setIsLoading(true);
-    const response = await axios.post(`${API_URL}/api/users/login`, {
-      username: username, // ส่ง username
-      password
-    });
-
-    const { token, ...user } = response.data;
-    
-    if (user.role === 'admin') {
-      navigation.replace('Admin');
-    } else {
-      Alert.alert('Error', 'Access denied. Admin only.');
+  const handleLogin = async () => {
+    if (!username || !password) {
+      setError('Please fill in all fields');
+      return;
     }
-  } catch (error) {
-    console.error('Login error:', error.response?.data || error);
-    const message = error.response?.data?.message || 'Login failed';
-    Alert.alert('Error', message);
-  } finally {
-    setIsLoading(false);
-  }
-};
+
+    try {
+      setIsLoading(true);
+      setError('');
+      console.log('Attempting login with:', { username, password });
+
+      const response = await axios.post(`${API_URL}/api/users/login`, {
+        username,
+        password
+      });
+
+      console.log('Login successful:', response.data);
+
+      const { token, role } = response.data;
+
+      // นำทางไปยังหน้าที่เหมาะสมตาม role
+      switch (role) {
+        case 'admin':
+          navigation.replace('Admin');
+          break;
+        case 'teacher':
+          navigation.replace('Teacher');
+          break;
+        case 'student':
+          navigation.replace('Student');
+          break;
+        default:
+          setError('Invalid role');
+      }
+    } catch (error) {
+      console.error('Login error:', error.response?.data || error);
+      setError(error.response?.data?.message || 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {/* Title */}
-        <Text style={styles.title}>
-          LOGIN
-        </Text>
+        <Text style={styles.title}>LOGIN</Text>
+        
+        {error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : null}
 
-        {/* Form */}
         <View style={styles.form}>
           <View style={styles.inputWrapper}>
-            <View style={styles.labelContainer}>
-              <Text style={styles.label}>Username</Text>
-            </View>
+            <Text style={styles.label}>Username</Text>
             <TextInput
               style={styles.input}
-              placeholder="Username"
+              placeholder="Enter your username"
               value={username}
-              onChangeText={setUsername}
+              onChangeText={(text) => {
+                setUsername(text);
+                setError('');
+              }}
               autoCapitalize="none"
               editable={!isLoading}
             />
           </View>
 
           <View style={styles.inputWrapper}>
-            <View style={styles.labelContainer}>
-              <Text style={styles.label}>Password</Text>
-            </View>
+            <Text style={styles.label}>Password</Text>
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder="Enter your password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                setError('');
+              }}
               secureTextEntry
               editable={!isLoading}
             />
@@ -78,8 +107,20 @@ const handleLogin = async () => {
             onPress={handleLogin}
             disabled={isLoading}
           >
-            <Text style={styles.loginButtonText}>
-              {isLoading ? 'Loading...' : 'Login'}
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginButtonText}>Login</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.registerButton}
+            onPress={() => navigation.navigate('Register')}
+            disabled={isLoading}
+          >
+            <Text style={styles.registerButtonText}>
+              Don't have an account? Register
             </Text>
           </TouchableOpacity>
         </View>
@@ -88,61 +129,70 @@ const handleLogin = async () => {
   );
 };
 
+// ย้าย styles มาไว้ในไฟล์เดียวกัน
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white'
+    backgroundColor: '#fff'
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 40
+    padding: 20,
+    justifyContent: 'center'
   },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFB800',
     textAlign: 'center',
-    marginBottom: 40
+    marginBottom: 30
   },
   form: {
-    width: '100%',
-    gap: 16
+    width: '100%'
   },
   inputWrapper: {
-    marginBottom: 16
-  },
-  labelContainer: {
-    backgroundColor: '#FFB800',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 4
+    marginBottom: 20
   },
   label: {
-    color: 'white',
-    fontSize: 14
+    fontSize: 16,
+    marginBottom: 5,
+    color: '#333'
   },
   input: {
-    backgroundColor: '#FFEDCC',
+    borderWidth: 1,
+    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
-    marginTop: 4
+    fontSize: 16
   },
   loginButton: {
-    backgroundColor: '#FFB800',
+    backgroundColor: '#007AFF',
+    padding: 15,
     borderRadius: 8,
-    padding: 14,
-    marginTop: 16
+    alignItems: 'center',
+    marginTop: 20
+  },
+  loginButtonDisabled: {
+    opacity: 0.7
   },
   loginButtonText: {
-    color: 'white',
-    textAlign: 'center',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '500'
+    fontWeight: 'bold'
+  },
+  registerButton: {
+    marginTop: 15,
+    padding: 10
+  },
+  registerButtonText: {
+    color: '#007AFF',
+    textAlign: 'center',
+    fontSize: 14
+  },
+  errorText: {
+    color: 'red',
+    textAlign: 'center',
+    marginBottom: 10
   }
 });
-
 
 export default LoginScreen;

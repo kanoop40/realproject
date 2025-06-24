@@ -2,9 +2,60 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/UserModel');
 const generateToken = require('../utils/generateToken');
 
-// @desc    Auth user & get token
-// @route   POST /api/users/login
-// @access  Public
+
+
+const getUsers = asyncHandler(async (req, res) => {
+  const users = await User.find({}).select('-password');
+  res.json(users);
+});
+const deleteUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id);
+    
+    if (user) {
+        await user.deleteOne();  // เปลี่ยนจาก remove() เป็น deleteOne()
+        res.json({ message: 'User removed' });
+    } else {
+        res.status(404);
+        throw new Error('User not found');
+    }
+});
+const updateUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id);
+    
+    if (user) {
+        user.username = req.body.username || user.username;
+        user.email = req.body.email || user.email;
+        user.firstName = req.body.firstName || user.firstName;
+        user.lastName = req.body.lastName || user.lastName;
+        user.faculty = req.body.faculty || user.faculty;
+        user.major = req.body.major || user.major;
+        user.groupCode = req.body.groupCode || user.groupCode;
+        user.role = req.body.role || user.role;
+        
+        if (req.body.password) {
+            user.password = req.body.password;
+        }
+
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser._id,
+            username: updatedUser.username,
+            email: updatedUser.email,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            faculty: updatedUser.faculty,
+            major: updatedUser.major,
+            groupCode: updatedUser.groupCode,
+            role: updatedUser.role
+        });
+    } else {
+        res.status(404);
+        throw new Error('User not found');
+    }
+});
+
+
 const authUser = asyncHandler(async (req, res) => {
     const { email, password, username } = req.body;
 
@@ -165,6 +216,9 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 module.exports = {
     authUser,
     registerUser,
-    getUserProfile,    // เพิ่มบรรทัดนี้
-    updateUserProfile  // เพิ่มบรรทัดนี้
+    getUserProfile,
+    updateUserProfile,
+    getUsers,      // เพิ่ม getUsers
+    deleteUser,
+    updateUser     // เพิ่ม deleteUser
 };
