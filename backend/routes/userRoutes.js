@@ -5,12 +5,12 @@ const {
     registerUser,
     getUserProfile,
     updateUserProfile,
-    getUsers,        // เพิ่ม getUsers
+    getUsers,
     deleteUser,
-    updateUser    // เพิ่ม deleteUser
+    updateUser
 } = require('../controllers/userController');
-
 const { protect, admin } = require('../middleware/authMiddleware');
+
 // Public routes
 router.post('/register', registerUser);
 router.post('/login', authUser);
@@ -21,12 +21,9 @@ router.route('/profile')
     .put(protect, updateUserProfile);
 
 // Admin routes
-router.route('/')
-    .get(protect, admin, getUsers);
-
+router.get('/', protect, admin, getUsers); // แก้ไขลำดับ middleware
 router.route('/:id')
     .delete(protect, admin, deleteUser)
     .put(protect, admin, updateUser);
-    
-    // เพิ่ม admin middleware
+
 module.exports = router;

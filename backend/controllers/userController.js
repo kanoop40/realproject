@@ -59,7 +59,7 @@ const updateUser = asyncHandler(async (req, res) => {
 const authUser = asyncHandler(async (req, res) => {
     const { email, password, username } = req.body;
 
-    // ค้นหาผู้ใช้จาก email หรือ username
+    // ค้นหาผู้ใช้
     const user = await User.findOne({
         $or: [
             { email: email?.toLowerCase() },
@@ -72,8 +72,16 @@ const authUser = asyncHandler(async (req, res) => {
 
     if (user && (await user.matchPassword(password))) {
         const token = generateToken(user._id);
-        console.log('Generated token for user:', user._id);
+        console.log('Generated token:', token); // เพิ่ม log
         
+        // ทดสอบ verify token ทันที
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            console.log('Token verified after generation:', decoded);
+        } catch (error) {
+            console.error('Token verification failed:', error);
+        }
+
         res.json({
             _id: user._id,
             username: user.username,

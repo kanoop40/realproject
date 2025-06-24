@@ -3,46 +3,59 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/UserModel');
 
 const protect = asyncHandler(async (req, res, next) => {
-    let token;
-    
-    if (req.headers.authorization?.startsWith('Bearer')) {
-        try {
-            token = req.headers.authorization.split(' ')[1];
-            console.log('Processing token:', token);
+    try {
+        console.log('Request Headers:', req.headers);
+        
+        let token;
+        
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+            try {
+                // แก้ไขการแยก token โดยใช้ trim() เพื่อลบช่องว่าง
+                token = req.headers.authorization.split('Bearer')[1].trim();
+                console.log('Extracted token:', token);
 
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            console.log('Decoded token:', decoded);
+                if (!token) {
+                    console.log('No token found after Bearer');
+                    res.status(401);
+                    throw new Error('No token provided');
+                }
 
-            // ใช้ lean() เพื่อดูข้อมูลดิบ
-            const user = await User.findById(decoded.id).lean();
-            console.log('Found user:', user);
+                // Verify token
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                console.log('Decoded token:', decoded);
 
-            if (!user) {
-                console.log('User not found for ID:', decoded.id);
+                // Get user from token
+                const user = await User.findById(decoded.id).select('-password');
+                console.log('Found user:', user);
+
+                if (!user) {
+                    console.log('No user found with token ID');
+                    res.status(401);
+                    throw new Error('User not found');
+                }
+
+                req.user = user;
+                next();
+            } catch (error) {
+                console.error('Token verification error:', error);
                 res.status(401);
-                throw new Error('User not found in database');
+                throw new Error(`Invalid token: ${error.message}`);
             }
-
-            req.user = user;
-            next();
-
-        } catch (error) {
-            console.error('Auth Error:', error);
+        } else {
+            console.log('No Authorization header or incorrect format');
             res.status(401);
-            if (error.name === 'JsonWebTokenError') {
-                throw new Error('Invalid token');
-            } else if (error.name === 'TokenExpiredError') {
-                throw new Error('Token expired');
-            } else {
-                throw new Error(`Authorization failed: ${error.message}`);
-            }
+            throw new Error('Not authorized, no token provided');
         }
-    } else {
+    } catch (error) {
+        console.error('Authentication error:', error);
         res.status(401);
-        throw new Error('No token provided');
+        throw error;
     }
 });
+
 const admin = (req, res, next) => {
+    console.log('Checking admin rights for user:', req.user);
+    
     if (req.user && req.user.role === 'admin') {
         next();
     } else {
@@ -51,7 +64,4 @@ const admin = (req, res, next) => {
     }
 };
 
-module.exports = { 
-    protect,
-    admin  // เพิ่ม admin middleware
-};
+module.exports = { protect, admin };
