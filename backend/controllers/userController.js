@@ -6,10 +6,17 @@ const generateToken = require('../utils/generateToken');
 // @route   POST /api/users/login
 // @access  Public
 const authUser = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, username } = req.body;
 
-    const user = await User.findOne({ email: email.toLowerCase() });
-    console.log('Login attempt for:', email);
+    // ค้นหาผู้ใช้จาก email หรือ username
+    const user = await User.findOne({
+        $or: [
+            { email: email?.toLowerCase() },
+            { username: username?.toLowerCase() }
+        ]
+    });
+    
+    console.log('Login attempt for:', email || username);
     console.log('Found user:', user);
 
     if (user && (await user.matchPassword(password))) {
@@ -27,7 +34,7 @@ const authUser = asyncHandler(async (req, res) => {
         });
     } else {
         res.status(401);
-        throw new Error('Invalid email or password');
+        throw new Error('Invalid credentials');
     }
 });
 
@@ -35,8 +42,9 @@ const authUser = asyncHandler(async (req, res) => {
 // @route   POST /api/users/register
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-    const { username, email, password, firstName, lastName, faculty, major, groupCode } = req.body;
+    const { username, email, password, firstName, lastName, faculty, major, groupCode, role } = req.body;
 
+    // ตรวจสอบว่าผู้ใช้มีอยู่แล้วหรือไม่
     const userExists = await User.findOne({ 
         $or: [
             { email: email.toLowerCase() }, 
@@ -49,6 +57,14 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new Error('User already exists');
     }
 
+    // ตรวจสอบว่า role ถูกต้องหรือไม่
+    const validRoles = ['admin', 'teacher', 'student'];
+    if (role && !validRoles.includes(role)) {
+        res.status(400);
+        throw new Error(`Invalid role. Role must be one of: ${validRoles.join(', ')}`);
+    }
+
+    // สร้างผู้ใช้ใหม่
     const user = await User.create({
         username: username.toLowerCase(),
         email: email.toLowerCase(),
@@ -57,11 +73,18 @@ const registerUser = asyncHandler(async (req, res) => {
         lastName,
         faculty,
         major,
-        groupCode
+        groupCode,
+        role: role || 'student' // ถ้าไม่ระบุ role จะเป็น student
     });
 
     if (user) {
-        console.log('Created user:', user);
+        console.log('Created user:', {
+            id: user._id,
+            username: user.username,
+            role: user.role,
+            createdAt: new Date().toISOString()
+        });
+
         res.status(201).json({
             _id: user._id,
             username: user.username,
@@ -76,7 +99,6 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new Error('Invalid user data');
     }
 });
-
 // @desc    Get user profile
 // @route   GET /api/users/profile
 // @access  Private
