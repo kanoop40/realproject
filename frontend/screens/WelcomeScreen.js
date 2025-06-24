@@ -5,25 +5,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const WelcomeScreen = ({ navigation }) => {
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <View className="flex-1 items-center justify-center p-8">
+      <View className="flex-1 items-center justify-center">
+        {/* Logo */}
         <Image
           source={require('../assets/logo.png')}
-          className="w-60 h-60 mb-8"
+          className="w-28 h-28 mb-20"
           resizeMode="contain"
         />
-        <Text className="text-3xl font-bold text-center mb-6">
-          Welcome to ChatApp
-        </Text>
-        <View className="w-full gap-4">
-          <TouchableOpacity 
-            className="bg-[#FFB800] py-4 rounded-lg"
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text className="text-white text-center text-lg font-semibold">
-              Login
-            </Text>
-          </TouchableOpacity>
-        </View>
+
+        {/* Login Button */}
+        <TouchableOpacity 
+          className="bg-[#FFB800] w-[150px] py-3 rounded-lg"
+          onPress={() => navigation.navigate('Login')}
+        >
+          <Text className="text-white text-center text-lg">
+            Login
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
