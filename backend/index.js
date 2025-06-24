@@ -1,29 +1,38 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const connectDB = require('./config/db');
+const mongoose = require('mongoose');
 const userRoutes = require('./routes/userRoutes');
-const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const { errorHandler } = require('./Middleware/errorMiddleware');
 
-// Load env vars
 dotenv.config();
-
-// Connect to database
-connectDB();
-
 const app = express();
 
-// Body parser
 app.use(express.json());
 
-// Mount routes
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI)
+    .then(async () => {
+        console.log('MongoDB Connected Successfully');
+        
+        // ทดสอบการเชื่อมต่อ
+        try {
+            const User = require('./models/UserModel');
+            const testConnection = await User.findOne();
+            console.log('Database connection test:', testConnection ? 'Successful' : 'No users found');
+        } catch (err) {
+            console.error('Database test error:', err);
+        }
+    })
+    .catch(err => {
+        console.error('MongoDB connection error:', err);
+        process.exit(1);
+    });
+
+// Routes
 app.use('/api/users', userRoutes);
 
-// Error handlers
-app.use(notFound);
+// Error Handling
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

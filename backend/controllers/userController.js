@@ -1,16 +1,21 @@
+const asyncHandler = require('express-async-handler');
+const User = require('../models/UserModel');
+const generateToken = require('../utils/generateToken');
+
+// @desc    Auth user & get token
+// @route   POST /api/users/login
+// @access  Public
 const authUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ email });
-   console.log('Found user:', user); // เพิ่ม log นี้
-    // Check password
+    const user = await User.findOne({ email: email.toLowerCase() });
+    console.log('Login attempt for:', email);
+    console.log('Found user:', user);
+
     if (user && (await user.matchPassword(password))) {
-        // สร้าง token ใหม่โดยใช้ _id
         const token = generateToken(user._id);
-        console.log('Generated token:', token); // เพื่อตรวจสอบ token
- console.log('User ID:', user._id); // เพิ่ม log นี้
-        console.log('Generated token:', token); // เพิ่ม log นี้
+        console.log('Generated token for user:', user._id);
+        
         res.json({
             _id: user._id,
             username: user.username,
@@ -18,7 +23,7 @@ const authUser = asyncHandler(async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            token: token // ส่ง token กลับไป
+            token
         });
     } else {
         res.status(401);
@@ -26,30 +31,27 @@ const authUser = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Register a new user
+// @route   POST /api/users/register
+// @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-    const { 
-        username, 
-        email, 
-        password, 
-        firstName, 
-        lastName,
-        faculty,
-        major,
-        groupCode 
-    } = req.body;
+    const { username, email, password, firstName, lastName, faculty, major, groupCode } = req.body;
 
-    // Check if user exists
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
+    const userExists = await User.findOne({ 
+        $or: [
+            { email: email.toLowerCase() }, 
+            { username: username.toLowerCase() }
+        ] 
+    });
 
     if (userExists) {
         res.status(400);
         throw new Error('User already exists');
     }
 
-    // Create user
     const user = await User.create({
-        username,
-        email,
+        username: username.toLowerCase(),
+        email: email.toLowerCase(),
         password,
         firstName,
         lastName,
@@ -59,10 +61,7 @@ const registerUser = asyncHandler(async (req, res) => {
     });
 
     if (user) {
-        // สร้าง token ใหม่โดยใช้ _id
-        const token = generateToken(user._id);
-        console.log('Generated token:', token); // เพื่อตรวจสอบ token
-
+        console.log('Created user:', user);
         res.status(201).json({
             _id: user._id,
             username: user.username,
@@ -70,10 +69,80 @@ const registerUser = asyncHandler(async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            token: token // ส่ง token กลับไป
+            token: generateToken(user._id)
         });
     } else {
         res.status(400);
         throw new Error('Invalid user data');
     }
 });
+
+// @desc    Get user profile
+// @route   GET /api/users/profile
+// @access  Private
+const getUserProfile = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    
+    if (user) {
+        res.json({
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            faculty: user.faculty,
+            major: user.major,
+            groupCode: user.groupCode,
+            role: user.role
+        });
+    } else {
+        res.status(404);
+        throw new Error('User not found');
+    }
+});
+
+// @desc    Update user profile
+// @route   PUT /api/users/profile
+// @access  Private
+const updateUserProfile = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    
+    if (user) {
+        user.username = req.body.username || user.username;
+        user.email = req.body.email || user.email;
+        user.firstName = req.body.firstName || user.firstName;
+        user.lastName = req.body.lastName || user.lastName;
+        user.faculty = req.body.faculty || user.faculty;
+        user.major = req.body.major || user.major;
+        user.groupCode = req.body.groupCode || user.groupCode;
+        
+        if (req.body.password) {
+            user.password = req.body.password;
+        }
+
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser._id,
+            username: updatedUser.username,
+            email: updatedUser.email,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            faculty: updatedUser.faculty,
+            major: updatedUser.major,
+            groupCode: updatedUser.groupCode,
+            role: updatedUser.role,
+            token: generateToken(updatedUser._id)
+        });
+    } else {
+        res.status(404);
+        throw new Error('User not found');
+    }
+});
+
+module.exports = {
+    authUser,
+    registerUser,
+    getUserProfile,    // เพิ่มบรรทัดนี้
+    updateUserProfile  // เพิ่มบรรทัดนี้
+};
