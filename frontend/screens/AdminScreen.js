@@ -7,7 +7,8 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -20,20 +21,17 @@ const AdminScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // ดึงข้อมูลผู้ใช้ทั้งหมด
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
       setError('');
 
-      // ดึง token จาก AsyncStorage
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         navigation.replace('Login');
         return;
       }
 
-      // เพิ่ม token ใน headers
       const config = {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -46,7 +44,6 @@ const AdminScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error fetching users:', error.response?.data || error);
       if (error.response?.status === 401) {
-        // ถ้า token ไม่ถูกต้องหรือหมดอายุ ให้กลับไปหน้า login
         await AsyncStorage.removeItem('userToken');
         navigation.replace('Login');
       } else {
@@ -61,7 +58,6 @@ const AdminScreen = ({ navigation }) => {
     fetchUsers();
   }, []);
 
-  // ลบผู้ใช้
   const handleDeleteUser = async (userId, username) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -78,24 +74,24 @@ const AdminScreen = ({ navigation }) => {
       };
 
       Alert.alert(
-        'Delete User',
-        `Are you sure you want to delete ${username}?`,
+        'ลบผู้ใช้',
+        `คุณแน่ใจหรือไม่ที่จะลบ ${username}?`,
         [
           {
-            text: 'Cancel',
+            text: 'ยกเลิก',
             style: 'cancel'
           },
           {
-            text: 'Delete',
+            text: 'ลบ',
             style: 'destructive',
             onPress: async () => {
               try {
                 await axios.delete(`${API_URL}/api/users/${userId}`, config);
-                fetchUsers(); // โหลดข้อมูลใหม่
-                Alert.alert('Success', 'User deleted successfully');
+                fetchUsers();
+                Alert.alert('สำเร็จ', 'ลบผู้ใช้เรียบร้อยแล้ว');
               } catch (error) {
-                console.error('Error deleting user:', error.response?.data || error);
-                Alert.alert('Error', error.response?.data?.message || 'Failed to delete user');
+                console.error('Error deleting user:', error);
+                Alert.alert('ผิดพลาด', 'ไม่สามารถลบผู้ใช้ได้');
               }
             }
           }
@@ -103,11 +99,10 @@ const AdminScreen = ({ navigation }) => {
       );
     } catch (error) {
       console.error('Error:', error);
-      Alert.alert('Error', 'Failed to process request');
+      Alert.alert('ผิดพลาด', 'ไม่สามารถดำเนินการได้');
     }
   };
 
-  // ออกจากระบบ
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('userToken');
@@ -117,19 +112,46 @@ const AdminScreen = ({ navigation }) => {
     }
   };
 
-  // แสดงข้อมูลพื้นฐานของผู้ใช้
   const renderUserInfo = (user) => (
     <View style={styles.userInfo}>
-      <Text style={styles.username}>{user.username}</Text>
-      <Text style={styles.userDetail}>{user.firstName} {user.lastName}</Text>
-      <Text style={styles.userDetail}>{user.email}</Text>
-      {user.faculty && <Text style={styles.userDetail}>คณะ: {user.faculty}</Text>}
-      {user.major && <Text style={styles.userDetail}>สาขา: {user.major}</Text>}
-      {user.groupCode && <Text style={styles.userDetail}>กลุ่ม: {user.groupCode}</Text>}
-      <View style={styles.roleContainer}>
-        <Text style={[styles.roleText, styles[`role_${user.role}`]]}>
-          {user.role}
-        </Text>
+      <View style={styles.leftContent}>
+        <View style={styles.avatarContainer}>
+          {user.profileImage ? (
+            <Image 
+              source={{ uri: `${API_URL}/${user.profileImage}` }}
+              style={styles.avatar}
+              defaultSource={require('../assets/default-avatar.png')}
+            />
+          ) : (
+            <View style={[styles.avatar, styles.emptyAvatar]}>
+              <Text style={styles.avatarText}>
+                {user.firstName && user.firstName[0].toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.userTextContainer}>
+          <Text style={styles.userName}>{user.firstName}</Text>
+          <Text style={styles.roleText}>
+            {user.role === 'student' ? 'นักศึกษา' : 
+             user.role === 'admin' ? 'ผู้ดูแลระบบ' : 
+             user.role === 'teacher' ? 'อาจารย์' : user.role}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.actionButtons}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.editButton]}
+          onPress={() => navigation.navigate('EditUser', { userId: user._id })}
+        >
+          <Icon name="edit" size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={() => handleDeleteUser(user._id, user.username)}
+        >
+          <Icon name="delete" size={18} color="#fff" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -159,21 +181,6 @@ const AdminScreen = ({ navigation }) => {
           {users.map((user) => (
             <View key={user._id} style={styles.userCard}>
               {renderUserInfo(user)}
-              <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.editButton]}
-                  onPress={() => navigation.navigate('EditUser', { userId: user._id })}
-                >
-                  <Icon name="edit" size={20} color="#fff" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.deleteButton]}
-                  onPress={() => handleDeleteUser(user._id, user.username)}
-                >
-                  <Icon name="delete" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
             </View>
           ))}
         </ScrollView>
@@ -188,6 +195,7 @@ const AdminScreen = ({ navigation }) => {
     </SafeAreaView>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -219,7 +227,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 15
+    backgroundColor: '#fff'
   },
   loadingContainer: {
     flex: 1,
@@ -239,67 +247,68 @@ const styles = StyleSheet.create({
   },
   userCard: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+    padding: 10,
+    marginBottom: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee'
   },
   userInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  leftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1
   },
-  username: {
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    overflow: 'hidden',
+    backgroundColor: '#E1E1E1'
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20
+  },
+  emptyAvatar: {
+    backgroundColor: '#E1E1E1',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  avatarText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4
+    color: '#666'
   },
-  userDetail: {
-    fontSize: 14,
-    color: '#666',
+  userTextContainer: {
+    flex: 1,
+    justifyContent: 'center'
+  },
+  userName: {
+    fontSize: 16,
+    color: '#000',
     marginBottom: 2
   },
-  roleContainer: {
-    marginTop: 5
-  },
   roleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    alignSelf: 'flex-start'
-  },
-  role_admin: {
-    backgroundColor: '#007AFF',
-    color: '#fff'
-  },
-  role_teacher: {
-    backgroundColor: '#34C759',
-    color: '#fff'
-  },
-  role_student: {
-    backgroundColor: '#FF9500',
-    color: '#fff'
+    fontSize: 14,
+    color: '#666'
   },
   actionButtons: {
     flexDirection: 'row',
     marginLeft: 10
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8
@@ -330,6 +339,5 @@ const styles = StyleSheet.create({
     elevation: 5
   }
 });
-// styles ยังคงเหมือนเดิม
 
 export default AdminScreen;

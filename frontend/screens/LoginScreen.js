@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // เพิ่ม import
 
-const API_URL = 'http://10.0.2.2:5000'; // สำหรับ Android Emulator
-// const API_URL = 'http://localhost:5000'; // สำหรับ iOS Simulator
+const API_URL = 'http://10.0.2.2:5000';
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
@@ -22,14 +22,14 @@ const LoginScreen = ({ navigation }) => {
 
   const handleLogin = async () => {
     if (!username || !password) {
-      setError('Please fill in all fields');
+      setError('กรุณากรอกข้อมูลให้ครบ');
       return;
     }
 
     try {
       setIsLoading(true);
       setError('');
-      console.log('Attempting login with:', { username, password });
+      console.log('Attempting login with:', { username });
 
       const response = await axios.post(`${API_URL}/api/users/login`, {
         username,
@@ -38,25 +38,22 @@ const LoginScreen = ({ navigation }) => {
 
       console.log('Login successful:', response.data);
 
-      const { token, role } = response.data;
+      // เก็บข้อมูลผู้ใช้และ token
+      await AsyncStorage.setItem('userToken', response.data.token);
+      await AsyncStorage.setItem('userData', JSON.stringify(response.data));
 
-      // นำทางไปยังหน้าที่เหมาะสมตาม role
-      switch (role) {
-        case 'admin':
-          navigation.replace('Admin');
-          break;
-        case 'teacher':
-          navigation.replace('Teacher');
-          break;
-        case 'student':
-          navigation.replace('Student');
-          break;
-        default:
-          setError('Invalid role');
+      // นำทางตาม role
+      if (response.data.role === 'admin') {
+        navigation.replace('Admin');
+      } else {
+        navigation.replace('User'); // นำทางไปหน้า User สำหรับ role อื่นๆ
       }
     } catch (error) {
       console.error('Login error:', error.response?.data || error);
-      setError(error.response?.data?.message || 'Login failed');
+      setError(error.response?.data?.message || 'เข้าสู่ระบบล้มเหลว');
+      
+      // ลบข้อมูลที่อาจจะมีการบันทึกไว้
+      await AsyncStorage.multiRemove(['userToken', 'userData']);
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +62,7 @@ const LoginScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>LOGIN</Text>
+        <Text style={styles.title}>เข้าสู่ระบบ</Text>
         
         {error ? (
           <Text style={styles.errorText}>{error}</Text>
@@ -73,10 +70,10 @@ const LoginScreen = ({ navigation }) => {
 
         <View style={styles.form}>
           <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={styles.label}>ชื่อผู้ใช้</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your username"
+              placeholder="กรอกชื่อผู้ใช้"
               value={username}
               onChangeText={(text) => {
                 setUsername(text);
@@ -88,10 +85,10 @@ const LoginScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>รหัสผ่าน</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder="กรอกรหัสผ่าน"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -110,18 +107,8 @@ const LoginScreen = ({ navigation }) => {
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginButtonText}>Login</Text>
+              <Text style={styles.loginButtonText}>เข้าสู่ระบบ</Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.registerButton}
-            onPress={() => navigation.navigate('Register')}
-            disabled={isLoading}
-          >
-            <Text style={styles.registerButtonText}>
-              Don't have an account? Register
-            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -129,7 +116,6 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
-// ย้าย styles มาไว้ในไฟล์เดียวกัน
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -178,15 +164,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold'
-  },
-  registerButton: {
-    marginTop: 15,
-    padding: 10
-  },
-  registerButtonText: {
-    color: '#007AFF',
-    textAlign: 'center',
-    fontSize: 14
   },
   errorText: {
     color: 'red',
