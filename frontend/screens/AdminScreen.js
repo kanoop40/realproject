@@ -22,38 +22,44 @@ const AdminScreen = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchUsers = async () => {
-    try {
-      setIsLoading(true);
-      setError('');
+ const fetchUsers = async () => {
+  try {
+    setIsLoading(true);
+    setError('');
 
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        navigation.replace('Login');
-        return;
-      }
-
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      };
-
-      const response = await axios.get(`${API_URL}/api/users`, config);
-      setUsers(response.data);
-    } catch (error) {
-      console.error('Error fetching users:', error.response?.data || error);
-      if (error.response?.status === 401) {
-        await AsyncStorage.removeItem('userToken');
-        navigation.replace('Login');
-      } else {
-        setError(error.response?.data?.message || 'Failed to load users');
-      }
-    } finally {
-      setIsLoading(false);
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      navigation.replace('Login');
+      return;
     }
-  };
+
+    const config = {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    const response = await axios.get(`${API_URL}/api/users`, config);
+    
+    // เพิ่มการตรวจสอบข้อมูล
+    if (response.data) {
+      setUsers(response.data);
+    } else {
+      setError('ไม่พบข้อมูลผู้ใช้');
+    }
+  } catch (error) {
+    console.error('Error fetching users:', error.response?.data || error);
+    if (error.response?.status === 401) {
+      await AsyncStorage.removeItem('userToken');
+      navigation.replace('Login');
+    } else {
+      setError(error.response?.data?.message || 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // เรียกใช้ fetchUsers เมื่อกลับมาที่หน้านี้
   useFocusEffect(
@@ -116,89 +122,98 @@ const AdminScreen = ({ navigation, route }) => {
     }
   };
 
-  const renderUserInfo = (user) => (
-    <View style={styles.userInfo}>
-      <View style={styles.leftContent}>
-        <View style={styles.avatarContainer}>
-          {user.profileImage ? (
-            <Image 
-              source={{ uri: `${API_URL}/${user.profileImage}` }}
-              style={styles.avatar}
-              defaultSource={require('../assets/default-avatar.png')}
-            />
-          ) : (
-            <View style={[styles.avatar, styles.emptyAvatar]}>
-              <Text style={styles.avatarText}>
-                {user.firstName && user.firstName[0].toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.userTextContainer}>
-          <Text style={styles.userName}>{user.firstName}</Text>
-          <Text style={styles.roleText}>
-            {user.role === 'student' ? 'นักศึกษา' : 
-             user.role === 'admin' ? 'ผู้ดูแลระบบ' : 
-             user.role === 'teacher' ? 'อาจารย์' : user.role}
-          </Text>
-        </View>
+  const renderUserInfo = (user) => (  // user คือพารามิเตอร์ที่ส่งเข้ามา
+  <View style={styles.userInfo}>
+    <View style={styles.leftContent}>
+      <View style={styles.avatarContainer}>
+        {user.profileImage ? (
+          <Image 
+            source={{ uri: `${API_URL}/${user.profileImage}` }}
+            style={styles.avatar}
+            defaultSource={require('../assets/default-avatar.png')}
+          />
+        ) : (
+          <View style={[styles.avatar, styles.emptyAvatar]}>
+            <Text style={styles.avatarText}>
+              {user.firstName && user.firstName[0].toUpperCase()}
+            </Text>
+          </View>
+        )}
       </View>
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-   style={[styles.actionButton, styles.editButton]}
-  onPress={() => navigation.navigate('EditUser', { userId: item._id })}
->
-         
-          <Icon name="edit" size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDeleteUser(user._id, user.username)}
-        >
-          <Icon name="delete" size={18} color="#fff" />
-        </TouchableOpacity>
+      <View style={styles.userTextContainer}>
+        <Text style={styles.userName}>{user.firstName}</Text>
+        <Text style={styles.roleText}>
+          {user.role === 'student' ? 'นักศึกษา' : 
+           user.role === 'admin' ? 'ผู้ดูแลระบบ' : 
+           user.role === 'teacher' ? 'อาจารย์' : user.role}
+        </Text>
       </View>
     </View>
-  );
+    <View style={styles.actionButtons}>
+      <TouchableOpacity 
+        style={[styles.actionButton, styles.editButton]}
+        onPress={() => navigation.navigate('EditUser', { userId: user._id })} // แก้จาก item._id เป็น user._id
+      >
+        <Icon name="edit" size={18} color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.actionButton, styles.deleteButton]}
+        onPress={() => handleDeleteUser(user._id, user.username)}
+      >
+        <Icon name="delete" size={18} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  </View>
+);
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>ผู้ใช้งาน</Text>
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>ผู้ใช้งาน</Text>
+      <TouchableOpacity 
+        style={styles.logoutButton}
+        onPress={handleLogout}
+      >
+        <Text style={styles.logoutButtonText}>Logout</Text>
+      </TouchableOpacity>
+    </View>
+
+    {isLoading ? (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    ) : error ? (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={handleLogout}
+          style={styles.retryButton}
+          onPress={fetchUsers}
         >
-          <Text style={styles.logoutButtonText}>Logout</Text>
+          <Text style={styles.retryButtonText}>ลองใหม่อีกครั้ง</Text>
         </TouchableOpacity>
       </View>
+    ) : users.length === 0 ? (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>ไม่พบข้อมูลผู้ใช้</Text>
+      </View>
+    ) : (
+      <ScrollView style={styles.content}>
+        {users.map((user) => (
+          <View key={user._id} style={styles.userCard}>
+            {renderUserInfo(user)}
+          </View>
+        ))}
+      </ScrollView>
+    )}
 
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : (
-        <ScrollView style={styles.content}>
-          {users.map((user) => (
-            <View key={user._id} style={styles.userCard}>
-              {renderUserInfo(user)}
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      <TouchableOpacity 
-        style={styles.fab}
-        onPress={() => navigation.navigate('AddUser')}
-      >
-        <Icon name="add" size={24} color="#fff" />
-      </TouchableOpacity>
-    </SafeAreaView>
-  );
+    <TouchableOpacity 
+      style={styles.fab}
+      onPress={() => navigation.navigate('AddUser')}
+    >
+      <Icon name="add" size={24} color="#fff" />
+    </TouchableOpacity>
+  </SafeAreaView>
+);
 };
 
 const styles = StyleSheet.create({
@@ -342,6 +357,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#ff3b30',
+    textAlign: 'center',
+    marginBottom: 15
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center'
   }
 });
 
