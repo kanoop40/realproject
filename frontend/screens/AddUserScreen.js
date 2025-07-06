@@ -18,41 +18,44 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
-  { label: 'เลือกสาขา', value: '' },
+  { label: 'เลือกคณะ', value: '1' }, // แก้ไขจาก value: '' เป็น '1'
   { label: 'วิศวกรรมศาสตร์', value: 'Engineering' },
   { label: 'วิทยาศาสตร์', value: 'Science' },
 ];
 
 const majors = {
   Engineering: [
-    { label: 'เลือกสาขา', value: '' },
+    { label: 'เลือกสาขา', value: '1' }, // แก้ไขจาก value: '' เป็น '1'
     { label: 'วิศวกรรมคอมพิวเตอร์', value: 'Computer Engineering' },
     { label: 'วิศวกรรมไฟฟ้า', value: 'Electrical Engineering' },
   ],
   Science: [
-    { label: 'เลือกสาขา', value: '' },
+    { label: 'เลือกสาขา', value: '1' }, // แก้ไขจาก value: '' เป็น '1'
     { label: 'วิทยาการคอมพิวเตอร์', value: 'Computer Science' },
     { label: 'คณิตศาสตร์', value: 'Mathematics' },
   ],
+  '1': [ // เพิ่ม default options สำหรับค่าเริ่มต้น
+    { label: 'เลือกสาขา', value: '1' }
+  ]
 };
 
 const groupCodes = [
-  { label: 'เลือกกลุ่มเรียน', value: null },
+  { label: 'เลือกกลุ่มเรียน', value: '1' }, // แก้ไขจาก value: null เป็น '1'
   { label: 'CE01', value: 'CE01' },
   { label: 'CE02', value: 'CE02' },
   { label: 'CE03', value: 'CE03' },
 ];
 const AddUserScreen = ({ navigation }) => {
-  const [formData, setFormData] = useState({
+ const [formData, setFormData] = useState({
   username: '',
   password: '',
   firstName: '',
   lastName: '',
   email: '',
   role: 'student',
-  faculty: '',  // เปลี่ยนจาก null เป็น ''
-  major: '',    // เปลี่ยนจาก null เป็น ''
-  groupCode: '' // เปลี่ยนจาก null เป็น ''
+  faculty: '1',  // เปลี่ยนจาก '' เป็น '1'
+  major: '1',    // เปลี่ยนจาก '' เป็น '1'
+  groupCode: '1' // เปลี่ยนจาก '' เป็น '1'
 });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -287,7 +290,7 @@ const validateForm = () => {
                     styles.roleButton,
                     formData.role === role && styles.roleButtonActive
                   ]}
-        onPress={() => {
+   onPress={() => {
   setFormData({
     ...formData,
     role,
@@ -298,14 +301,14 @@ const validateForm = () => {
       groupCode: '1'
     }),
     ...(role === 'teacher' && {
-      faculty: formData.faculty || '', // เปลี่ยนจาก null เป็น ''
-      major: formData.major || '',     // เปลี่ยนจาก null เป็น ''
+      faculty: formData.faculty || '1',
+      major: formData.major || '1',
       groupCode: '1'
     }),
     ...(role === 'student' && {
-      faculty: formData.faculty || '', // เปลี่ยนจาก null เป็น ''
-      major: formData.major || '',     // เปลี่ยนจาก null เป็น ''
-      groupCode: formData.groupCode || '' // เปลี่ยนจาก null เป็น ''
+      faculty: formData.faculty || '1',
+      major: formData.major || '1',
+      groupCode: formData.groupCode || '1'
     })
   });
 }}
@@ -353,7 +356,7 @@ const validateForm = () => {
             </View>
           )}
 
-         {shouldShowField('major') && formData.faculty && (
+ {shouldShowField('major') && (
   <View style={styles.inputGroup}>
     <Text style={styles.label}>สาขา</Text>
     <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
@@ -362,21 +365,20 @@ const validateForm = () => {
         onValueChange={(value) => {
           setFormData({
             ...formData,
-            major: value || ''
+            major: value || '1'
           });
           if (errors.major) setErrors({...errors, major: ''});
         }}
         style={styles.picker}
       >
-        {formData.faculty && majors[formData.faculty] ? 
-          majors[formData.faculty].map((major) => (
-            <Picker.Item 
-              key={major.value} 
-              label={major.label} 
-              value={major.value}
-            />
-          )) : null
-        }
+        {(formData.faculty && majors[formData.faculty] ? 
+          majors[formData.faculty] : majors['1']).map((major) => (
+          <Picker.Item 
+            key={major.value} 
+            label={major.label} 
+            value={major.value}
+          />
+        ))}
       </Picker>
     </View>
     {errors.major && (
