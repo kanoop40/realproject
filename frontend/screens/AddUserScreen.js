@@ -57,111 +57,108 @@ const AddUserScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.username) newErrors.username = 'กรุณากรอกชื่อผู้ใช้';
-    if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
-    if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
-    if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
-    if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
-    
-    if (formData.role !== 'admin') {
-      if (!formData.faculty) newErrors.faculty = 'กรุณาเลือกคณะ';
-      if (!formData.major) newErrors.major = 'กรุณาเลือกสาขา';
-      if (formData.role === 'student' && !formData.groupCode) {
-        newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
-      }
+const validateForm = () => {
+  const newErrors = {};
+  if (!formData.username) newErrors.username = 'กรุณากรอกชื่อผู้ใช้';
+  if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
+  if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
+  if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
+  if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
+  
+  // ตรวจสอบเฉพาะกรณีที่เป็นนักศึกษาหรืออาจารย์
+  if (formData.role === 'student' || formData.role === 'teacher') {
+    if (!formData.faculty) newErrors.faculty = 'กรุณาเลือกคณะ';
+    if (!formData.major) newErrors.major = 'กรุณาเลือกสาขา';
+    if (formData.role === 'student' && !formData.groupCode) {
+      newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
     }
+  }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && !emailRegex.test(formData.email)) {
-      newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
-    }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (formData.email && !emailRegex.test(formData.email)) {
+    newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
+  }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+  if (!validateForm()) {
+    Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+    return;
+  }
+
+  try {
+    setIsLoading(true);
+    const token = await AsyncStorage.getItem('userToken');
+    
+    if (!token) {
+      navigation.replace('Login');
       return;
     }
 
-    try {
-      setIsLoading(true);
-      const token = await AsyncStorage.getItem('userToken');
-      
-      if (!token) {
-        navigation.replace('Login');
-        return;
+    const config = {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
+    };
 
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+    // สร้างข้อมูลที่จะส่งตาม role
+    let dataToSend = {
+      username: formData.username,
+      password: formData.password,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      role: formData.role
+    };
+
+    // กำหนดค่าตาม role
+    if (formData.role === 'admin') {
+      dataToSend = {
+        ...dataToSend,
+        faculty: "1",
+        major: "1",
+        groupCode: "1"
       };
-
-      // สร้างข้อมูลที่จะส่งตาม role
-      let dataToSend = {
-  username: formData.username,
-  password: formData.password,
-  firstName: formData.firstName,
-  lastName: formData.lastName,
-  email: formData.email,
-  role: formData.role,
-  faculty: formData.role === 'admin' ? null : (formData.faculty || null),
-  major: formData.role === 'admin' ? null : (formData.major || null),
-  groupCode: formData.role === 'student' ? (formData.groupCode || null) : null
-};
-
-      console.log('Sending data:', dataToSend);
-
-      const response = await axios.post(`${API_URL}/api/users`, dataToSend, config);
-      
-      Alert.alert(
-        'สำเร็จ',
-        'เพิ่มผู้ใช้เรียบร้อยแล้ว',
-        [
-          {
-            text: 'ตกลง',
-            onPress: () => {
-              navigation.navigate('Admin', { refresh: true });
-            }
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Error adding user:', error.response || error);
-      let errorMessage = 'ไม่สามารถเพิ่มผู้ใช้ได้';
-      
-      if (error.response) {
-        switch (error.response.status) {
-          case 400:
-            errorMessage = 'ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบข้อมูลที่กรอก';
-            break;
-          case 401:
-            errorMessage = 'กรุณาเข้าสู่ระบบใหม่';
-            navigation.replace('Login');
-            break;
-          case 403:
-            errorMessage = 'คุณไม่มีสิทธิ์ในการเพิ่มผู้ใช้';
-            break;
-          case 409:
-            errorMessage = 'ชื่อผู้ใช้หรืออีเมลนี้มีในระบบแล้ว';
-            break;
-          default:
-            errorMessage = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเพิ่มผู้ใช้';
-        }
-      }
-      
-      Alert.alert('ผิดพลาด', errorMessage);
-    } finally {
-      setIsLoading(false);
+    } else if (formData.role === 'teacher') {
+      dataToSend = {
+        ...dataToSend,
+        faculty: formData.faculty,
+        major: formData.major,
+        groupCode: "1"
+      };
+    } else { // student
+      dataToSend = {
+        ...dataToSend,
+        faculty: formData.faculty,
+        major: formData.major,
+        groupCode: formData.groupCode
+      };
     }
-  };
+
+    console.log('Sending data:', dataToSend);
+
+    const response = await axios.post(`${API_URL}/api/users`, dataToSend, config);
+    
+    Alert.alert(
+      'สำเร็จ',
+      'เพิ่มผู้ใช้เรียบร้อยแล้ว',
+      [
+        {
+          text: 'ตกลง',
+          onPress: () => {
+            navigation.navigate('Admin', { refresh: true });
+          }
+        }
+      ]
+    );
+  } catch (error) {
+    // ... error handling ...
+  }
+};
 
   const shouldShowField = (fieldName) => {
     switch (fieldName) {
@@ -284,25 +281,25 @@ const AddUserScreen = ({ navigation }) => {
                     styles.roleButton,
                     formData.role === role && styles.roleButtonActive
                   ]}
-                 onPress={() => {
+             onPress={() => {
   setFormData({
     ...formData,
     role,
-    // เซ็ตค่าตาม role ที่เลือก
+    // กำหนดค่าตาม role
     ...(role === 'admin' && {
-      faculty: null,
-      major: null,
-      groupCode: null
+      faculty: "1",  // กำหนดเป็น 1 อัตโนมัติ
+      major: "1",    // กำหนดเป็น 1 อัตโนมัติ
+      groupCode: "1" // กำหนดเป็น 1 อัตโนมัติ
     }),
     ...(role === 'teacher' && {
-      faculty: formData.faculty || null,
-      major: formData.major || null,
-      groupCode: null
+      faculty: formData.faculty, // ส่งค่าตามปกติ
+      major: formData.major,     // ส่งค่าตามปกติ
+      groupCode: "1"            // กำหนดเป็น 1 อัตโนมัติ
     }),
     ...(role === 'student' && {
-      faculty: formData.faculty || null,
-      major: formData.major || null,
-      groupCode: formData.groupCode || null
+      faculty: formData.faculty, // ส่งค่าตามปกติ
+      major: formData.major,     // ส่งค่าตามปกติ
+      groupCode: formData.groupCode // ส่งค่าตามปกติ
     })
   });
 }}
