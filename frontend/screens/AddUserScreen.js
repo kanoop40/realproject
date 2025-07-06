@@ -18,7 +18,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
-  { label: 'เลือกสาขา', value: null },
+  { label: 'เลือกสาขา', value: '' },
   { label: 'วิศวกรรมศาสตร์', value: 'Engineering' },
   { label: 'วิทยาศาสตร์', value: 'Science' },
 ];
@@ -50,9 +50,9 @@ const AddUserScreen = ({ navigation }) => {
   lastName: '',
   email: '',
   role: 'student',
-  faculty: null, // เปลี่ยนจาก '' เป็น null
-  major: null, // เปลี่ยนจาก '' เป็น null 
-  groupCode: null // เปลี่ยนจาก '' เป็น null
+  faculty: '',  // เปลี่ยนจาก null เป็น ''
+  major: '',    // เปลี่ยนจาก null เป็น ''
+  groupCode: '' // เปลี่ยนจาก null เป็น ''
 });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -106,38 +106,39 @@ const validateForm = () => {
     };
 
     // สร้างข้อมูลที่จะส่งตาม role
-    let dataToSend = {
-      username: formData.username,
-      password: formData.password,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      role: formData.role
-    };
+     let dataToSend = {
+    username: formData.username,
+    password: formData.password,
+    firstName: formData.firstName,
+    lastName: formData.lastName,
+    email: formData.email,
+    role: formData.role
+  };
 
-    // กำหนดค่าตาม role
-    if (formData.role === 'admin') {
-      dataToSend = {
-        ...dataToSend,
-        faculty: "1",
-        major: "1",
-        groupCode: "1"
-      };
-    } else if (formData.role === 'teacher') {
-      dataToSend = {
-        ...dataToSend,
-        faculty: formData.faculty,
-        major: formData.major,
-        groupCode: "1"
-      };
-    } else { // student
-      dataToSend = {
-        ...dataToSend,
-        faculty: formData.faculty,
-        major: formData.major,
-        groupCode: formData.groupCode
-      };
-    }
+  // กำหนดค่าตาม role
+  if (formData.role === 'admin') {
+    dataToSend = {
+      ...dataToSend,
+      faculty: '1',
+      major: '1',
+      groupCode: '1'
+    };
+  } else if (formData.role === 'teacher') {
+    dataToSend = {
+      ...dataToSend,
+      faculty: formData.faculty || '1',
+      major: formData.major || '1',
+      groupCode: '1'
+    };
+  } else { // student
+    dataToSend = {
+      ...dataToSend,
+      faculty: formData.faculty,
+      major: formData.major,
+      groupCode: formData.groupCode
+    };
+  }
+
 
     console.log('Sending data:', dataToSend);
 
@@ -281,25 +282,25 @@ const validateForm = () => {
                     styles.roleButton,
                     formData.role === role && styles.roleButtonActive
                   ]}
-             onPress={() => {
+        onPress={() => {
   setFormData({
     ...formData,
     role,
     // กำหนดค่าตาม role
     ...(role === 'admin' && {
-      faculty: "1",  // กำหนดเป็น 1 อัตโนมัติ
-      major: "1",    // กำหนดเป็น 1 อัตโนมัติ
-      groupCode: "1" // กำหนดเป็น 1 อัตโนมัติ
+      faculty: '1',
+      major: '1',
+      groupCode: '1'
     }),
     ...(role === 'teacher' && {
-      faculty: formData.faculty, // ส่งค่าตามปกติ
-      major: formData.major,     // ส่งค่าตามปกติ
-      groupCode: "1"            // กำหนดเป็น 1 อัตโนมัติ
+      faculty: formData.faculty || '', // เปลี่ยนจาก null เป็น ''
+      major: formData.major || '',     // เปลี่ยนจาก null เป็น ''
+      groupCode: '1'
     }),
     ...(role === 'student' && {
-      faculty: formData.faculty, // ส่งค่าตามปกติ
-      major: formData.major,     // ส่งค่าตามปกติ
-      groupCode: formData.groupCode // ส่งค่าตามปกติ
+      faculty: formData.faculty || '', // เปลี่ยนจาก null เป็น ''
+      major: formData.major || '',     // เปลี่ยนจาก null เป็น ''
+      groupCode: formData.groupCode || '' // เปลี่ยนจาก null เป็น ''
     })
   });
 }}
@@ -322,11 +323,11 @@ const validateForm = () => {
               <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
                 <Picker
                   selectedValue={formData.faculty}
-                 onValueChange={(value) => {
+           onValueChange={(value) => {
   setFormData({
     ...formData,
-    faculty: value || null,
-    major: null // รีเซ็ต major เมื่อเปลี่ยนคณะ
+    faculty: value || '',  // เปลี่ยนจาก null เป็น ''
+    major: '',  // รีเซ็ต major เมื่อเปลี่ยนคณะ
   });
   if (errors.faculty) setErrors({...errors, faculty: ''});
 }}
@@ -353,10 +354,10 @@ const validateForm = () => {
               <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
                 <Picker
                   selectedValue={formData.major}
-                 onValueChange={(value) => {
+    onValueChange={(value) => {
   setFormData({
     ...formData,
-    major: value || null
+    major: value || ''  // เปลี่ยนจาก null เป็น ''
   });
   if (errors.major) setErrors({...errors, major: ''});
 }}
@@ -383,10 +384,10 @@ const validateForm = () => {
               <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
                 <Picker
                   selectedValue={formData.groupCode}
-          onValueChange={(value) => {
+    onValueChange={(value) => {
   setFormData({
     ...formData,
-    groupCode: value || null
+    groupCode: value || ''  // เปลี่ยนจาก null เป็น ''
   });
   if (errors.groupCode) setErrors({...errors, groupCode: ''});
 }}
