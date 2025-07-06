@@ -18,7 +18,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
-  { label: 'เลือกคณะ', value: '' },
+  { label: 'เลือกสาขา', value: null },
   { label: 'วิศวกรรมศาสตร์', value: 'Engineering' },
   { label: 'วิทยาศาสตร์', value: 'Science' },
 ];
@@ -37,23 +37,23 @@ const majors = {
 };
 
 const groupCodes = [
-  { label: 'เลือกกลุ่มเรียน', value: '' },
+  { label: 'เลือกกลุ่มเรียน', value: null },
   { label: 'CE01', value: 'CE01' },
   { label: 'CE02', value: 'CE02' },
   { label: 'CE03', value: 'CE03' },
 ];
 const AddUserScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    role: 'student',
-    faculty: '',
-    major: '',
-    groupCode: ''
-  });
+  username: '',
+  password: '',
+  firstName: '',
+  lastName: '',
+  email: '',
+  role: 'student',
+  faculty: null, // เปลี่ยนจาก '' เป็น null
+  major: null, // เปลี่ยนจาก '' เป็น null 
+  groupCode: null // เปลี่ยนจาก '' เป็น null
+});
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -106,16 +106,16 @@ const AddUserScreen = ({ navigation }) => {
 
       // สร้างข้อมูลที่จะส่งตาม role
       let dataToSend = {
-        username: formData.username,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        role: formData.role,
-        faculty: formData.role === 'admin' ? null : formData.faculty,
-        major: formData.role === 'admin' ? null : formData.major,
-        groupCode: formData.role === 'student' ? formData.groupCode : null
-      };
+  username: formData.username,
+  password: formData.password,
+  firstName: formData.firstName,
+  lastName: formData.lastName,
+  email: formData.email,
+  role: formData.role,
+  faculty: formData.role === 'admin' ? null : (formData.faculty || null),
+  major: formData.role === 'admin' ? null : (formData.major || null),
+  groupCode: formData.role === 'student' ? (formData.groupCode || null) : null
+};
 
       console.log('Sending data:', dataToSend);
 
@@ -284,15 +284,28 @@ const AddUserScreen = ({ navigation }) => {
                     styles.roleButton,
                     formData.role === role && styles.roleButtonActive
                   ]}
-                  onPress={() => {
-                    setFormData({
-                      ...formData,
-                      role,
-                      faculty: role === 'admin' ? null : formData.faculty,
-                      major: role === 'admin' ? null : formData.major,
-                      groupCode: role === 'student' ? formData.groupCode : null
-                    });
-                  }}
+                 onPress={() => {
+  setFormData({
+    ...formData,
+    role,
+    // เซ็ตค่าตาม role ที่เลือก
+    ...(role === 'admin' && {
+      faculty: null,
+      major: null,
+      groupCode: null
+    }),
+    ...(role === 'teacher' && {
+      faculty: formData.faculty || null,
+      major: formData.major || null,
+      groupCode: null
+    }),
+    ...(role === 'student' && {
+      faculty: formData.faculty || null,
+      major: formData.major || null,
+      groupCode: formData.groupCode || null
+    })
+  });
+}}
                 >
                   <Text style={[
                     styles.roleButtonText,
@@ -312,10 +325,14 @@ const AddUserScreen = ({ navigation }) => {
               <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
                 <Picker
                   selectedValue={formData.faculty}
-                  onValueChange={(value) => {
-                    setFormData({...formData, faculty: value, major: ''});
-                    if (errors.faculty) setErrors({...errors, faculty: ''});
-                  }}
+                 onValueChange={(value) => {
+  setFormData({
+    ...formData,
+    faculty: value || null,
+    major: null // รีเซ็ต major เมื่อเปลี่ยนคณะ
+  });
+  if (errors.faculty) setErrors({...errors, faculty: ''});
+}}
                   style={styles.picker}
                 >
                   {faculties.map((faculty) => (
@@ -339,10 +356,13 @@ const AddUserScreen = ({ navigation }) => {
               <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
                 <Picker
                   selectedValue={formData.major}
-                  onValueChange={(value) => {
-                    setFormData({...formData, major: value});
-                    if (errors.major) setErrors({...errors, major: ''});
-                  }}
+                 onValueChange={(value) => {
+  setFormData({
+    ...formData,
+    major: value || null
+  });
+  if (errors.major) setErrors({...errors, major: ''});
+}}
                   style={styles.picker}
                 >
                   {majors[formData.faculty].map((major) => (
@@ -366,10 +386,13 @@ const AddUserScreen = ({ navigation }) => {
               <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
                 <Picker
                   selectedValue={formData.groupCode}
-                  onValueChange={(value) => {
-                    setFormData({...formData, groupCode: value});
-                    if (errors.groupCode) setErrors({...errors, groupCode: ''});
-                  }}
+          onValueChange={(value) => {
+  setFormData({
+    ...formData,
+    groupCode: value || null
+  });
+  if (errors.groupCode) setErrors({...errors, groupCode: ''});
+}}
                   style={styles.picker}
                 >
                   {groupCodes.map((group) => (
