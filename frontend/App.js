@@ -7,6 +7,7 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import AdminScreen from './screens/AdminScreen';
 import AddUserScreen from './screens/AddUserScreen';
+import EditUserScreen from './screens/EditUserScreen'
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Admin" component={AdminScreen} />
            <Stack.Screen name="AddUser" component={AddUserScreen} />
+           <Stack.Screen name="EditUser" component={EditUserScreen} options={{ headerShown: false }}/>
         </Stack.Navigator>
       </NavigationContainer>
     </AuthProvider>

@@ -145,9 +145,10 @@ const AdminScreen = ({ navigation, route }) => {
       </View>
       <View style={styles.actionButtons}>
         <TouchableOpacity 
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => navigation.navigate('EditUser', { userId: user._id })}
-        >
+   style={[styles.actionButton, styles.editButton]}
+  onPress={() => navigation.navigate('EditUser', { userId: item._id })}
+>
+         
           <Icon name="edit" size={18} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity 
