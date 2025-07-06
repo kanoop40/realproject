@@ -162,6 +162,7 @@ const validateForm = () => {
 };
 
   const shouldShowField = (fieldName) => {
+  try {
     switch (fieldName) {
       case 'faculty':
       case 'major':
@@ -171,7 +172,11 @@ const validateForm = () => {
       default:
         return true;
     }
-  };
+  } catch (error) {
+    console.error('Error in shouldShowField:', error);
+    return false;
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -348,35 +353,37 @@ const validateForm = () => {
             </View>
           )}
 
-          {shouldShowField('major') && formData.faculty && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>สาขา</Text>
-              <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.major}
-    onValueChange={(value) => {
-  setFormData({
-    ...formData,
-    major: value || ''  // เปลี่ยนจาก null เป็น ''
-  });
-  if (errors.major) setErrors({...errors, major: ''});
-}}
-                  style={styles.picker}
-                >
-                  {majors[formData.faculty].map((major) => (
-                    <Picker.Item 
-                      key={major.value} 
-                      label={major.label} 
-                      value={major.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              {errors.major && (
-                <Text style={styles.errorText}>{errors.major}</Text>
-              )}
-            </View>
-          )}
+         {shouldShowField('major') && formData.faculty && (
+  <View style={styles.inputGroup}>
+    <Text style={styles.label}>สาขา</Text>
+    <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
+      <Picker
+        selectedValue={formData.major}
+        onValueChange={(value) => {
+          setFormData({
+            ...formData,
+            major: value || ''
+          });
+          if (errors.major) setErrors({...errors, major: ''});
+        }}
+        style={styles.picker}
+      >
+        {formData.faculty && majors[formData.faculty] ? 
+          majors[formData.faculty].map((major) => (
+            <Picker.Item 
+              key={major.value} 
+              label={major.label} 
+              value={major.value}
+            />
+          )) : null
+        }
+      </Picker>
+    </View>
+    {errors.major && (
+      <Text style={styles.errorText}>{errors.major}</Text>
+    )}
+  </View>
+)}
 
           {shouldShowField('groupCode') && (
             <View style={styles.inputGroup}>
