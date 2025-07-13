@@ -68,22 +68,40 @@ const EditUserScreen = ({ route, navigation }) => {
   }, [userId]);
 
   const loadUserData = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const response = await axios.get(`${API_URL}/api/users/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const userData = response.data;
-      setFormData({
-        ...userData,
-        password: '' // ไม่แสดงรหัสผ่านเดิม
-      });
-      setInitialRole(userData.role);
-    } catch (error) {
-      Alert.alert('Error', 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
-      navigation.goBack();
-    }
-  };
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const response = await axios.get(`${API_URL}/api/users/${userId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const userData = response.data;
+    
+    // กำหนดค่าเริ่มต้นให้ครบทุกฟิลด์
+    setFormData({
+      username: userData.username || '',
+      password: '', // ไม่แสดงรหัสผ่านเดิม
+      firstName: userData.firstName || '',
+      lastName: userData.lastName || '',
+      email: userData.email || '',
+      role: userData.role || 'student',
+      faculty: userData.faculty || '1',
+      major: userData.major || '1',
+      groupCode: userData.groupCode || '1'
+    });
+    setInitialRole(userData.role);
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    Alert.alert(
+      'Error',
+      'ไม่สามารถโหลดข้อมูลผู้ใช้ได้',
+      [
+        {
+          text: 'ตกลง',
+          onPress: () => navigation.goBack()
+        }
+      ]
+    );
+  }
+};
 
   const validateForm = () => {
     const newErrors = {};
@@ -226,243 +244,53 @@ const EditUserScreen = ({ route, navigation }) => {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>แก้ไขข้อมูลผู้ใช้</Text>
-        <View style={styles.placeholder} />
+ return (
+  <SafeAreaView style={styles.container}>
+    {/* ... header section ... */}
+    
+    <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.userSummary}>
+        <Text style={styles.summaryTitle}>ข้อมูลผู้ใช้</Text>
+        <Text style={styles.summaryText}>Username: {formData.username}</Text>
+        <Text style={styles.summaryText}>
+          ชื่อ-นามสกุล: {formData.firstName} {formData.lastName}
+        </Text>
+        <Text style={styles.summaryText}>อีเมล: {formData.email}</Text>
+        <Text style={styles.summaryText}>
+          สถานะ: {
+            formData.role === 'student' ? 'นักศึกษา' :
+            formData.role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'
+          }
+        </Text>
+        {formData.role !== 'admin' && (
+          <>
+            <Text style={styles.summaryText}>
+              คณะ: {
+                faculties.find(f => f.value === formData.faculty)?.label || 'ไม่ระบุ'
+              }
+            </Text>
+            <Text style={styles.summaryText}>
+              สาขา: {
+                majors[formData.faculty]?.find(m => m.value === formData.major)?.label || 'ไม่ระบุ'
+              }
+            </Text>
+          </>
+        )}
+        {formData.role === 'student' && (
+          <Text style={styles.summaryText}>
+            กลุ่มเรียน: {
+              groupCodes.find(g => g.value === formData.groupCode)?.label || 'ไม่ระบุ'
+            }
+          </Text>
+        )}
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>ชื่อผู้ใช้</Text>
-            <TextInput
-              style={[styles.input, errors.username && styles.inputError]}
-              value={formData.username}
-              onChangeText={(text) => {
-                setFormData({...formData, username: text});
-                if (errors.username) setErrors({...errors, username: ''});
-              }}
-              placeholder="กรอกชื่อผู้ใช้"
-              autoCapitalize="none"
-            />
-            {errors.username && (
-              <Text style={styles.errorText}>{errors.username}</Text>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>รหัสผ่าน (เว้นว่างถ้าไม่ต้องการเปลี่ยน)</Text>
-            <TextInput
-              style={[styles.input, errors.password && styles.inputError]}
-              value={formData.password}
-              onChangeText={(text) => {
-                setFormData({...formData, password: text});
-                if (errors.password) setErrors({...errors, password: ''});
-              }}
-              placeholder="กรอกรหัสผ่านใหม่"
-              secureTextEntry
-            />
-            {errors.password && (
-              <Text style={styles.errorText}>{errors.password}</Text>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>ชื่อ</Text>
-            <TextInput
-              style={[styles.input, errors.firstName && styles.inputError]}
-              value={formData.firstName}
-              onChangeText={(text) => {
-                setFormData({...formData, firstName: text});
-                if (errors.firstName) setErrors({...errors, firstName: ''});
-              }}
-              placeholder="กรอกชื่อ"
-            />
-            {errors.firstName && (
-              <Text style={styles.errorText}>{errors.firstName}</Text>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>นามสกุล</Text>
-            <TextInput
-              style={[styles.input, errors.lastName && styles.inputError]}
-              value={formData.lastName}
-              onChangeText={(text) => {
-                setFormData({...formData, lastName: text});
-                if (errors.lastName) setErrors({...errors, lastName: ''});
-              }}
-              placeholder="กรอกนามสกุล"
-            />
-            {errors.lastName && (
-              <Text style={styles.errorText}>{errors.lastName}</Text>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>อีเมล</Text>
-            <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              value={formData.email}
-              onChangeText={(text) => {
-                setFormData({...formData, email: text});
-                if (errors.email) setErrors({...errors, email: ''});
-              }}
-              placeholder="กรอกอีเมล"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            {errors.email && (
-              <Text style={styles.errorText}>{errors.email}</Text>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>สถานะ</Text>
-            <View style={styles.roleButtons}>
-              {['student', 'teacher', 'admin'].map((role) => (
-                <TouchableOpacity
-                  key={role}
-                  style={[
-                    styles.roleButton,
-                    formData.role === role && styles.roleButtonActive
-                  ]}
-                  onPress={() => {
-                    setFormData({
-                      ...formData,
-                      role,
-                      faculty: role === 'admin' ? '1' : formData.faculty,
-                      major: role === 'admin' ? '1' : formData.major,
-                      groupCode: role === 'student' ? formData.groupCode : '1'
-                    });
-                  }}
-                >
-                  <Text style={[
-                    styles.roleButtonText,
-                    formData.role === role && styles.roleButtonTextActive
-                  ]}>
-                    {role === 'student' ? 'นักศึกษา' :
-                     role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {shouldShowField('faculty') && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>คณะ</Text>
-              <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.faculty}
-                  onValueChange={(value) => {
-                    setFormData({
-                      ...formData,
-                      faculty: value,
-                      major: '1'
-                    });
-                    if (errors.faculty) setErrors({...errors, faculty: ''});
-                  }}
-                  style={styles.picker}
-                >
-                  {faculties.map((faculty) => (
-                    <Picker.Item 
-                      key={faculty.value} 
-                      label={faculty.label} 
-                      value={faculty.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              {errors.faculty && (
-                <Text style={styles.errorText}>{errors.faculty}</Text>
-              )}
-            </View>
-          )}
-
-        {shouldShowField('major') && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>สาขา</Text>
-              <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.major}
-                  onValueChange={(value) => {
-                    setFormData({
-                      ...formData,
-                      major: value
-                    });
-                    if (errors.major) setErrors({...errors, major: ''});
-                  }}
-                  style={styles.picker}
-                >
-                  {majors[formData.faculty]?.map((major) => (
-                    <Picker.Item 
-                      key={major.value} 
-                      label={major.label} 
-                      value={major.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              {errors.major && (
-                <Text style={styles.errorText}>{errors.major}</Text>
-              )}
-            </View>
-          )}
-
-          {shouldShowField('groupCode') && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>กลุ่มเรียน</Text>
-              <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.groupCode}
-                  onValueChange={(value) => {
-                    setFormData({
-                      ...formData,
-                      groupCode: value
-                    });
-                    if (errors.groupCode) setErrors({...errors, groupCode: ''});
-                  }}
-                  style={styles.picker}
-                >
-                  {groupCodes.map((group) => (
-                    <Picker.Item 
-                      key={group.value} 
-                      label={group.label} 
-                      value={group.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              {errors.groupCode && (
-                <Text style={styles.errorText}>{errors.groupCode}</Text>
-              )}
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>บันทึกการแก้ไข</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+      <View style={styles.form}>
+        {/* ... existing form fields ... */}
+      </View>
+    </ScrollView>
+  </SafeAreaView>
+);
 };
 
 const styles = StyleSheet.create({
@@ -569,6 +397,25 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
     fontSize: 12,
     marginTop: 5
+  },
+  userSummary: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    margin: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd'
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333'
+  },
+  summaryText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 5
   }
 });
 

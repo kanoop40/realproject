@@ -122,7 +122,7 @@ const AdminScreen = ({ navigation, route }) => {
     }
   };
 
-  const renderUserInfo = (user) => (  // user คือพารามิเตอร์ที่ส่งเข้ามา
+ const renderUserInfo = (user) => (
   <View style={styles.userInfo}>
     <View style={styles.leftContent}>
       <View style={styles.avatarContainer}>
@@ -152,7 +152,7 @@ const AdminScreen = ({ navigation, route }) => {
     <View style={styles.actionButtons}>
       <TouchableOpacity 
         style={[styles.actionButton, styles.editButton]}
-        onPress={() => navigation.navigate('EditUser', { userId: user._id })} // แก้จาก item._id เป็น user._id
+        onPress={() => navigation.navigate('EditUser', { userId: user._id })}
       >
         <Icon name="edit" size={18} color="#fff" />
       </TouchableOpacity>
