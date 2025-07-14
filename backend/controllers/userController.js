@@ -267,13 +267,33 @@ const createUser = asyncHandler(async (req, res) => {
     throw new Error('ข้อมูลผู้ใช้ไม่ถูกต้อง');
   }
 });
-
+const getUserById = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id).select('-password');
+    
+    if (user) {
+        res.json({
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            faculty: user.faculty,
+            major: user.major,
+            groupCode: user.groupCode,
+            role: user.role
+        });
+    } else {
+        res.status(404);
+        throw new Error('ไม่พบข้อมูลผู้ใช้');
+    }
+});
 
 module.exports = {
     authUser,
     registerUser,
     getUserProfile,
     updateUserProfile,
+    getUserById,
     getUsers,      // เพิ่ม getUsers
     deleteUser,
     createUser,

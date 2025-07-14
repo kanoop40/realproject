@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     marginBottom: 8,
-    color: '#333'
+    color: '#007AFF',
   },
   input: {
     borderWidth: 1,

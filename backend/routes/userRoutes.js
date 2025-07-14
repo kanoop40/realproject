@@ -1,20 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const {
+const { 
     authUser,
     registerUser,
     getUserProfile,
     updateUserProfile,
     getUsers,
     deleteUser,
+    createUser,
     updateUser,
-    createUser // เพิ่ม controller สำหรับสร้างผู้ใช้
+    getUserById // เพิ่มการ import
 } = require('../controllers/userController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
+
 // Public routes
 router.post('/login', authUser);
-
+router.get('/:id', protect, getUserById);
 // Protected routes
 router.route('/profile')
     .get(protect, getUserProfile)

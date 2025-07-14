@@ -69,16 +69,26 @@ const EditUserScreen = ({ route, navigation }) => {
 
   const loadUserData = async () => {
   try {
+    setIsLoading(true);
     const token = await AsyncStorage.getItem('userToken');
-    const response = await axios.get(`${API_URL}/api/users/${userId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    
+    if (!token) {
+      navigation.replace('Login');
+      return;
+    }
+
+    const config = {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    };
+
+    const response = await axios.get(`${API_URL}/api/users/${userId}`, config);
     const userData = response.data;
     
-    // กำหนดค่าเริ่มต้นให้ครบทุกฟิลด์
     setFormData({
       username: userData.username || '',
-      password: '', // ไม่แสดงรหัสผ่านเดิม
+      password: '',
       firstName: userData.firstName || '',
       lastName: userData.lastName || '',
       email: userData.email || '',
@@ -93,13 +103,10 @@ const EditUserScreen = ({ route, navigation }) => {
     Alert.alert(
       'Error',
       'ไม่สามารถโหลดข้อมูลผู้ใช้ได้',
-      [
-        {
-          text: 'ตกลง',
-          onPress: () => navigation.goBack()
-        }
-      ]
+      [{ text: 'ตกลง', onPress: () => navigation.goBack() }]
     );
+  } finally {
+    setIsLoading(false);
   }
 };
 
