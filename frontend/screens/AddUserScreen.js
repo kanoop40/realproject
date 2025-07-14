@@ -18,33 +18,56 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
-  { label: 'เลือกคณะ', value: '1' }, // แก้ไขจาก value: '' เป็น '1'
+  { label: 'เลือกคณะ', value: '1' },
   { label: 'วิศวกรรมศาสตร์', value: 'Engineering' },
   { label: 'วิทยาศาสตร์', value: 'Science' },
+  { label: 'ครุศาสตร์อุตสาหกรรม', value: 'Industrial Education' },
+  { label: 'เทคโนโลยีการเกษตร', value: 'Agricultural Technology' },
 ];
 
 const majors = {
   Engineering: [
-    { label: 'เลือกสาขา', value: '1' }, // แก้ไขจาก value: '' เป็น '1'
+    { label: 'เลือกสาขา', value: '1' },
     { label: 'วิศวกรรมคอมพิวเตอร์', value: 'Computer Engineering' },
     { label: 'วิศวกรรมไฟฟ้า', value: 'Electrical Engineering' },
+    { label: 'วิศวกรรมเครื่องกล', value: 'Mechanical Engineering' },
+    { label: 'วิศวกรรมโยธา', value: 'Civil Engineering' },
   ],
   Science: [
-    { label: 'เลือกสาขา', value: '1' }, // แก้ไขจาก value: '' เป็น '1'
+    { label: 'เลือกสาขา', value: '1' },
     { label: 'วิทยาการคอมพิวเตอร์', value: 'Computer Science' },
     { label: 'คณิตศาสตร์', value: 'Mathematics' },
+    { label: 'เคมี', value: 'Chemistry' },
+    { label: 'ฟิสิกส์', value: 'Physics' },
   ],
-  '1': [ // เพิ่ม default options สำหรับค่าเริ่มต้น
+  'Industrial Education': [
+    { label: 'เลือกสาขา', value: '1' },
+    { label: 'ครุศาสตร์วิศวกรรม', value: 'Engineering Education' },
+    { label: 'ครุศาสตร์เทคโนโลยี', value: 'Technology Education' },
+  ],
+  'Agricultural Technology': [
+    { label: 'เลือกสาขา', value: '1' },
+    { label: 'เทคโนโลยีการผลิตพืช', value: 'Crop Production Technology' },
+    { label: 'เทคโนโลยีการผลิตสัตว์', value: 'Animal Production Technology' },
+  ],
+  '1': [
     { label: 'เลือกสาขา', value: '1' }
   ]
 };
 
 const groupCodes = [
-  { label: 'เลือกกลุ่มเรียน', value: '1' }, // แก้ไขจาก value: null เป็น '1'
+  { label: 'เลือกกลุ่มเรียน', value: '1' },
   { label: 'CE01', value: 'CE01' },
   { label: 'CE02', value: 'CE02' },
   { label: 'CE03', value: 'CE03' },
+  { label: 'EE01', value: 'EE01' },
+  { label: 'EE02', value: 'EE02' },
+  { label: 'ME01', value: 'ME01' },
+  { label: 'ME02', value: 'ME02' },
+  { label: 'CV01', value: 'CV01' },
+  { label: 'CV02', value: 'CV02' },
 ];
+
 const AddUserScreen = ({ navigation }) => {
  const [formData, setFormData] = useState({
   username: '',
@@ -52,11 +75,20 @@ const AddUserScreen = ({ navigation }) => {
   firstName: '',
   lastName: '',
   email: '',
-  role: 'student',
-  faculty: '1',  // เปลี่ยนจาก '' เป็น '1'
-  major: '1',    // เปลี่ยนจาก '' เป็น '1'
-  groupCode: '1' // เปลี่ยนจาก '' เป็น '1'
+  role: 'student', // ค่าเริ่มต้นเป็น student
+  faculty: '1', // ค่าเริ่มต้นต้องตรงกับ value ใน faculties
+  major: '1',
+  groupCode: '1'
 });
+const handleRoleChange = (role) => {
+  setFormData({
+    ...formData,
+    role,
+    faculty: '1', // รีเซ็ตเป็นค่าเริ่มต้น
+    major: '1',
+    groupCode: '1'
+  });
+};
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -164,12 +196,13 @@ const validateForm = () => {
   }
 };
 
-  const shouldShowField = (fieldName) => {
+ const shouldShowField = (fieldName) => {
   try {
     switch (fieldName) {
       case 'faculty':
       case 'major':
-        return formData.role !== 'admin';
+        // แก้ไขเงื่อนไขให้ตรงกับค่า value ที่เป็นไปได้
+        return formData.role === 'student' || formData.role === 'teacher';
       case 'groupCode':
         return formData.role === 'student';
       default:
@@ -280,142 +313,121 @@ const validateForm = () => {
             )}
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>สถานะ</Text>
-            <View style={styles.roleButtons}>
-              {['student', 'teacher', 'admin'].map((role) => (
-                <TouchableOpacity
-                  key={role}
-                  style={[
-                    styles.roleButton,
-                    formData.role === role && styles.roleButtonActive
-                  ]}
-   onPress={() => {
-  setFormData({
-    ...formData,
-    role,
-    // กำหนดค่าตาม role
-    ...(role === 'admin' && {
-      faculty: '1',
-      major: '1',
-      groupCode: '1'
-    }),
-    ...(role === 'teacher' && {
-      faculty: formData.faculty || '1',
-      major: formData.major || '1',
-      groupCode: '1'
-    }),
-    ...(role === 'student' && {
-      faculty: formData.faculty || '1',
-      major: formData.major || '1',
-      groupCode: formData.groupCode || '1'
-    })
-  });
-}}
-                >
-                  <Text style={[
-                    styles.roleButtonText,
-                    formData.role === role && styles.roleButtonTextActive
-                  ]}>
-                    {role === 'student' ? 'นักศึกษา' :
-                     role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {shouldShowField('faculty') && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>คณะ</Text>
-              <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.faculty}
-           onValueChange={(value) => {
-  setFormData({
-    ...formData,
-    faculty: value || '',  // เปลี่ยนจาก null เป็น ''
-    major: '',  // รีเซ็ต major เมื่อเปลี่ยนคณะ
-  });
-  if (errors.faculty) setErrors({...errors, faculty: ''});
-}}
-                  style={styles.picker}
-                >
-                  {faculties.map((faculty) => (
-                    <Picker.Item 
-                      key={faculty.value} 
-                      label={faculty.label} 
-                      value={faculty.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              {errors.faculty && (
-                <Text style={styles.errorText}>{errors.faculty}</Text>
-              )}
-            </View>
-          )}
-
- {shouldShowField('major') && (
-  <View style={styles.inputGroup}>
-    <Text style={styles.label}>สาขา</Text>
-    <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
-      <Picker
-        selectedValue={formData.major}
-        onValueChange={(value) => {
-          setFormData({
-            ...formData,
-            major: value || '1'
-          });
-          if (errors.major) setErrors({...errors, major: ''});
-        }}
-        style={styles.picker}
+        <View style={styles.inputGroup}>
+  <Text style={styles.label}>สถานะ</Text>
+  <View style={styles.roleButtons}>
+    {['student', 'teacher', 'admin'].map((role) => (
+      <TouchableOpacity
+        key={role}
+        style={[
+          styles.roleButton,
+          formData.role === role && styles.roleButtonActive
+        ]}
+        onPress={() => handleRoleChange(role)}
       >
-        {(formData.faculty && majors[formData.faculty] ? 
-          majors[formData.faculty] : majors['1']).map((major) => (
-          <Picker.Item 
-            key={major.value} 
-            label={major.label} 
-            value={major.value}
-          />
-        ))}
-      </Picker>
-    </View>
-    {errors.major && (
-      <Text style={styles.errorText}>{errors.major}</Text>
-    )}
+        <Text style={[
+          styles.roleButtonText,
+          formData.role === role && styles.roleButtonTextActive
+        ]}>
+          {role === 'student' ? 'นักศึกษา' :
+           role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'}
+        </Text>
+      </TouchableOpacity>
+    ))}
   </View>
-)}
+</View>
 
-          {shouldShowField('groupCode') && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>กลุ่มเรียน</Text>
-              <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.groupCode}
-    onValueChange={(value) => {
-  setFormData({
-    ...formData,
-    groupCode: value || ''  // เปลี่ยนจาก null เป็น ''
-  });
-  if (errors.groupCode) setErrors({...errors, groupCode: ''});
-}}
-                  style={styles.picker}
-                >
-                  {groupCodes.map((group) => (
-                    <Picker.Item 
-                      key={group.value} 
-                      label={group.label} 
-                      value={group.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              {errors.groupCode && (
-                <Text style={styles.errorText}>{errors.groupCode}</Text>
-              )}
-            </View>
-          )}
+
+{shouldShowField('faculty') && (
+ <View style={styles.inputGroup}>
+  <Text style={styles.label}>คณะ</Text>
+  <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
+    <Picker
+      selectedValue={formData.faculty}
+      onValueChange={(value) => {
+        setFormData({
+          ...formData,
+          faculty: value,
+          major: '1',
+          groupCode: '1'
+        });
+        if (errors.faculty) setErrors({...errors, faculty: ''});
+      }}
+      style={styles.picker}
+      mode="dropdown" // เพิ่มบรรทัดนี้
+    >
+      {faculties.map((faculty) => (
+        <Picker.Item 
+          key={faculty.value} 
+          label={faculty.label} 
+          value={faculty.value}
+          color="#333" // เพิ่มบรรทัดนี้
+        />
+      ))}
+    </Picker>
+  </View>
+  {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
+</View>
+)}
+{shouldShowField('major') && (
+  <View style={styles.inputGroup}>
+  <Text style={styles.label}>สาขา</Text>
+  <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
+    <Picker
+      selectedValue={formData.major}
+      onValueChange={(value) => {
+        setFormData({
+          ...formData,
+          major: value,
+          groupCode: '1'
+        });
+        if (errors.major) setErrors({...errors, major: ''});
+      }}
+      style={styles.picker}
+      mode="dropdown" // เพิ่มบรรทัดนี้
+    >
+      {(majors[formData.faculty] || majors['1']).map((major) => (
+        <Picker.Item 
+          key={major.value} 
+          label={major.label} 
+          value={major.value}
+          color="#333" // เพิ่มบรรทัดนี้
+        />
+      ))}
+    </Picker>
+  </View>
+  {errors.major && <Text style={styles.errorText}>{errors.major}</Text>}
+</View>
+)}
+{shouldShowField('groupCode') && (
+  <View style={styles.inputGroup}>
+  <Text style={styles.label}>กลุ่มเรียน</Text>
+  <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
+    <Picker
+      selectedValue={formData.groupCode}
+      onValueChange={(value) => {
+        setFormData({
+          ...formData,
+          groupCode: value
+        });
+        if (errors.groupCode) setErrors({...errors, groupCode: ''});
+      }}
+      style={styles.picker}
+      mode="dropdown" // เพิ่มบรรทัดนี้
+    >
+      {groupCodes.map((group) => (
+        <Picker.Item 
+          key={group.value} 
+          label={group.label} 
+          value={group.value}
+          color="#333" // เพิ่มบรรทัดนี้
+        />
+      ))}
+    </Picker>
+  </View>
+  {errors.groupCode && <Text style={styles.errorText}>{errors.groupCode}</Text>}
+</View>
+)}
 
           <TouchableOpacity
             style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
@@ -508,15 +520,19 @@ const styles = StyleSheet.create({
   roleButtonTextActive: {
     color: '#fff'
   },
-  pickerContainer: {
+ pickerContainer: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
     marginTop: 5,
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
+    overflow: 'hidden' // เพิ่มบรรทัดนี้
   },
-  picker: {
-    height: 50
+   picker: {
+    height: 50,
+    width: '100%', // เพิ่มบรรทัดนี้
+    color: '#333', // เพิ่มบรรทัดนี้
+    backgroundColor: '#fff' // เพิ่มบรรทัดนี้
   },
   submitButton: {
     backgroundColor: '#007AFF',
