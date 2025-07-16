@@ -19,209 +19,169 @@ const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },
-  { label: 'วิศวกรรมศาสตร์', value: 'Engineering' },
-  { label: 'วิทยาศาสตร์', value: 'Science' },
-  { label: 'ครุศาสตร์อุตสาหกรรม', value: 'Industrial Education' },
-  { label: 'เทคโนโลยีการเกษตร', value: 'Agricultural Technology' },
+  { label: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', value: 'Engineering' },
 ];
 
 const majors = {
   Engineering: [
     { label: 'เลือกสาขา', value: '1' },
-    { label: 'วิศวกรรมคอมพิวเตอร์', value: 'Computer Engineering' },
-    { label: 'วิศวกรรมไฟฟ้า', value: 'Electrical Engineering' },
-    { label: 'วิศวกรรมเครื่องกล', value: 'Mechanical Engineering' },
-    { label: 'วิศวกรรมโยธา', value: 'Civil Engineering' },
-  ],
-  Science: [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: 'วิทยาการคอมพิวเตอร์', value: 'Computer Science' },
-    { label: 'คณิตศาสตร์', value: 'Mathematics' },
-    { label: 'เคมี', value: 'Chemistry' },
-    { label: 'ฟิสิกส์', value: 'Physics' },
-  ],
-  'Industrial Education': [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: 'ครุศาสตร์วิศวกรรม', value: 'Engineering Education' },
-    { label: 'ครุศาสตร์เทคโนโลยี', value: 'Technology Education' },
-  ],
-  'Agricultural Technology': [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: 'เทคโนโลยีการผลิตพืช', value: 'Crop Production Technology' },
-    { label: 'เทคโนโลยีการผลิตสัตว์', value: 'Animal Production Technology' },
+    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: 'DT' }
   ],
   '1': [
-    { label: 'เลือกสาขา', value: '1' }
+    { label: 'เลือกสาขา', value: '1' },
   ]
 };
 
-const groupCodes = [
-  { label: 'เลือกกลุ่มเรียน', value: '1' },
-  { label: 'CE01', value: 'CE01' },
-  { label: 'CE02', value: 'CE02' },
-  { label: 'CE03', value: 'CE03' },
-  { label: 'EE01', value: 'EE01' },
-  { label: 'EE02', value: 'EE02' },
-  { label: 'ME01', value: 'ME01' },
-  { label: 'ME02', value: 'ME02' },
-  { label: 'CV01', value: 'CV01' },
-  { label: 'CV02', value: 'CV02' },
-];
+const groupCodes = {
+  'DT': [
+    { label: 'เลือกกลุ่มเรียน', value: '1' },
+    { label: 'DT26721N', value: 'DT26721N' },
+    { label: 'DT26722N', value: 'DT26722N' }
+  ],
+  '1': [
+    { label: 'เลือกกลุ่มเรียน', value: '1' }
+  ]
+};
 
 const AddUserScreen = ({ navigation }) => {
- const [formData, setFormData] = useState({
-  username: '',
-  password: '',
-  firstName: '',
-  lastName: '',
-  email: '',
-  role: 'student', // ค่าเริ่มต้นเป็น student
-  faculty: '1', // ค่าเริ่มต้นต้องตรงกับ value ใน faculties
-  major: '1',
-  groupCode: '1'
-});
-const handleRoleChange = (role) => {
-  setFormData({
-    ...formData,
-    role,
-    faculty: '1', // รีเซ็ตเป็นค่าเริ่มต้น
+  const [formData, setFormData] = useState({
+    username: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    role: 'student',
+    faculty: '1',
     major: '1',
     groupCode: '1'
   });
-};
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-const validateForm = () => {
-  const newErrors = {};
-  if (!formData.username) newErrors.username = 'กรุณากรอกชื่อผู้ใช้';
-  if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
-  if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
-  if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
-  if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
-  
-  if (formData.role === 'student' || formData.role === 'teacher') {
-    // ตรวจสอบคณะ
-    if (formData.faculty === '1') {
-      newErrors.faculty = 'กรุณาเลือกคณะ';
-    }
-    
-    // ตรวจสอบสาขา
-    if (formData.major === '1') {
-      newErrors.major = 'กรุณาเลือกสาขา';
-    }
-    
-    // ตรวจสอบกลุ่มเรียนสำหรับนักศึกษา
-    if (formData.role === 'student' && formData.groupCode === '1') {
-      newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
-    }
-  }
-
-  // ตรวจสอบอีเมล
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (formData.email && !emailRegex.test(formData.email)) {
-    newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
-  }
-
-  setErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-};
-
-  const handleSubmit = async () => {
-  if (!validateForm()) {
-    Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
-    return;
-  }
-
-  try {
-    setIsLoading(true);
-    const token = await AsyncStorage.getItem('userToken');
-    
-    if (!token) {
-      navigation.replace('Login');
-      return;
-    }
-
-    const config = {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    };
-
-    // สร้างข้อมูลที่จะส่งตาม role
-     let dataToSend = {
-    username: formData.username,
-    password: formData.password,
-    firstName: formData.firstName,
-    lastName: formData.lastName,
-    email: formData.email,
-    role: formData.role
-  };
-
-  // กำหนดค่าตาม role
-  if (formData.role === 'admin') {
-    dataToSend = {
-      ...dataToSend,
+  const handleRoleChange = (role) => {
+    setFormData({
+      ...formData,
+      role,
       faculty: '1',
       major: '1',
       groupCode: '1'
-    };
-  } else if (formData.role === 'teacher') {
-    dataToSend = {
-      ...dataToSend,
-      faculty: formData.faculty || '1',
-      major: formData.major || '1',
-      groupCode: '1'
-    };
-  } else { // student
-    dataToSend = {
-      ...dataToSend,
-      faculty: formData.faculty,
-      major: formData.major,
-      groupCode: formData.groupCode
-    };
-  }
+    });
+  };
 
-
-    console.log('Sending data:', dataToSend);
-
-    const response = await axios.post(`${API_URL}/api/users`, dataToSend, config);
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.username) newErrors.username = 'กรุณากรอกชื่อผู้ใช้';
+    if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
+    if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
+    if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
+    if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
     
-    Alert.alert(
-      'สำเร็จ',
-      'เพิ่มผู้ใช้เรียบร้อยแล้ว',
-      [
-        {
-          text: 'ตกลง',
-          onPress: () => {
-            navigation.navigate('Admin', { refresh: true });
-          }
-        }
-      ]
-    );
-  } catch (error) {
-    // ... error handling ...
-  }
-};
+    if (formData.role === 'student' || formData.role === 'teacher') {
+      if (formData.faculty === '1') {
+        newErrors.faculty = 'กรุณาเลือกคณะ';
+      }
+      if (formData.major === '1') {
+        newErrors.major = 'กรุณาเลือกสาขา';
+      }
+      if (formData.role === 'student' && formData.groupCode === '1') {
+        newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
+      }
+    }
 
- const shouldShowField = (fieldName) => {
-  try {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (formData.email && !emailRegex.test(formData.email)) {
+      newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        navigation.replace('Login');
+        return;
+      }
+
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      };
+
+      let dataToSend = {
+        username: formData.username,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        role: formData.role
+      };
+
+      if (formData.role === 'admin') {
+        dataToSend = {
+          ...dataToSend,
+          faculty: '1',
+          major: '1',
+          groupCode: '1'
+        };
+      } else if (formData.role === 'teacher') {
+        dataToSend = {
+          ...dataToSend,
+          faculty: formData.faculty || '1',
+          major: formData.major || '1',
+          groupCode: '1'
+        };
+      } else {
+        dataToSend = {
+          ...dataToSend,
+          faculty: formData.faculty,
+          major: formData.major,
+          groupCode: formData.groupCode
+        };
+      }
+
+      await axios.post(`${API_URL}/api/users`, dataToSend, config);
+
+      Alert.alert(
+        'สำเร็จ',
+        'เพิ่มผู้ใช้เรียบร้อยแล้ว',
+        [
+          {
+            text: 'ตกลง',
+            onPress: () => {
+              navigation.navigate('Admin', { refresh: true });
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('ผิดพลาด', 'ไม่สามารถเพิ่มผู้ใช้ได้');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const shouldShowField = (fieldName) => {
     switch (fieldName) {
       case 'faculty':
       case 'major':
-        // แก้ไขเงื่อนไขให้ตรงกับค่า value ที่เป็นไปได้
         return formData.role === 'student' || formData.role === 'teacher';
       case 'groupCode':
         return formData.role === 'student';
       default:
         return true;
     }
-  } catch (error) {
-    console.error('Error in shouldShowField:', error);
-    return false;
-  }
-};
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -322,135 +282,124 @@ const validateForm = () => {
             )}
           </View>
 
-        <View style={styles.inputGroup}>
-  <Text style={styles.label}>สถานะ</Text>
-  <View style={styles.roleButtons}>
-    {['student', 'teacher', 'admin'].map((role) => (
-      <TouchableOpacity
-        key={role}
-        style={[
-          styles.roleButton,
-          formData.role === role && styles.roleButtonActive
-        ]}
-        onPress={() => handleRoleChange(role)}
-      >
-        <Text style={[
-          styles.roleButtonText,
-          formData.role === role && styles.roleButtonTextActive
-        ]}>
-          {role === 'student' ? 'นักศึกษา' :
-           role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'}
-        </Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-</View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>สถานะ</Text>
+            <View style={styles.roleButtons}>
+              {['student', 'teacher', 'admin'].map((role) => (
+                <TouchableOpacity
+                  key={role}
+                  style={[
+                    styles.roleButton,
+                    formData.role === role && styles.roleButtonActive
+                  ]}
+                  onPress={() => handleRoleChange(role)}
+                >
+                  <Text style={[
+                    styles.roleButtonText,
+                    formData.role === role && styles.roleButtonTextActive
+                  ]}>
+                    {role === 'student' ? 'นักศึกษา' :
+                    role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
-<View style={styles.selectedValues}>
-  <Text style={styles.selectedText}>
-    คณะที่เลือก: {faculties.find(f => f.value === formData.faculty)?.label || 'ยังไม่ได้เลือก'}
-  </Text>
-  <Text style={styles.selectedText}>
-    สาขาที่เลือก: {majors[formData.faculty]?.find(m => m.value === formData.major)?.label || 'ยังไม่ได้เลือก'}
-  </Text>
-  {formData.role === 'student' && (
-    <Text style={styles.selectedText}>
-      กลุ่มเรียนที่เลือก: {groupCodes.find(g => g.value === formData.groupCode)?.label || 'ยังไม่ได้เลือก'}
-    </Text>
-  )}
-</View>
-{shouldShowField('faculty') && (
- <View style={styles.inputGroup}>
-  <Text style={styles.label}>คณะ</Text>
-  <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
-    <Picker
-      selectedValue={formData.faculty}
-      onValueChange={(value) => {
-        setFormData({
-          ...formData,
-          faculty: value,
-          major: '1',
-          groupCode: '1'
-        });
-        if (errors.faculty) setErrors({...errors, faculty: ''});
-      }}
-      style={styles.picker}
-      mode="dropdown"
-    >
-      {faculties.map((faculty) => (
-        <Picker.Item 
-          key={faculty.value} 
-          label={faculty.label} 
-          value={faculty.value}
-          color={faculty.value === '1' ? '#666' : '#000'} // ปรับสีตัวอักษร
-        />
-      ))}
-    </Picker>
-  </View>
-  {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
-</View>
-)}
-{shouldShowField('major') && (
-  <View style={styles.inputGroup}>
-    <Text style={styles.label}>สาขา</Text>
-    <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
-      <Picker
-        selectedValue={formData.major}
-        onValueChange={(value) => {
-          setFormData({
-            ...formData,
-            major: value,
-            groupCode: '1'
-          });
-          if (errors.major) setErrors({...errors, major: ''});
-        }}
-        style={styles.picker}
-        mode="dropdown"
-        enabled={formData.faculty !== '1'}
-      >
-        {(majors[formData.faculty] || majors['1']).map((major) => (
-          <Picker.Item 
-            key={major.value} 
-            label={major.label} 
-            value={major.value}
-            color={major.value === '1' ? '#999' : '#333'}
-          />
-        ))}
-      </Picker>
-    </View>
-    {errors.major && <Text style={styles.errorText}>{errors.major}</Text>}
-  </View>
-)}
-{shouldShowField('groupCode') && (
-  <View style={styles.inputGroup}>
-    <Text style={styles.label}>กลุ่มเรียน</Text>
-    <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
-      <Picker
-        selectedValue={formData.groupCode}
-        onValueChange={(value) => {
-          setFormData({
-            ...formData,
-            groupCode: value
-          });
-          if (errors.groupCode) setErrors({...errors, groupCode: ''});
-        }}
-        style={styles.picker}
-        mode="dropdown"
-        enabled={formData.major !== '1'}
-      >
-        {groupCodes.map((group) => (
-          <Picker.Item 
-            key={group.value} 
-            label={group.label} 
-            value={group.value}
-            color={group.value === '1' ? '#999' : '#333'}
-          />
-        ))}
-      </Picker>
-    </View>
-    {errors.groupCode && <Text style={styles.errorText}>{errors.groupCode}</Text>}
-  </View>
-)}
+          {shouldShowField('faculty') && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>คณะ</Text>
+              <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
+                <Picker
+                  selectedValue={formData.faculty}
+                  onValueChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      faculty: value,
+                      major: '1',
+                      groupCode: '1'
+                    });
+                    if (errors.faculty) setErrors({...errors, faculty: ''});
+                  }}
+                  style={styles.picker}
+                  mode="dropdown"
+                >
+                  {faculties.map((faculty) => (
+                    <Picker.Item 
+                      key={faculty.value} 
+                      label={faculty.label} 
+                      value={faculty.value}
+                      color="#000"
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
+            </View>
+          )}
+
+          {shouldShowField('major') && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>สาขา</Text>
+              <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
+                <Picker
+                  selectedValue={formData.major}
+                  onValueChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      major: value,
+                      groupCode: '1'
+                    });
+                    if (errors.major) setErrors({...errors, major: ''});
+                  }}
+                  style={styles.picker}
+                  mode="dropdown"
+                  enabled={formData.faculty !== '1'}
+                >
+                  {(majors[formData.faculty] || majors['1']).map((major) => (
+                    <Picker.Item 
+                      key={major.value} 
+                      label={major.label} 
+                      value={major.value}
+                      color="#000"
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {errors.major && <Text style={styles.errorText}>{errors.major}</Text>}
+            </View>
+          )}
+
+          {shouldShowField('groupCode') && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>กลุ่มเรียน</Text>
+              <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
+                <Picker
+                  selectedValue={formData.groupCode}
+                  onValueChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      groupCode: value
+                    });
+                    if (errors.groupCode) setErrors({...errors, groupCode: ''});
+                  }}
+                  style={styles.picker}
+                  mode="dropdown"
+                  enabled={formData.major !== '1'}
+                >
+                  {(groupCodes[formData.major] || groupCodes['1']).map((group) => (
+                    <Picker.Item 
+                      key={group.value} 
+                      label={group.label} 
+                      value={group.value}
+                      color="#000"
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {errors.groupCode && <Text style={styles.errorText}>{errors.groupCode}</Text>}
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
@@ -468,8 +417,6 @@ const validateForm = () => {
     </SafeAreaView>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -550,13 +497,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginTop: 5,
     minHeight: 50,
+    overflow: 'hidden'
   },
   picker: {
-    minHeight: 50,
-    maxHeight: 50,
+    height: 50,
     width: '100%',
-    color: '#000', // เปลี่ยนเป็นสีดำเพื่อให้เห็นชัดขึ้น
-    backgroundColor: '#fff',
+    color: '#000',
+    backgroundColor: '#fff'
   },
   submitButton: {
     backgroundColor: '#007AFF',

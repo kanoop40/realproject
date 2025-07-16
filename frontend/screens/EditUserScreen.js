@@ -20,73 +20,24 @@ const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },
-  { label: 'วิศวกรรมศาสตร์', value: 'Engineering' },
-  { label: 'วิทยาศาสตร์', value: 'Science' },
-  { label: 'ครุศาสตร์อุตสาหกรรม', value: 'Industrial Education' },
-  { label: 'เทคโนโลยีการเกษตร', value: 'Agricultural Technology' },
+  { label: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', value: 'Engineering' },
 ];
 
 const majors = {
   Engineering: [
     { label: 'เลือกสาขา', value: '1' },
-    { label: 'วิศวกรรมคอมพิวเตอร์', value: 'Computer Engineering' },
-    { label: 'วิศวกรรมไฟฟ้า', value: 'Electrical Engineering' },
-    { label: 'วิศวกรรมเครื่องกล', value: 'Mechanical Engineering' },
-    { label: 'วิศวกรรมโยธา', value: 'Civil Engineering' },
-  ],
-  Science: [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: 'วิทยาการคอมพิวเตอร์', value: 'Computer Science' },
-    { label: 'คณิตศาสตร์', value: 'Mathematics' },
-    { label: 'เคมี', value: 'Chemistry' },
-    { label: 'ฟิสิกส์', value: 'Physics' },
-  ],
-  'Industrial Education': [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: 'ครุศาสตร์วิศวกรรม', value: 'Engineering Education' },
-    { label: 'ครุศาสตร์เทคโนโลยี', value: 'Technology Education' },
-  ],
-  'Agricultural Technology': [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: 'เทคโนโลยีการผลิตพืช', value: 'Crop Production Technology' },
-    { label: 'เทคโนโลยีการผลิตสัตว์', value: 'Animal Production Technology' },
+    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: 'DT' }
   ],
   '1': [
-    { label: 'เลือกสาขา', value: '1' }
+    { label: 'เลือกสาขา', value: '1' },
   ]
 };
 
 const groupCodes = {
-  'Computer Engineering': [
+  'DT': [
     { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'CE01', value: 'CE01' },
-    { label: 'CE02', value: 'CE02' },
-    { label: 'CE03', value: 'CE03' },
-  ],
-  'Electrical Engineering': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'EE01', value: 'EE01' },
-    { label: 'EE02', value: 'EE02' },
-  ],
-  'Mechanical Engineering': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'ME01', value: 'ME01' },
-    { label: 'ME02', value: 'ME02' },
-  ],
-  'Civil Engineering': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'CV01', value: 'CV01' },
-    { label: 'CV02', value: 'CV02' },
-  ],
-  'Computer Science': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'CS01', value: 'CS01' },
-    { label: 'CS02', value: 'CS02' },
-  ],
-  'Mathematics': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'MA01', value: 'MA01' },
-    { label: 'MA02', value: 'MA02' },
+    { label: 'DT26721N', value: 'DT26721N' },
+    { label: 'DT26722N', value: 'DT26722N' }
   ],
   '1': [
     { label: 'เลือกกลุ่มเรียน', value: '1' }

@@ -223,6 +223,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
+    paddingTop: 50, // เพิ่มบรรทัดนี้ หรือปรับเลขตามความเหมาะสม
     padding: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
