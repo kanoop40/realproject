@@ -100,15 +100,24 @@ const validateForm = () => {
   if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
   if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
   
-  // ตรวจสอบเฉพาะกรณีที่เป็นนักศึกษาหรืออาจารย์
   if (formData.role === 'student' || formData.role === 'teacher') {
-    if (!formData.faculty) newErrors.faculty = 'กรุณาเลือกคณะ';
-    if (!formData.major) newErrors.major = 'กรุณาเลือกสาขา';
-    if (formData.role === 'student' && !formData.groupCode) {
+    // ตรวจสอบคณะ
+    if (formData.faculty === '1') {
+      newErrors.faculty = 'กรุณาเลือกคณะ';
+    }
+    
+    // ตรวจสอบสาขา
+    if (formData.major === '1') {
+      newErrors.major = 'กรุณาเลือกสาขา';
+    }
+    
+    // ตรวจสอบกลุ่มเรียนสำหรับนักศึกษา
+    if (formData.role === 'student' && formData.groupCode === '1') {
       newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
     }
   }
 
+  // ตรวจสอบอีเมล
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (formData.email && !emailRegex.test(formData.email)) {
     newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
@@ -337,7 +346,19 @@ const validateForm = () => {
   </View>
 </View>
 
-
+<View style={styles.selectedValues}>
+  <Text style={styles.selectedText}>
+    คณะที่เลือก: {faculties.find(f => f.value === formData.faculty)?.label || 'ยังไม่ได้เลือก'}
+  </Text>
+  <Text style={styles.selectedText}>
+    สาขาที่เลือก: {majors[formData.faculty]?.find(m => m.value === formData.major)?.label || 'ยังไม่ได้เลือก'}
+  </Text>
+  {formData.role === 'student' && (
+    <Text style={styles.selectedText}>
+      กลุ่มเรียนที่เลือก: {groupCodes.find(g => g.value === formData.groupCode)?.label || 'ยังไม่ได้เลือก'}
+    </Text>
+  )}
+</View>
 {shouldShowField('faculty') && (
  <View style={styles.inputGroup}>
   <Text style={styles.label}>คณะ</Text>
@@ -354,14 +375,14 @@ const validateForm = () => {
         if (errors.faculty) setErrors({...errors, faculty: ''});
       }}
       style={styles.picker}
-      mode="dropdown" // เพิ่มบรรทัดนี้
+      mode="dropdown"
     >
       {faculties.map((faculty) => (
         <Picker.Item 
           key={faculty.value} 
           label={faculty.label} 
           value={faculty.value}
-          color="#333" // เพิ่มบรรทัดนี้
+          color={faculty.value === '1' ? '#666' : '#000'} // ปรับสีตัวอักษร
         />
       ))}
     </Picker>
@@ -371,62 +392,64 @@ const validateForm = () => {
 )}
 {shouldShowField('major') && (
   <View style={styles.inputGroup}>
-  <Text style={styles.label}>สาขา</Text>
-  <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
-    <Picker
-      selectedValue={formData.major}
-      onValueChange={(value) => {
-        setFormData({
-          ...formData,
-          major: value,
-          groupCode: '1'
-        });
-        if (errors.major) setErrors({...errors, major: ''});
-      }}
-      style={styles.picker}
-      mode="dropdown" // เพิ่มบรรทัดนี้
-    >
-      {(majors[formData.faculty] || majors['1']).map((major) => (
-        <Picker.Item 
-          key={major.value} 
-          label={major.label} 
-          value={major.value}
-          color="#333" // เพิ่มบรรทัดนี้
-        />
-      ))}
-    </Picker>
+    <Text style={styles.label}>สาขา</Text>
+    <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
+      <Picker
+        selectedValue={formData.major}
+        onValueChange={(value) => {
+          setFormData({
+            ...formData,
+            major: value,
+            groupCode: '1'
+          });
+          if (errors.major) setErrors({...errors, major: ''});
+        }}
+        style={styles.picker}
+        mode="dropdown"
+        enabled={formData.faculty !== '1'}
+      >
+        {(majors[formData.faculty] || majors['1']).map((major) => (
+          <Picker.Item 
+            key={major.value} 
+            label={major.label} 
+            value={major.value}
+            color={major.value === '1' ? '#999' : '#333'}
+          />
+        ))}
+      </Picker>
+    </View>
+    {errors.major && <Text style={styles.errorText}>{errors.major}</Text>}
   </View>
-  {errors.major && <Text style={styles.errorText}>{errors.major}</Text>}
-</View>
 )}
 {shouldShowField('groupCode') && (
   <View style={styles.inputGroup}>
-  <Text style={styles.label}>กลุ่มเรียน</Text>
-  <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
-    <Picker
-      selectedValue={formData.groupCode}
-      onValueChange={(value) => {
-        setFormData({
-          ...formData,
-          groupCode: value
-        });
-        if (errors.groupCode) setErrors({...errors, groupCode: ''});
-      }}
-      style={styles.picker}
-      mode="dropdown" // เพิ่มบรรทัดนี้
-    >
-      {groupCodes.map((group) => (
-        <Picker.Item 
-          key={group.value} 
-          label={group.label} 
-          value={group.value}
-          color="#333" // เพิ่มบรรทัดนี้
-        />
-      ))}
-    </Picker>
+    <Text style={styles.label}>กลุ่มเรียน</Text>
+    <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
+      <Picker
+        selectedValue={formData.groupCode}
+        onValueChange={(value) => {
+          setFormData({
+            ...formData,
+            groupCode: value
+          });
+          if (errors.groupCode) setErrors({...errors, groupCode: ''});
+        }}
+        style={styles.picker}
+        mode="dropdown"
+        enabled={formData.major !== '1'}
+      >
+        {groupCodes.map((group) => (
+          <Picker.Item 
+            key={group.value} 
+            label={group.label} 
+            value={group.value}
+            color={group.value === '1' ? '#999' : '#333'}
+          />
+        ))}
+      </Picker>
+    </View>
+    {errors.groupCode && <Text style={styles.errorText}>{errors.groupCode}</Text>}
   </View>
-  {errors.groupCode && <Text style={styles.errorText}>{errors.groupCode}</Text>}
-</View>
 )}
 
           <TouchableOpacity
@@ -520,19 +543,20 @@ const styles = StyleSheet.create({
   roleButtonTextActive: {
     color: '#fff'
   },
- pickerContainer: {
+  pickerContainer: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    marginTop: 5,
     backgroundColor: '#fff',
-    overflow: 'hidden' // เพิ่มบรรทัดนี้
+    marginTop: 5,
+    minHeight: 50,
   },
-   picker: {
-    height: 50,
-    width: '100%', // เพิ่มบรรทัดนี้
-    color: '#333', // เพิ่มบรรทัดนี้
-    backgroundColor: '#fff' // เพิ่มบรรทัดนี้
+  picker: {
+    minHeight: 50,
+    maxHeight: 50,
+    width: '100%',
+    color: '#000', // เปลี่ยนเป็นสีดำเพื่อให้เห็นชัดขึ้น
+    backgroundColor: '#fff',
   },
   submitButton: {
     backgroundColor: '#007AFF',
