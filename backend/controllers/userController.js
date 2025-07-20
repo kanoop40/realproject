@@ -3,21 +3,64 @@ const User = require('../models/UserModel');
 const generateToken = require('../utils/generateToken');
 
 const searchUsers = asyncHandler(async (req, res) => {
-    const q = req.query.q ? req.query.q.trim() : '';
-    if (!q) return res.json([]);
+    try {
+        const q = req.query.q ? req.query.q.trim() : '';
+        const currentUserId = req.user._id; // ได้จาก auth middleware
+        console.log('Search query:', q); // Debug log
 
-    const searchRegex = new RegExp(q, 'i');
-    const users = await User.find({
-        role: { $ne: 'admin' },
-        $or: [
-            { username: searchRegex },
-            { firstName: searchRegex },
-            { lastName: searchRegex },
-            { email: searchRegex }
-        ]
-    }).select('-password');
+        // ถ้าไม่มีคำค้นหา ส่งarray ว่างกลับไป
+        if (!q) {
+            console.log('Empty search query, returning empty array');
+            return res.json([]);
+        }
 
-    res.json(users);
+        // สร้าง regex สำหรับค้นหาแบบ case-insensitive
+        const searchRegex = new RegExp(q, 'i');
+        console.log('Search regex:', searchRegex); // Debug log
+
+        // ค้นหาผู้ใช้ที่ไม่ใช่ admin และไม่ใช่ตัวเอง โดยค้นหาเฉพาะชื่อและนามสกุล
+        const query = {
+            $and: [
+                { role: { $ne: 'admin' } },
+                { _id: { $ne: currentUserId } }, // ไม่แสดงตัวเอง
+                {
+                    $or: [
+                        { firstName: searchRegex },
+                        { lastName: searchRegex }
+                    ]
+                }
+            ]
+        };
+
+        console.log('MongoDB query:', JSON.stringify(query, null, 2)); // Debug log
+
+        const users = await User.find(query)
+            .select('-password')
+            .sort({ firstName: 1, lastName: 1 }); // เรียงตามชื่อ
+
+        console.log(`Found ${users.length} users`); // Debug log
+
+        // ส่งผลลัพธ์กลับไป
+        res.json(users.map(user => ({
+            _id: user._id,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            faculty: user.faculty,
+            major: user.major,
+            groupCode: user.groupCode,
+            role: user.role,
+            avatar: user.avatar
+        })));
+
+    } catch (error) {
+        console.error('Search error:', error); // Debug log
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการค้นหา',
+            error: error.message
+        });
+    }
 });
 
 const getUsers = asyncHandler(async (req, res) => {
@@ -304,15 +347,134 @@ const getUserById = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Get current user info
+// @route   GET /api/users/me
+// @access  Private
+const getCurrentUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).select('-password');
+    
+    if (user) {
+        res.json({
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            faculty: user.faculty,
+            major: user.major,
+            groupCode: user.groupCode,
+            role: user.role,
+            avatar: user.avatar
+        });
+    } else {
+        res.status(404);
+        throw new Error('ไม่พบข้อมูลผู้ใช้');
+    }
+});
+
+// อัพเดตโปรไฟล์ผู้ใช้
+const updateProfile = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { firstName, lastName, email, faculty, major, groupCode } = req.body;
+
+        // ตรวจสอบข้อมูลที่จำเป็น
+        if (!firstName || !lastName || !email) {
+            res.status(400);
+            throw new Error('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+        }
+
+        // ตรวจสอบว่าอีเมลซ้ำกับผู้ใช้คนอื่นหรือไม่
+        const existingUser = await User.findOne({ 
+            email: email, 
+            _id: { $ne: userId } 
+        });
+
+        if (existingUser) {
+            res.status(400);
+            throw new Error('อีเมลนี้ถูกใช้งานแล้ว');
+        }
+
+        // อัพเดตข้อมูลผู้ใช้
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            {
+                firstName,
+                lastName,
+                email,
+                faculty,
+                major,
+                groupCode
+            },
+            { 
+                new: true,
+                select: '-password'
+            }
+        );
+
+        if (!updatedUser) {
+            res.status(404);
+            throw new Error('ไม่พบข้อมูลผู้ใช้');
+        }
+
+        res.json(updatedUser);
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        if (error.code === 11000) {
+            res.status(400);
+            throw new Error('อีเมลนี้ถูกใช้งานแล้ว');
+        }
+        throw error;
+    }
+});
+
+// อัพโหลดรูปโปรไฟล์
+const uploadAvatar = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        if (!req.file) {
+            res.status(400);
+            throw new Error('กรุณาเลือกไฟล์รูปภาพ');
+        }
+
+        // อัพเดตข้อมูล avatar ในฐานข้อมูล
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { avatar: req.file.path },
+            { 
+                new: true,
+                select: '-password'
+            }
+        );
+
+        if (!updatedUser) {
+            res.status(404);
+            throw new Error('ไม่พบข้อมูลผู้ใช้');
+        }
+
+        res.json({
+            message: 'อัพโหลดรูปโปรไฟล์สำเร็จ',
+            avatar: req.file.path
+        });
+    } catch (error) {
+        console.error('Error uploading avatar:', error);
+        throw error;
+    }
+});
+
 module.exports = {
     authUser,
     registerUser,
     getUserProfile,
     updateUserProfile,
     getUserById,
-    getUsers,      // เพิ่ม getUsers
+    getCurrentUser,    // เพิ่ม getCurrentUser
+    getUsers,         // เพิ่ม getUsers
     deleteUser,
     createUser,
     searchUsers,
-    updateUser     // เพิ่ม deleteUser
+    updateUser,        // เพิ่ม deleteUser
+    updateProfile,     // เพิ่ม updateProfile
+    uploadAvatar       // เพิ่ม uploadAvatar
 };

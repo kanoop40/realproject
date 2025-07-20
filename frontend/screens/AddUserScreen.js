@@ -19,7 +19,7 @@ const API_URL = 'http://10.0.2.2:5000';
 
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },
-  { label: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', value: 'Engineering' },
+  { label: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', value: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ' },
 ];
 
 const majors = {

@@ -1,7 +1,9 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+const path = require('path');
 const userRoutes = require('./routes/userRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 const { errorHandler } = require('./Middleware/errorMiddleware');
 
 dotenv.config();
@@ -9,8 +11,12 @@ const app = express();
 
 app.use(express.json());
 
+// Serve static files (for uploaded images)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI)
+const mongoUri = process.env.MONGO_URI || 'mongodb+srv://punchkan2547:kanoop60@cluster0.pco8lhg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+mongoose.connect(mongoUri)
     .then(async () => {
         console.log('MongoDB Connected Successfully');
         
@@ -30,6 +36,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 // Routes
 app.use('/api/users', userRoutes);
+app.use('/api/chats', chatRoutes);
 
 // Error Handling
 app.use(errorHandler);
