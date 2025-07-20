@@ -46,7 +46,7 @@ const LoginScreen = ({ navigation }) => {
       if (response.data.role === 'admin') {
         navigation.replace('Admin');
       } else {
-        navigation.replace('User'); // นำทางไปหน้า User สำหรับ role อื่นๆ
+         navigation.replace('Chat'); // นำทางไปหน้า User สำหรับ role อื่นๆ
       }
     } catch (error) {
       console.error('Login error:', error.response?.data || error);

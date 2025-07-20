@@ -3,93 +3,104 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  TextInput,
   TouchableOpacity,
-  Image
+  ActivityIndicator
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
+const API_URL = 'http://10.0.2.2:5000';
+
 const ChatScreen = ({ navigation }) => {
-  const [chats, setChats] = useState([]);
-  const [message, setMessage] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadCurrentUser();
-    loadChats();
   }, []);
 
   const loadCurrentUser = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await axios.get('http://10.0.2.2:5000/api/users/me', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      if (!token) {
+        navigation.replace('Login');
+        return;
+      }
+
+      const response = await axios.get(`${API_URL}/api/users/me`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+
+      if (response.data.role === 'admin') {
+        navigation.replace('Admin');
+        return;
+      }
+
       setCurrentUser(response.data);
     } catch (error) {
-      console.error(error);
+      console.error('Error loading user:', error);
+      if (error.response?.status === 401) {
+        navigation.replace('Login');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const loadChats = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const response = await axios.get('http://10.0.2.2:5000/api/chats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setChats(response.data);
-    } catch (error) {
-      console.error(error);
-    }
+  const navigateToSearch = () => {
+    navigation.navigate('Search');
   };
+
+  const navigateToProfile = () => {
+    navigation.navigate('Profile');
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity 
-          onPress={() => navigation.navigate('Search')}
-          style={styles.searchButton}
+          onPress={navigateToSearch}
+          style={styles.iconButton}
         >
           <Icon name="search" size={24} color="#333" />
         </TouchableOpacity>
 
+        <Text style={styles.headerTitle}>แชท</Text>
+
         <TouchableOpacity 
-          onPress={() => navigation.navigate('Profile')}
-          style={styles.profileButton}
+          onPress={navigateToProfile}
+          style={styles.iconButton}
         >
-          {currentUser?.profileImage ? (
-            <Image 
-              source={{ uri: currentUser.profileImage }} 
-              style={styles.profileImage}
-            />
-          ) : (
-            <Icon name="account-circle" size={24} color="#333" />
-          )}
+          <Icon name="account-circle" size={24} color="#333" />
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={chats}
-        keyExtractor={(item) => item._id}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={styles.chatItem}
-            onPress={() => navigation.navigate('ChatDetail', { chatId: item._id })}
-          >
-            <Image 
-              source={{ uri: item.participant.profileImage || 'default_image_url' }}
-              style={styles.avatar}
-            />
-            <View style={styles.chatInfo}>
-              <Text style={styles.username}>{item.participant.username}</Text>
-              <Text style={styles.lastMessage}>{item.lastMessage}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      />
+      <View style={styles.emptyContainer}>
+        <Icon name="chat-bubble-outline" size={64} color="#ccc" />
+        <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
+        <Text style={styles.subText}>
+          ค้นหาเพื่อนเพื่อเริ่มแชท
+        </Text>
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={navigateToSearch}
+        >
+          <Icon name="search" size={20} color="#fff" style={styles.searchIcon} />
+          <Text style={styles.searchButtonText}>ค้นหาเพื่อน</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -99,48 +110,66 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff'
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff'
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 15,
+    paddingTop: 30,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#ddd'
   },
-  searchButton: {
-    padding: 5
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333'
   },
-  profileButton: {
-    padding: 5
+  iconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5'
   },
-  profileImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
   },
-  chatItem: {
-    flexDirection: 'row',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    alignItems: 'center'
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 15
-  },
-  chatInfo: {
-    flex: 1
-  },
-  username: {
-    fontSize: 16,
-    fontWeight: 'bold'
-  },
-  lastMessage: {
+  subText: {
     fontSize: 14,
     color: '#666',
-    marginTop: 5
+    marginTop: 8,
+    marginBottom: 24
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 10
+  },
+  searchIcon: {
+    marginRight: 8
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600'
   }
 });
 
