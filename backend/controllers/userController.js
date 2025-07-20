@@ -2,7 +2,23 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/UserModel');
 const generateToken = require('../utils/generateToken');
 
+const searchUsers = asyncHandler(async (req, res) => {
+    const q = req.query.q ? req.query.q.trim() : '';
+    if (!q) return res.json([]);
 
+    const searchRegex = new RegExp(q, 'i');
+    const users = await User.find({
+        role: { $ne: 'admin' },
+        $or: [
+            { username: searchRegex },
+            { firstName: searchRegex },
+            { lastName: searchRegex },
+            { email: searchRegex }
+        ]
+    }).select('-password');
+
+    res.json(users);
+});
 
 const getUsers = asyncHandler(async (req, res) => {
   const users = await User.find({}).select('-password');
@@ -297,5 +313,6 @@ module.exports = {
     getUsers,      // เพิ่ม getUsers
     deleteUser,
     createUser,
+    searchUsers,
     updateUser     // เพิ่ม deleteUser
 };

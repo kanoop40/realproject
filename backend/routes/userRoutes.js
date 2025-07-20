@@ -9,6 +9,7 @@ const {
     deleteUser,
     createUser,
     updateUser,
+    searchUsers,
     getUserById // เพิ่มการ import
 } = require('../controllers/userController');
 const { protect, admin } = require('../middleware/authMiddleware');
@@ -31,4 +32,5 @@ router.route('/:id')
     .delete(protect, admin, deleteUser)
     .put(protect, admin, updateUser);
 
+    router.get('/search', protect, searchUsers);
 module.exports = router;
