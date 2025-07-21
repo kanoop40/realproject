@@ -17,8 +17,9 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: true,
-        unique: true
+        required: false,
+        unique: true,
+        sparse: true // อนุญาตให้เป็น null และไม่ซ้ำกัน
     },
     firstName: {
         type: String,
@@ -75,6 +76,10 @@ const userSchema = new mongoose.Schema({
     lastSeen: {
         type: Date,
         default: Date.now
+    },
+    pushToken: {
+        type: String,
+        default: null
     }
 }, {
     timestamps: true

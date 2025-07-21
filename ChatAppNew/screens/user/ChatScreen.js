@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -7,27 +8,23 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   Animated
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as DocumentPicker from 'expo-document-picker';
+import { createPrivateChat } from '../../service/api';
 import api from '../../service/api';
+import { useSocket } from '../../context/SocketContext';
+import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'http://192.168.2.38:5000'; // WiFi IP address
+const API_URL = 'http://192.168.2.38:5000';
 
 const ChatScreen = ({ route, navigation }) => {
+  const { socket } = useSocket();
+  const { user: authUser, loading: authLoading } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [chats, setChats] = useState([]);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
   const [popupAnimation] = useState(new Animated.Value(0));
@@ -36,8 +33,10 @@ const ChatScreen = ({ route, navigation }) => {
   const { recipientId, recipientName, recipientAvatar } = route.params || {};
 
   useEffect(() => {
-    loadCurrentUser();
-  }, []);
+    if (!authLoading) {
+      loadCurrentUser();
+    }
+  }, [authLoading]);
 
   useEffect(() => {
     if (currentUser) {
@@ -51,38 +50,53 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [currentUser, recipientId]);
 
+  // เพิ่ม focus listener เพื่อรีเฟรชแชทเมื่อกลับมาหน้านี้
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser && !recipientId) {
+        console.log('📱 ChatScreen focused, refreshing chats...');
+        loadChats();
+      }
+    }, [currentUser, recipientId, loadChats])
+  );
+
+  // Refresh chats when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (currentUser && !recipientId) {
+        console.log('ChatScreen: Screen focused, refreshing chats...');
+        loadChats();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, currentUser, recipientId, loadChats]);
+
   const handleDirectChat = async () => {
     try {
-      // ดูว่ามีห้องแชทอยู่แล้วหรือไม่
-      const existingChats = await api.get('/chats');
-      const existingChat = existingChats.data.find(chat => 
-        chat.participants.some(p => p._id === recipientId)
-      );
+      console.log('🔄 Handling direct chat with recipientId:', recipientId);
+      
+      // ใช้ createPrivateChat API เหมือนกับ SearchUserScreen
+      const response = await createPrivateChat([currentUser._id, recipientId]);
+      console.log('✅ Private chat response:', response);
 
-      if (existingChat) {
-        setSelectedChat({
-          _id: existingChat._id,
-          roomName: existingChat.roomName,
-          participants: existingChat.participants
-        });
-        loadMessages(existingChat._id);
+      if (response.existing) {
+        console.log('📱 Using existing chat:', response.chatroomId);
       } else {
-        // สร้างห้องแชทใหม่
-        const response = await api.post('/chats', {
-          roomName: `${currentUser.firstName} & ${recipientName}`,
-          participants: [recipientId]
-        });
-
-        setSelectedChat({
-          _id: response.data._id,
-          roomName: response.data.roomName,
-          participants: response.data.user_id
-        });
-        
-        loadMessages(response.data._id);
+        console.log('🆕 Created new chat:', response.chatroomId);
       }
+
+      // นำทางไปยังหน้าแชทส่วนตัว
+      navigation.replace('PrivateChat', {
+        chatroomId: response.chatroomId,
+        roomName: response.roomName,
+        recipientId: recipientId,
+        recipientName: recipientName,
+        recipientAvatar: recipientAvatar
+      });
+      
     } catch (error) {
-      console.error('Error creating direct chat:', error);
+      console.error('❌ Error in handleDirectChat:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเปิดแชทได้');
     }
   };
@@ -90,16 +104,30 @@ const ChatScreen = ({ route, navigation }) => {
   const loadCurrentUser = async () => {
     try {
       console.log('ChatScreen: Loading current user...');
+      console.log('ChatScreen: AuthUser from context:', authUser);
+      
+      // ตรวจสอบ token ก่อน
       const token = await AsyncStorage.getItem('userToken');
+      console.log('ChatScreen: Token from storage:', token ? 'exists' : 'not found');
+      
       if (!token) {
         console.log('ChatScreen: No token found, redirecting to login');
         navigation.replace('Login');
         return;
       }
 
-      console.log('ChatScreen: Fetching current user...');
+      // ดึงข้อมูลจาก API เสมอ เพื่อให้แน่ใจว่าได้ข้อมูลที่ถูกต้องตาม token
+      console.log('ChatScreen: Fetching current user from API...');
       const response = await api.get('/users/current');
-      console.log('ChatScreen: User data received:', response.data);
+      console.log('ChatScreen: User data received from API:', response.data);
+      
+      // เปรียบเทียบข้อมูลจาก AuthContext และ API
+      if (authUser && authUser._id !== response.data._id) {
+        console.warn('⚠️ Mismatch between AuthContext and API user!');
+        console.warn('AuthContext user:', authUser._id, authUser.firstName, authUser.lastName);
+        console.warn('API user:', response.data._id, response.data.firstName, response.data.lastName);
+        console.warn('ใช้ข้อมูลจาก API เพราะเป็นข้อมูลที่ถูกต้องตาม token');
+      }
 
       if (response.data.role === 'admin') {
         console.log('ChatScreen: User is admin, redirecting to admin screen');
@@ -107,7 +135,7 @@ const ChatScreen = ({ route, navigation }) => {
         return;
       }
 
-      console.log('ChatScreen: Setting current user');
+      console.log('ChatScreen: Setting current user from API');
       setCurrentUser(response.data);
     } catch (error) {
       console.error('ChatScreen: Error loading user:', error);
@@ -126,92 +154,50 @@ const ChatScreen = ({ route, navigation }) => {
 
   const loadChats = useCallback(async () => {
     try {
+      console.log('ChatScreen: Loading chats...');
       const response = await api.get('/chats');
-      setChats(response.data);
+      console.log('ChatScreen: Chats loaded:', response.data?.length || 0, 'chats');
+      console.log('ChatScreen: Chat data sample:', response.data?.[0]);
+      setChats(response.data || []);
     } catch (error) {
-      console.error('Error loading chats:', error);
-    }
-  }, []);
-
-  const loadMessages = useCallback(async (chatId) => {
-    try {
-      const response = await api.get(`/chats/${chatId}/messages`);
-      setMessages(response.data.messages);
+      console.error('ChatScreen: Error loading chats:', error);
+      console.error('ChatScreen: Error response:', error.response?.data);
+      setChats([]);
       
-      // มาร์คข้อความว่าอ่านแล้ว
-      await api.put(`/chats/${chatId}/read`);
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    }
-  }, []);
-
-  const sendMessage = async () => {
-    if ((!newMessage.trim() && !selectedFile) || !selectedChat || isSending) return;
-
-    setIsSending(true);
-    const messageToSend = newMessage.trim();
-    setNewMessage('');
-
-    try {
-      const formData = new FormData();
-      formData.append('content', messageToSend || 'ไฟล์แนบ');
-      
-      if (selectedFile) {
-        formData.append('file', {
-          uri: selectedFile.uri,
-          type: selectedFile.mimeType,
-          name: selectedFile.name
-        });
+      if (error.response?.status === 401) {
+        Alert.alert('เซสชันหมดอายุ', 'กรุณาเข้าสู่ระบบใหม่', [
+          { text: 'ตกลง', onPress: () => navigation.replace('Login') }
+        ]);
       }
-
-      const response = await api.post(`/chats/${selectedChat._id}/messages`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      // เพิ่มข้อความใหม่ไปยัง state
-      setMessages(prev => [...prev, response.data]);
-      setSelectedFile(null);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setNewMessage(messageToSend); // คืนข้อความถ้าส่งไม่สำเร็จ
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งข้อความได้');
-    } finally {
-      setIsSending(false);
     }
-  };
-
-  const pickFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
-
-      if (result.type === 'success') {
-        setSelectedFile(result);
-      }
-    } catch (error) {
-      console.error('Error picking file:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเลือกไฟล์ได้');
-    }
-  };
-
-  const removeSelectedFile = () => {
-    setSelectedFile(null);
-  };
+  }, [navigation]);
 
   const deleteChat = async (chatId) => {
     try {
-      await api.delete(`/chats/${chatId}`);
-      // รีเฟรชรายการแชท
-      loadChats();
+      console.log('🗑️ Deleting chat:', chatId);
+      const response = await api.delete(`/chats/${chatId}`);
+      console.log('✅ Chat deleted successfully:', response.data);
+      
+      // รีเฟรชรายการแชทใหม่
+      console.log('🔄 Refreshing chat list after deletion...');
+      await loadChats();
+      
       setChatToDelete(null);
       Alert.alert('สำเร็จ', 'ลบห้องแชทเรียบร้อยแล้ว');
     } catch (error) {
-      console.error('Error deleting chat:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบห้องแชทได้');
+      console.error('❌ Error deleting chat:', error);
+      console.error('❌ Error response:', error.response?.data);
+      
+      let errorMessage = 'ไม่สามารถลบห้องแชทได้';
+      if (error.response?.status === 403) {
+        errorMessage = 'คุณไม่มีสิทธิ์ลบห้องแชทนี้';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'ไม่พบห้องแชทที่ต้องการลบ';
+        // ลบออกจาก state ถ้าไม่พบในเซิร์ฟเวอร์
+        setChats(prev => prev.filter(chat => chat._id !== chatId));
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     }
   };
 
@@ -275,15 +261,23 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const handleChatPress = (chat) => {
-    setSelectedChat(chat);
-    loadMessages(chat._id);
+    // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
+    const otherParticipant = chat.participants?.find(p => p._id !== currentUser._id);
+    
+    console.log('🔗 Opening chat with participant:', otherParticipant);
+    console.log('🔗 Chat room name:', chat.roomName);
+    
+    navigation.navigate('PrivateChat', {
+      chatroomId: chat._id,
+      roomName: chat.roomName,
+      recipientId: otherParticipant?._id,
+      recipientName: otherParticipant ? 
+        `${otherParticipant.firstName} ${otherParticipant.lastName}` : 
+        'แชทส่วนตัว',
+      recipientAvatar: otherParticipant?.avatar
+    });
   };
 
-  const goBackToChats = () => {
-    setSelectedChat(null);
-    setMessages([]);
-    loadChats();
-  };
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('th-TH', {
@@ -292,37 +286,18 @@ const ChatScreen = ({ route, navigation }) => {
     });
   };
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const downloadFile = (file) => {
-    // TODO: Implement file download/opening functionality
-    Alert.alert('ไฟล์', `ชื่อไฟล์: ${file.file_name}\nขนาด: ${formatFileSize(file.size)}`);
-  };
-
-  const formatDate = (timestamp) => {
-    const date = new Date(timestamp);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'วันนี้';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'เมื่อวาน';
-    } else {
-      return date.toLocaleDateString('th-TH');
-    }
-  };
-
   const renderChatItem = useCallback(({ item }) => {
     // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
-    const otherParticipant = item.participants.find(p => p._id !== currentUser._id);
+    const otherParticipant = item.participants?.find(p => p._id !== currentUser._id);
+    
+    // Debug logging
+    console.log('Rendering chat item:', {
+      chatId: item._id,
+      roomName: item.roomName,
+      participants: item.participants,
+      otherParticipant: otherParticipant,
+      currentUserId: currentUser._id
+    });
     
     return (
       <TouchableOpacity 
@@ -358,7 +333,7 @@ const ChatScreen = ({ route, navigation }) => {
           <Text style={styles.chatName}>
             {otherParticipant ? 
               `${otherParticipant.firstName} ${otherParticipant.lastName}` :
-              item.roomName
+              'แชทส่วนตัว'
             }
           </Text>
           {item.lastMessage && (
@@ -379,219 +354,26 @@ const ChatScreen = ({ route, navigation }) => {
     );
   }, [currentUser]);
 
-  const renderMessage = useCallback(({ item }) => {
-    const isMyMessage = item.sender._id === currentUser._id;
-    
-    return (
-      <View style={[
-        styles.messageContainer,
-        isMyMessage ? styles.myMessage : styles.otherMessage
-      ]}>
-        {!isMyMessage && (
-          <View style={styles.messageAvatarContainer}>
-            {item.sender.avatar ? (
-              <Image
-                source={{ uri: `${API_URL}/${item.sender.avatar}` }}
-                style={styles.messageAvatar}
-                defaultSource={require('../../assets/default-avatar.png')}
-              />
-            ) : (
-              <View style={[styles.messageAvatar, styles.defaultMessageAvatar]}>
-                <Text style={styles.messageAvatarText}>
-                  {item.sender.firstName?.[0]?.toUpperCase() || '?'}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-        
-        <View style={[
-          styles.messageBubble,
-          isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.otherMessageText
-          ]}>
-            {item.content}
-          </Text>
-          
-          {/* แสดงไฟล์ถ้ามี */}
-          {item.file && (
-            <TouchableOpacity 
-              style={styles.fileAttachment}
-              onPress={() => downloadFile(item.file)}
-            >
-              <Text style={styles.attachIcon}>📎</Text>
-              <Text style={[
-                styles.fileName,
-                { color: isMyMessage ? "#fff" : "#007AFF" }
-              ]}>
-                {item.file.file_name}
-              </Text>
-              <Text style={[
-                styles.fileSize,
-                { color: isMyMessage ? "#fff" : "#666" }
-              ]}>
-                ({formatFileSize(item.file.size)})
-              </Text>
-            </TouchableOpacity>
-          )}
-          
-          <Text style={[
-            styles.messageTime,
-            isMyMessage ? styles.myMessageTime : styles.otherMessageTime
-          ]}>
-            {formatTime(item.timestamp)}
-          </Text>
-        </View>
-      </View>
-    );
-  }, [currentUser]);
-
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={{marginTop: 10}}>
+          {authLoading ? 'กำลังโหลดข้อมูลผู้ใช้...' : 'กำลังโหลด...'}
+        </Text>
       </View>
     );
   }
 
-  // หากเลือกแชทแล้ว แสดงหน้าข้อความ
-  if (selectedChat) {
-    return (
-      <KeyboardAvoidingView 
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        {/* Header ของแชท */}
-        <View style={styles.chatHeader}>
-          <TouchableOpacity 
-            onPress={goBackToChats}
-            style={styles.backButton}
-          >
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.chatHeaderInfo}>
-            {(() => {
-              const otherParticipant = selectedChat.participants?.find(p => p._id !== currentUser._id);
-              return (
-                <>
-                  {otherParticipant?.avatar ? (
-                    <Image
-                      source={{ uri: `${API_URL}/${otherParticipant.avatar}` }}
-                      style={styles.headerAvatar}
-                      defaultSource={require('../../assets/default-avatar.png')}
-                    />
-                  ) : (
-                    <View style={[styles.headerAvatar, styles.defaultAvatar]}>
-                      <Text style={styles.headerAvatarText}>
-                        {otherParticipant?.firstName?.[0]?.toUpperCase() || '?'}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  <View style={styles.headerTextInfo}>
-                    <Text style={styles.chatHeaderName}>
-                      {otherParticipant ? 
-                        `${otherParticipant.firstName} ${otherParticipant.lastName}` :
-                        selectedChat.roomName
-                      }
-                    </Text>
-                  </View>
-                </>
-              );
-            })()}
-          </View>
-          
-          <View style={styles.headerActions}>
-            {/* สำหรับปุ่มเพิ่มเติมในอนาคต */}
-          </View>
-        </View>
-
-        {/* รายการข้อความ */}
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item._id}
-          renderItem={renderMessage}
-          style={styles.messagesList}
-          contentContainerStyle={styles.messagesContainer}
-          inverted={false}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={15}
-          windowSize={10}
-          initialNumToRender={12}
-        />
-
-        {/* Input สำหรับพิมพ์ข้อความ */}
-        <View style={styles.inputContainer}>
-          {/* แสดงไฟล์ที่เลือก */}
-          {selectedFile && (
-            <View style={styles.selectedFileContainer}>
-              <View style={styles.fileInfo}>
-                <Text style={styles.attachIcon}>📎</Text>
-                <Text style={styles.fileName} numberOfLines={1}>
-                  {selectedFile.name}
-                </Text>
-              </View>
-              <TouchableOpacity 
-                onPress={removeSelectedFile}
-                style={styles.removeFileButton}
-              >
-                <Text style={styles.closeIcon}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          <View style={styles.messageInputRow}>
-            <TouchableOpacity
-              style={styles.fileButton}
-              onPress={pickFile}
-            >
-              <Text style={styles.attachIcon}>📎</Text>
-            </TouchableOpacity>
-            
-            <TextInput
-              style={styles.textInput}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="พิมพ์ข้อความ..."
-              placeholderTextColor="#999"
-              multiline
-              maxLength={1000}
-              keyboardType="default"
-              returnKeyType="default"
-              enablesReturnKeyAutomatically={false}
-              blurOnSubmit={false}
-              autoCorrect={true}
-              spellCheck={true}
-              textContentType="none"
-              autoCapitalize="sentences"
-            />
-            
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                ((!newMessage.trim() && !selectedFile) || isSending) && styles.sendButtonDisabled
-              ]}
-              onPress={sendMessage}
-              disabled={(!newMessage.trim() && !selectedFile) || isSending}
-            >
-              {isSending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.sendIcon}>➤</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  // หน้ารายการแชท
+  // Debug info
+  console.log('ChatScreen render:', {
+    currentUser: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser._id})` : 'null',
+    authUser: authUser ? `${authUser.firstName} ${authUser.lastName} (${authUser._id})` : 'null',
+    chatsCount: chats.length,
+    recipientId,
+    isLoading,
+    authLoading
+  });
 
   return (
     <View style={styles.container}>
@@ -619,6 +401,13 @@ const ChatScreen = ({ route, navigation }) => {
           <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
           <Text style={styles.subText}>
             ค้นหาเพื่อนเพื่อเริ่มแชท
+          </Text>
+          {/* Debug info */}
+          <Text style={styles.debugText}>
+            User: {currentUser?.firstName} {currentUser?.lastName} ({currentUser?._id?.slice(-6)}) | Chats: {chats.length}
+          </Text>
+          <Text style={styles.debugText}>
+            AuthUser: {authUser?.firstName} {authUser?.lastName} ({authUser?._id?.slice(-6)})
           </Text>
           <TouchableOpacity
             style={styles.searchButton}
@@ -812,158 +601,6 @@ const styles = StyleSheet.create({
     color: '#999'
   },
 
-  // Chat Screen Styles
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    paddingTop: 50,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd'
-  },
-  backButton: {
-    padding: 8,
-    marginRight: 8
-  },
-  chatHeaderInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12
-  },
-  headerAvatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666'
-  },
-  headerTextInfo: {
-    flex: 1
-  },
-  chatHeaderName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333'
-  },
-  headerActions: {
-    width: 40
-  },
-
-  // Messages Styles
-  messagesList: {
-    flex: 1,
-    backgroundColor: '#f8f9fa'
-  },
-  messagesContainer: {
-    padding: 16
-  },
-  messageContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    alignItems: 'flex-end'
-  },
-  myMessage: {
-    justifyContent: 'flex-end'
-  },
-  otherMessage: {
-    justifyContent: 'flex-start'
-  },
-  messageAvatarContainer: {
-    marginRight: 8
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16
-  },
-  defaultMessageAvatar: {
-    backgroundColor: '#e1e1e1',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  messageAvatarText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666'
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    padding: 12,
-    borderRadius: 18
-  },
-  myMessageBubble: {
-    backgroundColor: '#007AFF',
-    borderBottomRightRadius: 4
-  },
-  otherMessageBubble: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 20
-  },
-  myMessageText: {
-    color: '#fff'
-  },
-  otherMessageText: {
-    color: '#333'
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4
-  },
-  myMessageTime: {
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'right'
-  },
-  otherMessageTime: {
-    color: '#999'
-  },
-
-  // Input Styles
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 16,
-    paddingTop: 8,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#ddd'
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    maxHeight: 100,
-    fontSize: 16
-  },
-  sendButton: {
-    backgroundColor: '#007AFF',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#ccc'
-  },
-
   // Empty State Styles
   emptyContainer: {
     flex: 1,
@@ -992,57 +629,16 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     marginTop: 10
   },
-  searchIcon: {
-    marginRight: 8
-  },
-
-  // File attachment styles
-  selectedFileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  fileInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  fileName: {
-    marginLeft: 8,
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
-  },
-  removeFileButton: {
-    padding: 4,
-  },
-  messageInputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  fileButton: {
-    padding: 8,
-    marginRight: 8,
-  },
-  fileAttachment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  fileSize: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
   searchButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600'
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#999',
+    marginVertical: 10,
+    textAlign: 'center'
   },
 
   // Floating Button Styles
@@ -1116,10 +712,6 @@ const styles = StyleSheet.create({
   },
 
   // Emoji Icon Styles
-  backIcon: {
-    fontSize: 20,
-    color: '#007AFF',
-  },
   headerIcon: {
     fontSize: 20,
     color: '#007AFF',
@@ -1132,6 +724,7 @@ const styles = StyleSheet.create({
   searchIcon: {
     fontSize: 16,
     color: '#fff',
+    marginRight: 8,
   },
   floatingIcon: {
     fontSize: 24,
@@ -1140,17 +733,6 @@ const styles = StyleSheet.create({
   menuIcon: {
     fontSize: 20,
     marginRight: 12,
-  },
-  attachIcon: {
-    fontSize: 16,
-  },
-  closeIcon: {
-    fontSize: 16,
-    color: '#666',
-  },
-  sendIcon: {
-    fontSize: 20,
-    color: '#fff',
   },
 });
 

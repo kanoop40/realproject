@@ -23,10 +23,13 @@ const searchUsers = asyncHandler(async (req, res) => {
         // กำหนด role filter ตาม role ของผู้ใช้ปัจจุบัน
         let roleFilter = {};
         if (currentUserRole === 'student') {
-            // ผู้ใช้ปกติค้นหาเจอเฉพาะ student เท่านั้น
-            roleFilter = { role: 'student' };
-        } else if (currentUserRole === 'admin' || currentUserRole === 'teacher') {
-            // admin และ teacher ค้นหาได้ทุก role
+            // นักศึกษาค้นหาเจอทุกคนยกเว้น admin
+            roleFilter = { role: { $ne: 'admin' } };
+        } else if (currentUserRole === 'teacher') {
+            // teacher ค้นหาได้ทุก role ยกเว้น admin
+            roleFilter = { role: { $ne: 'admin' } };
+        } else if (currentUserRole === 'admin') {
+            // admin ค้นหาได้ทุก role
             roleFilter = {};
         }
 
@@ -302,49 +305,87 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 });
 
 const createUser = asyncHandler(async (req, res) => {
-  const {
-    username,
-    password,
-    firstName,
-    lastName,
-    email,
-    role,
-    faculty,
-    major,
-    groupCode
-  } = req.body;
+  try {
+    let {
+      username,
+      password,
+      firstName,
+      lastName,
+      email,
+      role,
+      faculty,
+      department,
+      major,
+      groupCode
+    } = req.body;
 
-  const userExists = await User.findOne({ 
-    $or: [
-      { email },
-      { username }
-    ]
-  });
+    console.log('Creating user with data:', { username, email, role, faculty, major, groupCode });
 
-  if (userExists) {
-    res.status(400);
-    throw new Error('ผู้ใช้นี้มีอยู่ในระบบแล้ว');
-  }
+    // ทำความสะอาด email - ถ้าเป็นค่าว่างให้เป็น undefined
+    if (email === '' || email === null || (typeof email === 'string' && email.trim() === '')) {
+      email = undefined;
+    } else if (email) {
+      email = email.trim();
+    }
 
-  const user = await User.create({
-    username,
-    password,
-    firstName,
-    lastName,
-    email,
-    role,
-    faculty,
-    major,
-    groupCode
-  });
+    // ตรวจสอบว่า username ซ้ำหรือไม่
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      res.status(400);
+      throw new Error('ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว');
+    }
 
-  if (user) {
-    res.status(201).json({
-      message: 'สร้างผู้ใช้สำเร็จ'
-    });
-  } else {
-    res.status(400);
-    throw new Error('ข้อมูลผู้ใช้ไม่ถูกต้อง');
+    // ตรวจสอบว่า email ซ้ำหรือไม่ (เฉพาะเมื่อมี email)
+    if (email) {
+      const existingEmailUser = await User.findOne({ email });
+      if (existingEmailUser) {
+        res.status(400);
+        throw new Error('อีเมลนี้มีอยู่ในระบบแล้ว');
+      }
+    }
+
+    // เตรียมข้อมูลสำหรับสร้างผู้ใช้
+    const userData = {
+      username,
+      password,
+      firstName,
+      lastName,
+      role,
+      faculty,
+      department,
+      major,
+      groupCode
+    };
+
+    // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมา (ไม่เป็นค่าว่าง)
+    if (email) {
+      userData.email = email;
+    }
+
+    const user = await User.create(userData);
+
+    if (user) {
+      console.log('User created successfully:', user.username);
+      res.status(201).json({
+        message: 'สร้างผู้ใช้สำเร็จ',
+        userId: user._id
+      });
+    } else {
+      res.status(400);
+      throw new Error('ข้อมูลผู้ใช้ไม่ถูกต้อง');
+    }
+  } catch (error) {
+    console.error('Error in createUser:', error.message);
+    if (error.code === 11000) {
+      // MongoDB duplicate key error
+      const field = Object.keys(error.keyPattern)[0];
+      const message = field === 'username' ? 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว' : 
+                      field === 'email' ? 'อีเมลนี้มีอยู่ในระบบแล้ว' : 
+                      'ข้อมูลซ้ำในระบบ';
+      res.status(400);
+      throw new Error(message);
+    }
+    throw error;
   }
 });
 const getUserById = asyncHandler(async (req, res) => {
@@ -459,10 +500,13 @@ const uploadAvatar = asyncHandler(async (req, res) => {
             throw new Error('กรุณาเลือกไฟล์รูปภาพ');
         }
 
+        // แปลง path ให้เป็น forward slash สำหรับ URL
+        const avatarPath = req.file.path.replace(/\\/g, '/');
+
         // อัพเดตข้อมูล avatar ในฐานข้อมูล
         const updatedUser = await User.findByIdAndUpdate(
             userId,
-            { avatar: req.file.path },
+            { avatar: avatarPath },
             { 
                 new: true,
                 select: '-password'
@@ -476,10 +520,39 @@ const uploadAvatar = asyncHandler(async (req, res) => {
 
         res.json({
             message: 'อัพโหลดรูปโปรไฟล์สำเร็จ',
-            avatar: req.file.path
+            avatar: avatarPath
         });
     } catch (error) {
         console.error('Error uploading avatar:', error);
+        throw error;
+    }
+});
+
+// อัปเดต Push Token
+const updatePushToken = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { pushToken } = req.body;
+
+        console.log('Updating push token for user:', userId, 'Token:', pushToken);
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { pushToken },
+            { new: true, select: '-password' }
+        );
+
+        if (!updatedUser) {
+            res.status(404);
+            throw new Error('ไม่พบข้อมูลผู้ใช้');
+        }
+
+        res.json({
+            message: 'อัปเดต Push Token สำเร็จ',
+            pushToken
+        });
+    } catch (error) {
+        console.error('Error updating push token:', error);
         throw error;
     }
 });
@@ -497,5 +570,6 @@ module.exports = {
     searchUsers,
     updateUser,        // เพิ่ม deleteUser
     updateProfile,     // เพิ่ม updateProfile
-    uploadAvatar       // เพิ่ม uploadAvatar
+    uploadAvatar,      // เพิ่ม uploadAvatar
+    updatePushToken    // เพิ่ม updatePushToken
 };

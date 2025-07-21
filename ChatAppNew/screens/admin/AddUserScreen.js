@@ -7,9 +7,10 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  FlatList
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,27 +20,62 @@ const API_URL = 'http://192.168.2.38:5000';
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },
   { label: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', value: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ' },
+ 
+];
+
+// หน่วยงานสำหรับเจ้าหน้าที่
+const departments = [
+  { label: 'เลือกหน่วยงาน', value: '1' },
+  { label: 'สำนักงานอธิการบดี', value: 'สำนักงานอธิการบดี' },
+  { label: 'กองการเงินและบัญชี', value: 'กองการเงินและบัญชี' },
+  { label: 'กองพัฒนานักศึกษา', value: 'กองพัฒนานักศึกษา' },
+  { label: 'กองบริการการศึกษา', value: 'กองบริการการศึกษา' },
+  { label: 'กองแผนงาน', value: 'กองแผนงาน' },
+  { label: 'กองบุคคล', value: 'กองบุคคล' },
+  { label: 'สำนักวิทยบริการและเทคโนโลยีสารสนเทศ', value: 'สำนักวิทยบริการและเทคโนโลยีสารสนเทศ' }
 ];
 
 const majors = {
-  บริหารธุรกิจและเทคโนโลยีสารสนเทศ: [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: '345 เทคโนโลยีธุรกิจดิจิทัล' }
-  ],
   '1': [
+    { label: 'เลือกสาขา', value: '1' }
+  ],
+  'บริหารธุรกิจและเทคโนโลยีสารสนเทศ': [
     { label: 'เลือกสาขา', value: '1' },
+    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: '345 เทคโนโลยีธุรกิจดิจิทัล' },
+    { label: '346 การบัญชี', value: '346 การบัญชี' },
+    { label: '347 การจัดการ', value: '347 การจัดการ' },
+    { label: '348 การตลาด', value: '348 การตลาด' },
+    { label: '349 เทคโนโลยีสารสนเทศ', value: '349 เทคโนโลยีสารสนเทศ' }
   ]
+  
 };
 
 const groupCodes = {
+  '1': [
+    { label: 'เลือกกลุ่มเรียน', value: '1' }
+  ],
   '345 เทคโนโลยีธุรกิจดิจิทัล': [
     { label: 'เลือกกลุ่มเรียน', value: '1' },
     { label: 'DT26721N', value: 'DT26721N' },
-    { label: 'DT26722N', value: 'DT26722N' }
+    { label: 'DT26722N', value: 'DT26722N' },
+    { label: 'DT26723N', value: 'DT26723N' }
   ],
-  '1': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' }
+  '346 การบัญชี': [
+    { label: 'เลือกกลุ่มเรียน', value: '1' },
+    { label: 'ACC26701', value: 'ACC26701' },
+    { label: 'ACC26702', value: 'ACC26702' }
+  ],
+  '347 การจัดการ': [
+    { label: 'เลือกกลุ่มเรียน', value: '1' },
+    { label: 'MGT26701', value: 'MGT26701' },
+    { label: 'MGT26702', value: 'MGT26702' }
+  ],
+  '348 การตลาด': [
+    { label: 'เลือกกลุ่มเรียน', value: '1' },
+    { label: 'MKT26701', value: 'MKT26701' },
+    { label: 'MKT26702', value: 'MKT26702' }
   ]
+  
 };
 
 const AddUserScreen = ({ navigation }) => {
@@ -56,6 +92,61 @@ const AddUserScreen = ({ navigation }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showFacultyModal, setShowFacultyModal] = useState(false);
+  const [showMajorModal, setShowMajorModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+
+  const selectFaculty = (faculty) => {
+    setFormData({
+      ...formData,
+      faculty: faculty.value,
+      major: '1',
+      groupCode: '1'
+    });
+    if (errors.faculty) setErrors({...errors, faculty: ''});
+    setShowFacultyModal(false);
+  };
+
+  const selectMajor = (major) => {
+    setFormData({
+      ...formData,
+      major: major.value,
+      groupCode: '1'
+    });
+    if (errors.major) setErrors({...errors, major: ''});
+    setShowMajorModal(false);
+  };
+
+  const selectGroup = (group) => {
+    setFormData({
+      ...formData,
+      groupCode: group.value
+    });
+    if (errors.groupCode) setErrors({...errors, groupCode: ''});
+    setShowGroupModal(false);
+  };
+
+  const getFacultyLabel = () => {
+    if (formData.role === 'staff') {
+      const department = departments.find(d => d.value === formData.faculty);
+      return department ? department.label : 'เลือกหน่วยงาน';
+    } else {
+      const faculty = faculties.find(f => f.value === formData.faculty);
+      return faculty ? faculty.label : 'เลือกคณะ';
+    }
+  };
+
+  const getMajorLabel = () => {
+    const availableMajors = majors[formData.faculty] || majors['1'];
+    const major = availableMajors.find(m => m.value === formData.major);
+    return major ? major.label : 'เลือกสาขา';
+  };
+
+  const getGroupLabel = () => {
+    const availableGroups = groupCodes[formData.major] || groupCodes['1'];
+    const group = availableGroups.find(g => g.value === formData.groupCode);
+    return group ? group.label : 'เลือกกลุ่มเรียน';
+  };
 
   const handleRoleChange = (role) => {
     setFormData({
@@ -73,19 +164,35 @@ const AddUserScreen = ({ navigation }) => {
     if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
     if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
     if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
-    if (!formData.email) newErrors.email = 'กรุณากรอกอีเมล';
+    // อีเมลไม่จำเป็นต้องกรอก
     
-    if (formData.role === 'student' || formData.role === 'teacher') {
+    // ตรวจสอบเงื่อนไขตาม role
+    if (formData.role === 'student') {
+      // นักศึกษา: ต้องกรอกคณะ สาขา และกลุ่มเรียน
       if (formData.faculty === '1') {
         newErrors.faculty = 'กรุณาเลือกคณะ';
       }
       if (formData.major === '1') {
         newErrors.major = 'กรุณาเลือกสาขา';
       }
-      if (formData.role === 'student' && formData.groupCode === '1') {
+      if (formData.groupCode === '1') {
         newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
       }
+    } else if (formData.role === 'teacher') {
+      // อาจารย์: ต้องกรอกคณะ และสาขา (ไม่ต้องกลุ่มเรียน)
+      if (formData.faculty === '1') {
+        newErrors.faculty = 'กรุณาเลือกคณะ';
+      }
+      if (formData.major === '1') {
+        newErrors.major = 'กรุณาเลือกสาขา';
+      }
+    } else if (formData.role === 'staff') {
+      // เจ้าหน้าที่: ต้องกรอกเฉพาะหน่วยงาน
+      if (formData.faculty === '1') {
+        newErrors.faculty = 'กรุณาเลือกหน่วยงาน';
+      }
     }
+    // admin: ไม่ต้องกรอกอะไรเพิ่ม
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (formData.email && !emailRegex.test(formData.email)) {
@@ -122,28 +229,48 @@ const AddUserScreen = ({ navigation }) => {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        email: formData.email,
         role: formData.role
       };
 
+      // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมาจริงๆ (ไม่เป็นค่าว่าง)
+      if (formData.email && formData.email.trim() !== '') {
+        dataToSend.email = formData.email.trim();
+      }
+      // หากไม่มี email หรือเป็นค่าว่าง ก็ไม่ส่ง email field ไปเลย
+
       if (formData.role === 'admin') {
+        // ผู้ดูแลระบบ: ไม่ต้องกรอกข้อมูลเพิ่ม
         dataToSend = {
           ...dataToSend,
           faculty: '1',
+          department: '1',
           major: '1',
           groupCode: '1'
         };
       } else if (formData.role === 'teacher') {
-        dataToSend = {
-          ...dataToSend,
-          faculty: formData.faculty || '1',
-          major: formData.major || '1',
-          groupCode: '1'
-        };
-      } else {
+        // อาจารย์: กรอกคณะและสาขา
         dataToSend = {
           ...dataToSend,
           faculty: formData.faculty,
+          department: formData.faculty, // ใช้ค่าเดียวกับ faculty
+          major: formData.major,
+          groupCode: '1'
+        };
+      } else if (formData.role === 'staff') {
+        // เจ้าหน้าที่: กรอกเฉพาะหน่วยงาน
+        dataToSend = {
+          ...dataToSend,
+          faculty: formData.faculty, // หน่วยงานที่เลือก
+          department: formData.faculty, // ใช้ค่าเดียวกับ faculty
+          major: '1',
+          groupCode: '1'
+        };
+      } else if (formData.role === 'student') {
+        // นักศึกษา: กรอกครบทุกข้อมูล
+        dataToSend = {
+          ...dataToSend,
+          faculty: formData.faculty,
+          department: formData.faculty, // ใช้ค่าเดียวกับ faculty
           major: formData.major,
           groupCode: formData.groupCode
         };
@@ -151,12 +278,34 @@ const AddUserScreen = ({ navigation }) => {
 
       await axios.post(`${API_URL}/api/users`, dataToSend, config);
 
+      // Reset form หลังจากสร้างผู้ใช้สำเร็จ
+      setFormData({
+        username: '',
+        password: '',
+        firstName: '',
+        lastName: '',
+        email: '',
+        role: 'student',
+        faculty: '1',
+        major: '1',
+        groupCode: '1'
+      });
+      setErrors({});
+
       Alert.alert(
         'สำเร็จ',
         'เพิ่มผู้ใช้เรียบร้อยแล้ว',
         [
           {
-            text: 'ตกลง',
+            text: 'เพิ่มผู้ใช้อีกคน',
+            style: 'default',
+            onPress: () => {
+              // อยู่ในหน้าเดิมเพื่อเพิ่มผู้ใช้คนต่อไป
+            }
+          },
+          {
+            text: 'กลับหน้าแอดมิน',
+            style: 'cancel',
             onPress: () => {
               navigation.navigate('Admin', { refresh: true });
             }
@@ -164,7 +313,20 @@ const AddUserScreen = ({ navigation }) => {
         ]
       );
     } catch (error) {
-      Alert.alert('ผิดพลาด', 'ไม่สามารถเพิ่มผู้ใช้ได้');
+      console.log('Error creating user:', error.response?.data || error.message);
+      let errorMessage = 'ไม่สามารถเพิ่มผู้ใช้ได้';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status === 400) {
+        errorMessage = 'ข้อมูลไม่ถูกต้องหรือมีผู้ใช้นี้ในระบบแล้ว';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'ไม่มีสิทธิ์ในการเพิ่มผู้ใช้';
+        navigation.replace('Login');
+        return;
+      }
+      
+      Alert.alert('ผิดพลาด', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -173,6 +335,7 @@ const AddUserScreen = ({ navigation }) => {
   const shouldShowField = (fieldName) => {
     switch (fieldName) {
       case 'faculty':
+        return formData.role === 'student' || formData.role === 'teacher' || formData.role === 'staff';
       case 'major':
         return formData.role === 'student' || formData.role === 'teacher';
       case 'groupCode':
@@ -264,7 +427,7 @@ const AddUserScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>อีเมล</Text>
+            <Text style={styles.label}>อีเมล (ไม่จำเป็น)</Text>
             <TextInput
               style={[styles.input, errors.email && styles.inputError]}
               value={formData.email}
@@ -272,7 +435,7 @@ const AddUserScreen = ({ navigation }) => {
                 setFormData({...formData, email: text});
                 if (errors.email) setErrors({...errors, email: ''});
               }}
-              placeholder="กรอกอีเมล"
+              placeholder="กรอกอีเมล (ไม่จำเป็น)"
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -284,7 +447,7 @@ const AddUserScreen = ({ navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>สถานะ</Text>
             <View style={styles.roleButtons}>
-              {['student', 'teacher', 'admin'].map((role) => (
+              {['student', 'teacher', 'staff', 'admin'].map((role) => (
                 <TouchableOpacity
                   key={role}
                   style={[
@@ -298,7 +461,8 @@ const AddUserScreen = ({ navigation }) => {
                     formData.role === role && styles.roleButtonTextActive
                   ]}>
                     {role === 'student' ? 'นักศึกษา' :
-                    role === 'teacher' ? 'อาจารย์' : 'ผู้ดูแลระบบ'}
+                    role === 'teacher' ? 'อาจารย์' :
+                    role === 'staff' ? 'เจ้าหน้าที่' : 'ผู้ดูแลระบบ'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -307,32 +471,18 @@ const AddUserScreen = ({ navigation }) => {
 
           {shouldShowField('faculty') && (
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>คณะ</Text>
-              <View style={[styles.pickerContainer, errors.faculty && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.faculty}
-                  onValueChange={(value) => {
-                    setFormData({
-                      ...formData,
-                      faculty: value,
-                      major: '1',
-                      groupCode: '1'
-                    });
-                    if (errors.faculty) setErrors({...errors, faculty: ''});
-                  }}
-                  style={styles.picker}
-                  mode="dropdown"
-                >
-                  {faculties.map((faculty) => (
-                    <Picker.Item 
-                      key={faculty.value} 
-                      label={faculty.label} 
-                      value={faculty.value}
-                      color="#000"
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <Text style={styles.label}>
+                {formData.role === 'staff' ? 'หน่วยงาน' : 'คณะ'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.dropdown, errors.faculty && styles.inputError]}
+                onPress={() => setShowFacultyModal(true)}
+              >
+                <Text style={[styles.dropdownText, formData.faculty === '1' && styles.placeholderText]}>
+                  {getFacultyLabel()}
+                </Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
               {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
             </View>
           )}
@@ -340,31 +490,16 @@ const AddUserScreen = ({ navigation }) => {
           {shouldShowField('major') && (
             <View style={styles.inputGroup}>
               <Text style={styles.label}>สาขา</Text>
-              <View style={[styles.pickerContainer, errors.major && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.major}
-                  onValueChange={(value) => {
-                    setFormData({
-                      ...formData,
-                      major: value,
-                      groupCode: '1'
-                    });
-                    if (errors.major) setErrors({...errors, major: ''});
-                  }}
-                  style={styles.picker}
-                  mode="dropdown"
-                  enabled={formData.faculty !== '1'}
-                >
-                  {(majors[formData.faculty] || majors['1']).map((major) => (
-                    <Picker.Item 
-                      key={major.value} 
-                      label={major.label} 
-                      value={major.value}
-                      color="#000"
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={[styles.dropdown, errors.major && styles.inputError, formData.faculty === '1' && styles.dropdownDisabled]}
+                onPress={() => formData.faculty !== '1' && setShowMajorModal(true)}
+                disabled={formData.faculty === '1'}
+              >
+                <Text style={[styles.dropdownText, formData.major === '1' && styles.placeholderText]}>
+                  {getMajorLabel()}
+                </Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
               {errors.major && <Text style={styles.errorText}>{errors.major}</Text>}
             </View>
           )}
@@ -372,30 +507,16 @@ const AddUserScreen = ({ navigation }) => {
           {shouldShowField('groupCode') && (
             <View style={styles.inputGroup}>
               <Text style={styles.label}>กลุ่มเรียน</Text>
-              <View style={[styles.pickerContainer, errors.groupCode && styles.inputError]}>
-                <Picker
-                  selectedValue={formData.groupCode}
-                  onValueChange={(value) => {
-                    setFormData({
-                      ...formData,
-                      groupCode: value
-                    });
-                    if (errors.groupCode) setErrors({...errors, groupCode: ''});
-                  }}
-                  style={styles.picker}
-                  mode="dropdown"
-                  enabled={formData.major !== '1'}
-                >
-                  {(groupCodes[formData.major] || groupCodes['1']).map((group) => (
-                    <Picker.Item 
-                      key={group.value} 
-                      label={group.label} 
-                      value={group.value}
-                      color="#000"
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={[styles.dropdown, errors.groupCode && styles.inputError, formData.major === '1' && styles.dropdownDisabled]}
+                onPress={() => formData.major !== '1' && setShowGroupModal(true)}
+                disabled={formData.major === '1'}
+              >
+                <Text style={[styles.dropdownText, formData.groupCode === '1' && styles.placeholderText]}>
+                  {getGroupLabel()}
+                </Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
               {errors.groupCode && <Text style={styles.errorText}>{errors.groupCode}</Text>}
             </View>
           )}
@@ -413,6 +534,104 @@ const AddUserScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Faculty Modal */}
+      <Modal
+        visible={showFacultyModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowFacultyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {formData.role === 'staff' ? 'เลือกหน่วยงาน' : 'เลือกคณะ'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowFacultyModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={formData.role === 'staff' ? 
+                departments.filter(d => d.value !== '1') : 
+                faculties.filter(f => f.value !== '1')
+              }
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => selectFaculty(item)}
+                >
+                  <Text style={styles.modalItemText}>{item.label}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Major Modal */}
+      <Modal
+        visible={showMajorModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMajorModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>เลือกสาขา</Text>
+              <TouchableOpacity onPress={() => setShowMajorModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={(majors[formData.faculty] || majors['1']).filter(m => m.value !== '1')}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => selectMajor(item)}
+                >
+                  <Text style={styles.modalItemText}>{item.label}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Group Modal */}
+      <Modal
+        visible={showGroupModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowGroupModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>เลือกกลุ่มเรียน</Text>
+              <TouchableOpacity onPress={() => setShowGroupModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={(groupCodes[formData.major] || groupCodes['1']).filter(g => g.value !== '1')}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => selectGroup(item)}
+                >
+                  <Text style={styles.modalItemText}>{item.label}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -471,11 +690,11 @@ const styles = StyleSheet.create({
   roleButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10
+    gap: 8
   },
   roleButton: {
     flex: 1,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
@@ -488,10 +707,76 @@ const styles = StyleSheet.create({
   },
   roleButtonText: {
     color: '#333',
-    fontSize: 14
+    fontSize: 12
   },
   roleButtonTextActive: {
     color: '#fff'
+  },
+  dropdown: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 50
+  },
+  dropdownDisabled: {
+    backgroundColor: '#f5f5f5',
+    opacity: 0.6
+  },
+  dropdownText: {
+    fontSize: 16,
+    color: '#000',
+    flex: 1
+  },
+  placeholderText: {
+    color: '#999'
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#666'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '85%',
+    maxHeight: '70%',
+    padding: 0
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee'
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#007AFF'
+  },
+  modalClose: {
+    fontSize: 18,
+    color: '#666'
+  },
+  modalItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0'
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#333'
   },
   pickerContainer: {
     borderWidth: 1,

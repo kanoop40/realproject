@@ -15,7 +15,8 @@ const {
     getUserById,
     getCurrentUser,
     updateProfile,
-    uploadAvatar
+    uploadAvatar,
+    updatePushToken
 } = require('../controllers/userController');
 const { protect, admin } = require('../Middleware/authMiddleware');
 
@@ -61,6 +62,9 @@ router.put('/update-profile', protect, updateProfile);
 
 // Upload avatar route
 router.post('/upload-avatar', protect, upload.single('avatar'), uploadAvatar);
+
+// Push token route
+router.post('/push-token', protect, updatePushToken);
 
 // Protected routes
 router.route('/profile')

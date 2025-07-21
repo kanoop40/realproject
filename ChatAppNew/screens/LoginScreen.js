@@ -9,31 +9,14 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://192.168.2.38:5000';
+import { login } from '../service/api';
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // ฟังก์ชันทดสอบ connection
-  const testConnection = async () => {
-    try {
-      console.log('Testing connection to:', `${API_URL}/api/auth/health`);
-      const response = await axios.get(`${API_URL}/api/auth/health`, { 
-        timeout: 5000 
-      });
-      console.log('Connection test success:', response.data);
-      Alert.alert('Connection Test', `Success: ${response.data.message}`);
-    } catch (error) {
-      console.log('Connection test failed:', error.message);
-      Alert.alert('Connection Test Failed', `Error: ${error.message}`);
-    }
-  };
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -44,31 +27,34 @@ const LoginScreen = ({ navigation }) => {
     try {
       setIsLoading(true);
       setError('');
-      console.log('Attempting login with:', { username, password });
+      
+      console.log('🔐 Attempting login with:', { username });
 
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
-        username,
-        password
-      });
+      const response = await login(username, password);
 
-      console.log('Login successful:', response.data);
+      console.log('✅ Login successful:', response.data);
 
-      // เก็บข้อมูลผู้ใช้และ token
-      await AsyncStorage.setItem('userToken', response.data.token);
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data));
+      // เก็บข้อมูลผู้ใช้และ token  
+      const userData = response.data;
+      
+      try {
+        await AsyncStorage.setItem('userToken', userData.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        console.log('✅ User data saved to AsyncStorage');
+      } catch (storageError) {
+        console.error('❌ Error saving to AsyncStorage:', storageError);
+        // ดำเนินการต่อได้ แม้ save ไม่สำเร็จ
+      }
 
       // นำทางตาม role
-      if (response.data.role === 'admin') {
+      if (userData.role === 'admin') {
         navigation.replace('Admin');
       } else {
-         navigation.replace('Chat'); // นำทางไปหน้า User สำหรับ role อื่นๆ
+        navigation.replace('Chat');
       }
     } catch (error) {
-      console.error('Login error:', error.response?.data || error);
+      console.error('❌ Login error:', error.response?.data || error.message);
       setError(error.response?.data?.message || 'เข้าสู่ระบบล้มเหลว');
-      
-      // ลบข้อมูลที่อาจจะมีการบันทึกไว้
-      await AsyncStorage.multiRemove(['userToken', 'userData']);
     } finally {
       setIsLoading(false);
     }

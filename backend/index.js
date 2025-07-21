@@ -168,44 +168,47 @@ io.on('connection', (socket) => {
     });
 
     // เข้าร่วมห้องแชท
-    socket.on('join_chat', (chatId) => {
-        socket.join(chatId);
-        console.log(`👥 User ${socket.userId} joined chat room: ${chatId}`);
+    socket.on('joinRoom', (chatroomId) => {
+        socket.join(chatroomId);
+        console.log(`👥 User ${socket.userId} joined chat room: ${chatroomId}`);
     });
 
     // ออกจากห้องแชท
-    socket.on('leave_chat', (chatId) => {
-        socket.leave(chatId);
-        console.log(`👋 User ${socket.userId} left chat room: ${chatId}`);
+    socket.on('leaveRoom', (chatroomId) => {
+        socket.leave(chatroomId);
+        console.log(`👋 User ${socket.userId} left chat room: ${chatroomId}`);
     });
 
     // ส่งข้อความแบบ real-time
-    socket.on('send_message', (messageData) => {
-        console.log('📨 Broadcasting message to chat:', messageData.chatId);
-        socket.to(messageData.chatId).emit('receive_message', messageData);
+    socket.on('sendMessage', (data) => {
+        console.log('📨 Broadcasting message to chat:', data.chatroomId);
+        socket.to(data.chatroomId).emit('newMessage', {
+            message: data.message,
+            chatroomId: data.chatroomId
+        });
     });
 
     // การพิมพ์
     socket.on('typing', (data) => {
-        socket.to(data.chatId).emit('user_typing', {
+        socket.to(data.chatroomId).emit('userTyping', {
             userId: socket.userId,
             isTyping: data.isTyping
         });
     });
 
     // การอ่านข้อความ
-    socket.on('message_read', (data) => {
-        socket.to(data.chatId).emit('message_read_update', {
+    socket.on('messageRead', (data) => {
+        socket.to(data.chatroomId).emit('messageReadUpdate', {
             messageId: data.messageId,
             readBy: data.readBy
         });
     });
 
     // แจ้งเตือนแบบ real-time
-    socket.on('send_notification', (notificationData) => {
+    socket.on('sendNotification', (notificationData) => {
         const recipientSocketId = activeUsers.get(notificationData.recipientId);
         if (recipientSocketId) {
-            io.to(recipientSocketId).emit('receive_notification', notificationData);
+            io.to(recipientSocketId).emit('receiveNotification', notificationData);
         }
     });
 
@@ -240,6 +243,9 @@ app.use((req, res, next) => {
     req.io = io;
     next();
 });
+
+// ทำให้ io instance เข้าถึงได้จาก app
+app.set('io', io);
 
 // API Routes
 app.use('/api/auth', authRoutes);

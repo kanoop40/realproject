@@ -125,9 +125,9 @@ const AdminScreen = ({ navigation, route }) => {
   <View style={styles.userInfo}>
     <View style={styles.leftContent}>
       <View style={styles.avatarContainer}>
-        {user.profileImage ? (
+        {user.avatar ? (
           <Image 
-            source={{ uri: `${API_URL}/${user.profileImage}` }}
+            source={{ uri: `${API_URL}/${user.avatar}` }}
             style={styles.avatar}
             defaultSource={require('../../assets/default-avatar.png')}
           />
@@ -144,7 +144,8 @@ const AdminScreen = ({ navigation, route }) => {
         <Text style={styles.roleText}>
           {user.role === 'student' ? 'นักศึกษา' : 
            user.role === 'admin' ? 'ผู้ดูแลระบบ' : 
-           user.role === 'teacher' ? 'อาจารย์' : user.role}
+           user.role === 'teacher' ? 'อาจารย์' : 
+           user.role === 'staff' ? 'เจ้าหน้าที่' : user.role}
         </Text>
       </View>
     </View>
