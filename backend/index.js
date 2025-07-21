@@ -31,7 +31,13 @@ const MONGO_URI = process.env.MONGO_URI;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:19006';
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? 
     process.env.ALLOWED_ORIGINS.split(',') : 
-    ['http://localhost:19006', 'http://localhost:8081', 'https://localhost:19006'];
+    [
+        'http://localhost:19006', 
+        'http://localhost:8081', 
+        'https://localhost:19006',
+        'http://b1s-ely-anonymous-8081.exp.direct',
+        'https://b1s-ely-anonymous-8081.exp.direct'
+    ];
 
 // Socket.IO configuration with environment-based CORS
 const io = socketIo(server, {
@@ -43,6 +49,17 @@ const io = socketIo(server, {
 });
 
 // Security middleware
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// CORS middleware - อนุญาตทุก origin ใน development
+app.use(cors({
+    origin: NODE_ENV === 'production' ? ALLOWED_ORIGINS : "*",
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(helmet({
     crossOriginResourcePolicy: false,
 }));

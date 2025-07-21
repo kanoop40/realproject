@@ -3,8 +3,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// สำหรับ tunnel mode ให้ใช้ IP เดียวกับ Expo tunnel
-const API_URL = 'http://192.168.1.34:5000';
+// Auto-detect API URL based on environment  
+const getApiUrl = () => {
+  // ถ้าใช้ Android Emulator
+  if (Platform.OS === 'android' && !Constants.isDevice) {
+    return 'http://10.0.2.2:5000';
+  }
+  
+  // สำหรับ Expo Go บนมือถือ - ใช้ tunnel URL
+  if (Constants.executionEnvironment === 'storeClient') {
+    // ลองใช้ IP ปัจจุบันก่อน ถ้าไม่ได้ใช้ tunnel
+    const localUrl = 'http://172.22.98.52:5000';
+    console.log('🔗 Using local IP URL:', localUrl);
+    return localUrl;
+  }
+  
+  // สำหรับ tunnel mode - ใช้ tunnel host
+  const { manifest } = Constants;
+  if (manifest?.debuggerHost) {
+    const host = manifest.debuggerHost.split(':')[0];
+    console.log('🔗 Using tunnel host:', host);
+    return `http://${host}:5000`;
+  }
+  
+  // Fallback สำหรับ development
+  return 'http://localhost:5000';
+};
+
+const API_URL = getApiUrl();
 
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
