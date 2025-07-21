@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: chatapp-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+    disk:
+      name: chatapp-data
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 1
