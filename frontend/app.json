@@ -11,6 +11,11 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://exp.host/@yourapp/chatapp"
+    },
+    "runtimeVersion": "exposdk:48.0.0",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chatapp.mobile"
@@ -30,9 +35,7 @@
     "web": {
       "favicon": "./assets/icon.png"
     },
-    "locales": {
-      "th": "./assets/locales/th.json"
-    },
-    "platforms": ["ios", "android", "web"]
+    "platforms": ["ios", "android", "web"],
+    "sdkVersion": "48.0.0"
   }
 }

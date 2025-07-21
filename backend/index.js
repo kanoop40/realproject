@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const userRoutes = require('./routes/userRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const authRoutes = require('./routes/authRoutes');
 const { errorHandler } = require('./Middleware/errorMiddleware');
 
 dotenv.config();
@@ -35,6 +36,7 @@ mongoose.connect(mongoUri)
     });
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chats', chatRoutes);
 

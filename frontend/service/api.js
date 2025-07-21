@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.1.34:5000'; // สำหรับ Mobile Device
+const API_URL = 'http://192.168.1.34:5000'; // IP จริงของเครื่อง
 // const API_URL = 'http://10.0.2.2:5000'; // สำหรับ Android Emulator
 // const API_URL = 'http://localhost:5000'; // สำหรับ iOS Simulator
 
@@ -26,11 +26,11 @@ api.interceptors.request.use(async (config) => {
 });
 
 export const login = (username, password) => {
-  return api.post('/api/auth/login', { username, password });
+  return api.post('/auth/login', { username, password });
 };
 
 export const checkAuthStatus = () => {
-  return api.get('/api/auth/status');
+  return api.get('/auth/status');
 };
 
 export default api;

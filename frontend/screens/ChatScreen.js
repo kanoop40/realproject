@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import api from '../service/api';
 
-const API_URL = 'http://192.168.1.34:5000';
+const API_URL = 'http://192.168.1.34:5000'; // IP จริงของเครื่อง
 
 const ChatScreen = ({ route, navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -114,19 +114,18 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadChats = async () => {
+  const loadChats = useCallback(async () => {
     try {
       const response = await api.get('/chats');
       setChats(response.data);
     } catch (error) {
       console.error('Error loading chats:', error);
     }
-  };
+  }, []);
 
-  const loadMessages = async (chatId) => {
+  const loadMessages = useCallback(async (chatId) => {
     try {
       const response = await api.get(`/chats/${chatId}/messages`);
-
       setMessages(response.data.messages);
       
       // มาร์คข้อความว่าอ่านแล้ว
@@ -134,7 +133,7 @@ const ChatScreen = ({ route, navigation }) => {
     } catch (error) {
       console.error('Error loading messages:', error);
     }
-  };
+  }, []);
 
   const sendMessage = async () => {
     if ((!newMessage.trim() && !selectedFile) || !selectedChat || isSending) return;
@@ -311,7 +310,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const renderChatItem = ({ item }) => {
+  const renderChatItem = useCallback(({ item }) => {
     // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
     const otherParticipant = item.participants.find(p => p._id !== currentUser._id);
     
@@ -368,9 +367,9 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [currentUser]);
 
-  const renderMessage = ({ item }) => {
+  const renderMessage = useCallback(({ item }) => {
     const isMyMessage = item.sender._id === currentUser._id;
     
     return (
@@ -438,7 +437,7 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
       </View>
     );
-  };
+  }, [currentUser]);
 
   if (isLoading) {
     return (
@@ -510,6 +509,10 @@ const ChatScreen = ({ route, navigation }) => {
           contentContainerStyle={styles.messagesContainer}
           inverted={false}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={15}
+          windowSize={10}
+          initialNumToRender={12}
         />
 
         {/* Input สำหรับพิมพ์ข้อความ */}
@@ -552,6 +555,10 @@ const ChatScreen = ({ route, navigation }) => {
               returnKeyType="default"
               enablesReturnKeyAutomatically={false}
               blurOnSubmit={false}
+              autoCorrect={true}
+              spellCheck={true}
+              textContentType="none"
+              autoCapitalize="sentences"
             />
             
             <TouchableOpacity
@@ -618,6 +625,13 @@ const ChatScreen = ({ route, navigation }) => {
           renderItem={renderChatItem}
           style={styles.chatsList}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={8}
+          getItemLayout={(data, index) => (
+            {length: 80, offset: 80 * index, index}
+          )}
         />
       )}
 
