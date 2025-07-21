@@ -55,7 +55,17 @@ app.use(helmet({
 
 // CORS middleware - อนุญาตทุก origin ใน development
 app.use(cors({
-    origin: NODE_ENV === 'production' ? ALLOWED_ORIGINS : "*",
+    origin: function (origin, callback) {
+        // อนุญาตทุกคำขอใน development
+        if (NODE_ENV === 'development') {
+            return callback(null, true);
+        }
+        // ใน production ใช้ ALLOWED_ORIGINS
+        if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || !origin) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
