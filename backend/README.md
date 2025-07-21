@@ -2,259 +2,295 @@
 
 ระบบแชทสำหรับมหาวิทยาลัย รองรับการแชทระหว่างนักศึกษา อาจารย์ และบุคลากร
 
-## 🚀 Features
+## ✨ Features
 
-### 1. การยืนยันตัวตน
-- ✅ ล็อกอินด้วยรหัสนักศึกษา/พนักงาน
-- ✅ JWT Authentication
-- ✅ Role-based access control (student, teacher, staff, admin)
+### 🔐 Authentication & Authorization
+- ระบบล็อกอินด้วยรหัสนักศึกษา/พนักงาน
+- JWT Authentication
+- Role-based access control (student, teacher, staff, admin)
 
-### 2. การแชทส่วนตัว
-- ✅ สร้างห้องแชทส่วนตัว
-- ✅ ส่งข้อความและไฟล์ (PDF, Word, รูปภาพ)
-- ✅ ลบข้อความที่ส่งแล้ว
-- ✅ แสดงสถานะอ่าน/ยังไม่อ่าน
-- ✅ Real-time messaging with Socket.IO
-- ✅ ลบห้องแชท
+### 💬 Chat System
+- แชทส่วนตัวระหว่าง 2 คน
+- กลุ่มแชทสำหรับหลายคน
+- Real-time messaging ด้วย Socket.IO
+- ระบบอ่านแล้ว/ยังไม่อ่าน
+- ลบข้อความได้
+- ลบห้องแชทได้
 
-### 3. กลุ่มแชท
-- ✅ สร้างกลุ่มได้ (อาจารย์/เจ้าหน้าที่เท่านั้น)
-- ✅ มีรูปกลุ่มและชื่อกลุ่ม
-- ✅ ระบบลบกลุ่ม/ลบสมาชิก
-- ✅ เชิญสมาชิกเข้ากลุ่มอัตโนมัติตาม:
-  - ห้องเรียน (groupCode)
-  - รหัสนักศึกษา (pattern matching)
-  - คณะ (faculty)
-  - หน่วยงาน (department)
-- ✅ แสดงจำนวนสมาชิกในกลุ่ม
+### 👥 Group Chat Features
+- สร้างกลุ่มได้ (เฉพาะอาจารย์/เจ้าหน้าที่)
+- อัปโหลดรูปกลุ่ม
+- ระบบเชิญสมาชิกอัตโนมัติตาม:
+  - ห้องเรียน
+  - รหัสนักศึกษา
+  - คณะ/หน่วยงาน
+- จัดการสมาชิกกลุ่ม (เพิ่ม/ลบ)
+- แสดงจำนวนสมาชิก
 
-### 4. การจัดการไฟล์
-- ✅ รองรับไฟล์ PDF, Word, รูปภาพ
-- ✅ ขนาดไฟล์สูงสุด 50MB
-- ✅ จัดเก็บไฟล์อัปโหลด
+### 📎 File Sharing
+- ส่งไฟล์ได้ไม่จำกัดเวลา
+- รองรับ PDF, Word, รูปภาพ
+- ขนาดไฟล์สูงสุด 50MB
 
-### 5. โปรไฟล์ผู้ใช้
-- ✅ แสดงชื่อ-นามสกุล, ห้องเรียน, หน่วยงาน/คณะ
-- ✅ รหัสประจำตัว (นักศึกษา/พนักงาน)
-- ✅ รูปภาพโปรไฟล์
-- ✅ สถานะออนไลน์/ออฟไลน์
+### 👤 User Profile
+- แสดงชื่อ-นามสกุล
+- ห้องเรียน
+- หน่วยงาน/คณะ
+- รหัสประจำตัว
+- รูปภาพโปรไฟล์
 
-### 6. การค้นหา
-- ✅ ค้นหาผู้ใช้ในระบบ
-- ✅ ค้นหากลุ่ม
+### 🔔 Notifications
+- แจ้งเตือนทันทีสำหรับทุกข้อความ
+- ไม่ต้องเป็นเพื่อนก่อน
+- Real-time notifications
 
-### 7. การแจ้งเตือน
-- ✅ แจ้งเตือนข้อความใหม่
-- ✅ แจ้งเตือนเชิญเข้ากลุ่ม
-- ✅ Real-time notifications
-
-### 8. ระบบผู้ดูแล
-- ✅ สร้าง/แก้ไข/ลบบัญชีผู้ใช้
-- ✅ จัดการสิทธิ์ผู้ใช้
+### 🔍 Search System
+- ค้นหาผู้ใช้ในระบบได้
+- ค้นหากลุ่มแชท
 
 ## 🛠 Tech Stack
 
-- **Runtime**: Node.js
-- **Framework**: Express.js
+- **Backend**: Node.js, Express.js
 - **Database**: MongoDB with Mongoose
-- **Authentication**: JWT
 - **Real-time**: Socket.IO
+- **Authentication**: JWT (JSON Web Tokens)
 - **File Upload**: Multer
 - **Security**: Helmet, CORS, Rate Limiting
-- **Validation**: Express Validator
 
-## 📦 Installation
+## 🚀 Deployment on Render
 
-### Local Development
+### Prerequisites
+1. สร้างบัญชี [Render](https://render.com)
+2. เตรียม MongoDB Atlas database
+3. เตรียม GitHub repository
 
-1. **Clone และติดตั้ง dependencies**
+### Step 1: เตรียม Repository
+
+1. **Push โปรเจคขึ้น GitHub:**
 ```bash
-cd backend
-npm install
+# ถ้ายังไม่ได้ init git
+git init
+git add .
+git commit -m "Initial backend setup for Render deployment"
+
+# เพิ่ม remote repository
+git remote add origin https://github.com/your-username/chatapp-backend.git
+git push -u origin main
 ```
 
-2. **สร้างไฟล์ .env**
+### Step 2: สร้าง Web Service บน Render
+
+1. เข้า [Render Dashboard](https://dashboard.render.com)
+2. คลิก **"New +"** → **"Web Service"**
+3. เลือก **"Build and deploy from a Git repository"**
+4. เชื่อมต่อ GitHub account และเลือก repository
+5. กำหนดค่าต่อไปนี้:
+
+**Basic Settings:**
+- **Name**: `chatapp-backend` (หรือชื่อที่ต้องการ)
+- **Environment**: `Node`
+- **Region**: `Singapore` (ใกล้ประเทศไทยที่สุด)
+- **Branch**: `main`
+- **Root Directory**: ปล่อยว่าง (ถ้าไฟล์อยู่ใน root) หรือ `backend` (ถ้าอยู่ในโฟลเดอร์)
+
+**Build & Deploy:**
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+
+### Step 3: Environment Variables
+
+ใน Render Dashboard → Advanced → **Environment Variables** เพิ่ม:
+
 ```bash
-cp .env.example .env
-# แก้ไขค่าใน .env ตามต้องการ
+# จำเป็น (Required)
+MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/chatapp?retryWrites=true&w=majority
+JWT_SECRET=your-super-secret-jwt-key-make-it-very-long-and-complex-at-least-32-characters
+NODE_ENV=production
+
+# ไม่บังคับ (Optional - มีค่า default แล้ว)
+PORT=5000
+JWT_EXPIRE=30d
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=1000
+MAX_FILE_SIZE_MB=50
+FRONTEND_URL=https://your-frontend-app.com
+ALLOWED_ORIGINS=https://your-frontend-app.com,http://localhost:19006
+SOCKET_CORS_ORIGIN=https://your-frontend-app.com
 ```
 
-3. **สร้าง Admin User**
+### Step 4: Deploy
+
+1. คลิก **"Create Web Service"**
+2. Render จะ build และ deploy อัตโนมัติ
+3. รอประมาณ 5-10 นาที จนสถานะเป็น **"Live"**
+
+### Step 5: ทดสอบ
+
+เมื่อ deploy สำเร็จ จะได้ URL เช่น: `https://chatapp-backend.onrender.com`
+
+ทดสอบ API:
 ```bash
-node scripts/createAdmin.js
+# Health check
+curl https://chatapp-backend.onrender.com/api/health
+
+# API info  
+curl https://chatapp-backend.onrender.com/
 ```
 
-4. **สร้าง Test Users (Optional)**
-```bash
-node scripts/createTestUsers.js
-```
-
-5. **รันเซิร์ฟเวอร์**
-```bash
-# Development
-npm run dev
-
-# Production
-npm start
-```
-
-### Deploy บน Vercel
-
-1. **ติดตั้ง Vercel CLI**
-```bash
-npm i -g vercel
-```
-
-2. **Login Vercel**
-```bash
-vercel login
-```
-
-3. **Deploy**
-```bash
-vercel --prod
-```
-
-4. **ตั้งค่า Environment Variables ใน Vercel Dashboard**
-- `MONGO_URI`: MongoDB connection string
-- `JWT_SECRET`: JWT secret key
-- `NODE_ENV`: production
-
-## 📋 API Endpoints
+## 📦 API Endpoints
 
 ### Authentication
 - `POST /api/auth/register` - สมัครสมาชิก
 - `POST /api/auth/login` - เข้าสู่ระบบ
-- `GET /api/auth/me` - ดึงข้อมูลผู้ใช้ปัจจุบัน
+- `GET /api/auth/me` - ดูข้อมูลผู้ใช้ปัจจุบัน
 
-### Users Management
-- `GET /api/users` - ดึงรายการผู้ใช้ (Admin)
-- `GET /api/users/search` - ค้นหาผู้ใช้
-- `GET /api/users/:id` - ดึงข้อมูลผู้ใช้
-- `PUT /api/users/:id` - แก้ไขข้อมูลผู้ใช้
-- `DELETE /api/users/:id` - ลบผู้ใช้ (Admin)
+### Users
+- `GET /api/users` - ค้นหาผู้ใช้
+- `GET /api/users/:id` - ดูข้อมูลผู้ใช้
+- `PUT /api/users/profile` - แก้ไขโปรไฟล์
+- `POST /api/users/avatar` - อัปโหลดรูปโปรไฟล์
 
-### Chat (Private)
-- `GET /api/chats` - ดึงรายการแชท
-- `POST /api/chats` - สร้างห้องแชทใหม่
-- `GET /api/chats/:id/messages` - ดึงข้อความในแชท
-- `POST /api/chats/:id/messages` - ส่งข้อความ (รองรับไฟล์)
+### Chats
+- `GET /api/chats` - ดูรายการแชท
+- `POST /api/chats` - สร้างแชทใหม่
+- `GET /api/chats/:id/messages` - ดูข้อความในแชท
+- `POST /api/chats/:id/messages` - ส่งข้อความ
 - `DELETE /api/chats/messages/:id` - ลบข้อความ
-- `POST /api/chats/messages/:id/read` - ทำเครื่องหมายอ่านแล้ว
-- `GET /api/chats/:id/unread-count` - จำนวนข้อความที่ยังไม่อ่าน
 - `DELETE /api/chats/:id` - ลบห้องแชท
 
 ### Groups
-- `GET /api/groups` - ดึงรายการกลุ่ม
+- `GET /api/groups` - ดูรายการกลุ่ม
 - `POST /api/groups` - สร้างกลุ่มใหม่
-- `GET /api/groups/:id` - ดึงข้อมูลกลุ่ม
-- `DELETE /api/groups/:id` - ลบกลุ่ม
+- `GET /api/groups/:id` - ดูข้อมูลกลุ่ม
 - `POST /api/groups/:id/invite` - เชิญสมาชิก
 - `DELETE /api/groups/:id/members/:userId` - ลบสมาชิก
-- `POST /api/groups/:id/leave` - ออกจากกลุ่ม
-- `PUT /api/groups/:id/auto-invite` - ตั้งค่า Auto Invite
+- `DELETE /api/groups/:id` - ลบกลุ่ม
 
 ### Notifications
-- `GET /api/notifications` - ดึงการแจ้งเตือน
+- `GET /api/notifications` - ดูการแจ้งเตือน
 - `PUT /api/notifications/:id/read` - ทำเครื่องหมายอ่านแล้ว
 - `DELETE /api/notifications/:id` - ลบการแจ้งเตือน
-- `GET /api/notifications/unread-count` - จำนวนการแจ้งเตือนที่ยังไม่อ่าน
 
-## 🔧 Socket.IO Events
+## 🔧 Local Development
 
-### Client to Server
-- `join` - เข้าร่วมระบบ
-- `join_chat` - เข้าร่วมห้องแชท
-- `leave_chat` - ออกจากห้องแชท
-- `send_message` - ส่งข้อความ
-- `typing` - กำลังพิมพ์
-- `message_read` - อ่านข้อความ
+```bash
+# Clone repository
+git clone https://github.com/your-username/chatapp-backend.git
+cd chatapp-backend
 
-### Server to Client
-- `receive_message` - รับข้อความใหม่
-- `user_typing` - ผู้ใช้กำลังพิมพ์
-- `message_read_update` - อัพเดทสถานะอ่าน
-- `user_online` - ผู้ใช้ออนไลน์
-- `user_offline` - ผู้ใช้ออฟไลน์
-- `receive_notification` - รับการแจ้งเตือน
+# Install dependencies
+npm install
 
-## 🗃 Database Schema
+# Copy environment file
+cp .env.example .env
 
-### User
-- `username` - ชื่อผู้ใช้ (unique)
-- `password` - รหัสผ่าน (hashed)
-- `email` - อีเมล (unique)
-- `firstName`, `lastName` - ชื่อ-นามสกุล
-- `faculty` - คณะ
-- `department` - หน่วยงาน
-- `major` - สาขาวิชา (นักศึกษา)
-- `groupCode` - ห้องเรียน
-- `studentId` - รหัสนักศึกษา
-- `employeeId` - รหัสพนักงาน
-- `role` - บทบาท (student/teacher/staff/admin)
-- `avatar` - รูปโปรไฟล์
-- `isOnline` - สถานะออนไลน์
-- `lastSeen` - เวลาที่เข้าใช้ล่าสุด
+# Edit .env with your values
+# Start development server
+npm run dev
 
-### Messages
-- `chat_id` - ID ห้องแชท
-- `group_id` - ID กลุ่ม (สำหรับกลุ่มแชท)
-- `user_id` - ID ผู้ส่ง
-- `content` - เนื้อหาข้อความ
-- `messageType` - ประเภทข้อความ (text/file/image)
-- `file_id` - ID ไฟล์ (ถ้ามี)
-- `readBy` - รายการผู้อ่าน
-- `isDeleted` - สถานะลบ
-- `time` - เวลาส่ง
+# Create admin user
+npm run create-admin
 
-### GroupChat
-- `groupName` - ชื่อกลุ่ม
-- `groupImage` - รูปกลุ่ม
-- `creator` - ผู้สร้างกลุ่ม
-- `members` - รายการสมาชิก
-- `autoInviteSettings` - การตั้งค่าเชิญอัตโนมัติ
-- `settings` - การตั้งค่ากลุ่ม
+# Create test users
+npm run create-test-users
+```
+
+## 📝 User Roles
+
+### 🎓 Student (นักศึกษา)
+- เข้าระบบด้วยรหัสนักศึกษา
+- แชทส่วนตัวและกลุ่ม
+- ส่งข้อความและไฟล์
+- ลบข้อความของตัวเอง
+- แก้ไขโปรไฟล์ตนเอง
+- ค้นหาผู้ใช้อื่น
+
+### 👨‍🏫 Teacher (อาจารย์)
+- เข้าระบบด้วยรหัสพนักงาน
+- ทุกอย่างเหมือนนักศึกษา
+- **เพิ่มเติม**: สร้างกลุ่มได้
+- **เพิ่มเติม**: ตั้งค่า Auto Invite ได้
+
+### 👥 Staff (เจ้าหน้าที่/บุคลากร)
+- เข้าระบบด้วยรหัสพนักงาน
+- ทุกอย่างเหมือนอาจารย์
+
+### 🔧 Admin (ผู้ดูแลระบบ)
+- สร้าง/แก้ไข/ลบบัญชีผู้ใช้
+- จัดการระบบทั้งหมด
+- ส่งการแจ้งเตือนระบบ
 
 ## 🔒 Security Features
 
-- ✅ JWT Authentication
-- ✅ Password Hashing (bcrypt)
-- ✅ Rate Limiting
-- ✅ CORS Protection
-- ✅ Helmet Security Headers
-- ✅ File Type Validation
-- ✅ Input Validation
+- **Helmet**: ป้องกัน security vulnerabilities
+- **Rate Limiting**: จำกัดจำนวน requests
+- **CORS**: ควบคุมการเข้าถึงจาก domain อื่น
+- **JWT**: Authentication ที่ปลอดภัย
+- **Input Validation**: ตรวจสอบข้อมูลที่เข้ามา
+- **File Upload Security**: จำกัดประเภทและขนาดไฟล์
 
-## 📱 Platform Support
+## 🔧 Scripts
 
-- ✅ Web Application
-- ✅ Mobile (React Native/Expo)
-- ✅ Real-time Updates
-- ✅ Cross-platform compatibility
+```bash
+# Development
+npm run dev          # รัน server ใน development mode
 
-## 🚀 Performance
+# Production  
+npm start           # รัน server ใน production mode
 
-- ✅ Database Indexing
-- ✅ Efficient Queries
-- ✅ File Size Limits
-- ✅ Connection Pooling
-- ✅ Error Handling
+# Database Management
+npm run create-admin      # สร้าง admin user
+npm run create-test-users # สร้าง test users
+npm run reset-admin       # รีเซ็ต admin password
+```
 
-## 🎯 Future Enhancements
+## 🚨 Important Notes สำหรับ Render
 
-- [ ] Message Encryption
-- [ ] Video/Voice Calls
-- [ ] Message Reactions
-- [ ] File Preview
-- [ ] Advanced Search
-- [ ] Message Threads
-- [ ] Admin Dashboard
-- [ ] Analytics
+### 1. Database Setup
+- ใช้ **MongoDB Atlas** (ฟรี 512MB)
+- **อย่าใช้** local MongoDB
+- ตั้งค่า IP Whitelist เป็น `0.0.0.0/0` ใน MongoDB Atlas
 
-## 📞 Support
+### 2. Environment Variables
+- `MONGO_URI` **จำเป็น** - MongoDB connection string
+- `JWT_SECRET` **จำเป็น** - ต้องยาวมากกว่า 32 ตัวอักษร
+- `NODE_ENV=production` **จำเป็น**
 
-สำหรับการสนับสนุนหรือข้อสงสัย กรุณาติดต่อทีมพัฒนา
+### 3. File Storage
+- ไฟล์อัปโหลดจะหายหลัง deploy ใหม่
+- ควรใช้ cloud storage เช่น AWS S3, Cloudinary
 
----
+### 4. Performance
+- Render free tier จะ sleep หลัง 15 นาทีไม่ใช้งาน
+- Cold start ใช้เวลา 30-60 วินาที
+- ควร upgrade เป็น paid plan สำหรับ production
 
-**ChatApp Backend v2.0.0** - University Chat System
+## 🐛 Troubleshooting
+
+### 1. Build Failed
+```bash
+# ตรวจสอบ package.json
+# ตรวจสอบ Node.js version compatibility
+# ดู build logs ใน Render Dashboard
+```
+
+### 2. Database Connection Error
+```bash
+# ตรวจสอบ MONGO_URI format
+# ตรวจสอบ MongoDB Atlas IP whitelist
+# ตรวจสอบ username/password
+```
+
+### 3. CORS Error
+```bash
+# เพิ่ม frontend URL ใน ALLOWED_ORIGINS
+# ตรวจสอบ protocol (http vs https)
+```
+
+### 4. Environment Variables
+```bash
+# ตรวจสอบใน Render Dashboard → Environment Variables
+# ห้ามมี space หรือ quotes เกิน
+# Redeploy หลังจากเปลี่ยน env vars
+```
+

@@ -8,6 +8,9 @@ const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
 
+// Load environment variables
+dotenv.config();
+
 // Routes imports
 const userRoutes = require('./routes/userRoutes');
 const chatRoutes = require('./routes/chatRoutes');
@@ -18,15 +21,24 @@ const notificationRoutes = require('./routes/notificationRoutes');
 // Middleware imports
 const { errorHandler } = require('./Middleware/errorMiddleware');
 
-dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO configuration
+// Environment variables with defaults
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:19006';
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? 
+    process.env.ALLOWED_ORIGINS.split(',') : 
+    ['http://localhost:19006', 'http://localhost:8081', 'https://localhost:19006'];
+
+// Socket.IO configuration with environment-based CORS
 const io = socketIo(server, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
+        origin: NODE_ENV === 'production' ? ALLOWED_ORIGINS : "*",
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 
@@ -35,24 +47,32 @@ app.use(helmet({
     crossOriginResourcePolicy: false,
 }));
 
-// Rate limiting
+// Rate limiting with environment configuration
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // limit each IP to 1000 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
+    max: parseInt(process.env.RATE_LIMIT_MAX) || 1000, // limit each IP
+    message: {
+        error: 'Too many requests from this IP',
+        retryAfter: 'Please try again later'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
 });
 app.use(limiter);
 
-// CORS configuration
+// CORS configuration with environment-based origins
 app.use(cors({
-    origin: ['http://localhost:19006', 'http://localhost:8081', '*'], // Expo default ports
+    origin: NODE_ENV === 'production' ? ALLOWED_ORIGINS : true,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    optionsSuccessStatus: 200
 }));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Body parsing middleware
+const maxFileSize = (parseInt(process.env.MAX_FILE_SIZE_MB) || 50) + 'mb';
+app.use(express.json({ limit: maxFileSize }));
+app.use(express.urlencoded({ extended: true, limit: maxFileSize }));
 
 // Logging middleware 
 app.use((req, res, next) => {
@@ -61,23 +81,32 @@ app.use((req, res, next) => {
 });
 
 // Serve static files (for uploaded images and files)
+const uploadPath = process.env.UPLOAD_PATH || './uploads';
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// MongoDB Connection
-const mongoUri = process.env.MONGO_URI || 'mongodb+srv://punchkan2547:kanoop60@cluster0.pco8lhg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-mongoose.connect(mongoUri)
-    .then(async () => {
-        console.log('✅ MongoDB Connected Successfully');
-        
-        // ทดสอบการเชื่อมต่อ
-        try {
-            const User = require('./models/UserModel');
-            const testConnection = await User.findOne();
-            console.log('✅ Database connection test:', testConnection ? 'Successful' : 'No users found');
-        } catch (err) {
-            console.error('❌ Database test error:', err);
-        }
-    })
+// MongoDB Connection with error handling
+if (!MONGO_URI) {
+    console.error('❌ MONGO_URI environment variable is required');
+    process.exit(1);
+}
+
+mongoose.connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+})
+.then(async () => {
+    console.log('✅ MongoDB Connected Successfully');
+    console.log(`🔗 Database: ${MONGO_URI.split('@')[1]?.split('/')[0] || 'Unknown'}`);
+    
+    // ทดสอบการเชื่อมต่อ
+    try {
+        const User = require('./models/UserModel');
+        const testConnection = await User.findOne();
+        console.log('✅ Database connection test:', testConnection ? 'Successful' : 'No users found');
+    } catch (err) {
+        console.error('❌ Database test error:', err);
+    }
+})
     .catch(err => {
         console.error('❌ MongoDB connection error:', err);
         process.exit(1);
@@ -229,10 +258,9 @@ app.use('*', (req, res) => {
     });
 });
 
-const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📡 Socket.IO server running`);
-    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Environment: ${NODE_ENV}`);
+    console.log(`🔗 CORS Origins: ${ALLOWED_ORIGINS.join(', ')}`);
 });
