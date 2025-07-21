@@ -14,11 +14,10 @@ import {
   Animated
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
-import api from '../service/api';
+import api from '../../service/api';
 
-const API_URL = 'http://192.168.1.34:5000'; // IP จริงของเครื่อง
+const API_URL = 'http://192.168.2.38:5000'; // WiFi IP address
 
 const ChatScreen = ({ route, navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -90,26 +89,37 @@ const ChatScreen = ({ route, navigation }) => {
 
   const loadCurrentUser = async () => {
     try {
+      console.log('ChatScreen: Loading current user...');
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
+        console.log('ChatScreen: No token found, redirecting to login');
         navigation.replace('Login');
         return;
       }
 
+      console.log('ChatScreen: Fetching current user...');
       const response = await api.get('/users/current');
+      console.log('ChatScreen: User data received:', response.data);
 
       if (response.data.role === 'admin') {
+        console.log('ChatScreen: User is admin, redirecting to admin screen');
         navigation.replace('Admin');
         return;
       }
 
+      console.log('ChatScreen: Setting current user');
       setCurrentUser(response.data);
     } catch (error) {
-      console.error('Error loading user:', error);
+      console.error('ChatScreen: Error loading user:', error);
+      console.error('ChatScreen: Error response:', error.response?.data);
       if (error.response?.status === 401) {
+        console.log('ChatScreen: Unauthorized, redirecting to login');
         navigation.replace('Login');
+      } else {
+        Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
     } finally {
+      console.log('ChatScreen: Setting loading to false');
       setIsLoading(false);
     }
   };
@@ -326,7 +336,7 @@ const ChatScreen = ({ route, navigation }) => {
             <Image
               source={{ uri: `${API_URL}/${otherParticipant.avatar}` }}
               style={styles.avatar}
-              defaultSource={require('../assets/default-avatar.png')}
+              defaultSource={require('../../assets/default-avatar.png')}
             />
           ) : (
             <View style={[styles.avatar, styles.defaultAvatar]}>
@@ -383,7 +393,7 @@ const ChatScreen = ({ route, navigation }) => {
               <Image
                 source={{ uri: `${API_URL}/${item.sender.avatar}` }}
                 style={styles.messageAvatar}
-                defaultSource={require('../assets/default-avatar.png')}
+                defaultSource={require('../../assets/default-avatar.png')}
               />
             ) : (
               <View style={[styles.messageAvatar, styles.defaultMessageAvatar]}>
@@ -412,7 +422,7 @@ const ChatScreen = ({ route, navigation }) => {
               style={styles.fileAttachment}
               onPress={() => downloadFile(item.file)}
             >
-              <Icon name="attach-file" size={16} color={isMyMessage ? "#fff" : "#007AFF"} />
+              <Text style={styles.attachIcon}>📎</Text>
               <Text style={[
                 styles.fileName,
                 { color: isMyMessage ? "#fff" : "#007AFF" }
@@ -460,7 +470,7 @@ const ChatScreen = ({ route, navigation }) => {
             onPress={goBackToChats}
             style={styles.backButton}
           >
-            <Icon name="arrow-back" size={24} color="#333" />
+            <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           
           <View style={styles.chatHeaderInfo}>
@@ -472,7 +482,7 @@ const ChatScreen = ({ route, navigation }) => {
                     <Image
                       source={{ uri: `${API_URL}/${otherParticipant.avatar}` }}
                       style={styles.headerAvatar}
-                      defaultSource={require('../assets/default-avatar.png')}
+                      defaultSource={require('../../assets/default-avatar.png')}
                     />
                   ) : (
                     <View style={[styles.headerAvatar, styles.defaultAvatar]}>
@@ -521,7 +531,7 @@ const ChatScreen = ({ route, navigation }) => {
           {selectedFile && (
             <View style={styles.selectedFileContainer}>
               <View style={styles.fileInfo}>
-                <Icon name="attach-file" size={16} color="#007AFF" />
+                <Text style={styles.attachIcon}>📎</Text>
                 <Text style={styles.fileName} numberOfLines={1}>
                   {selectedFile.name}
                 </Text>
@@ -530,7 +540,7 @@ const ChatScreen = ({ route, navigation }) => {
                 onPress={removeSelectedFile}
                 style={styles.removeFileButton}
               >
-                <Icon name="close" size={16} color="#666" />
+                <Text style={styles.closeIcon}>✕</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -540,7 +550,7 @@ const ChatScreen = ({ route, navigation }) => {
               style={styles.fileButton}
               onPress={pickFile}
             >
-              <Icon name="attach-file" size={24} color="#007AFF" />
+              <Text style={styles.attachIcon}>📎</Text>
             </TouchableOpacity>
             
             <TextInput
@@ -572,7 +582,7 @@ const ChatScreen = ({ route, navigation }) => {
               {isSending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Icon name="send" size={20} color="#fff" />
+                <Text style={styles.sendIcon}>➤</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -590,7 +600,7 @@ const ChatScreen = ({ route, navigation }) => {
           onPress={navigateToSearch}
           style={styles.iconButton}
         >
-          <Icon name="search" size={24} color="#333" />
+          <Text style={styles.headerIcon}>🔍</Text>
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>แชท</Text>
@@ -599,13 +609,13 @@ const ChatScreen = ({ route, navigation }) => {
           onPress={navigateToProfile}
           style={styles.iconButton}
         >
-          <Icon name="account-circle" size={24} color="#333" />
+          <Text style={styles.headerIcon}>👤</Text>
         </TouchableOpacity>
       </View>
 
       {chats.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Icon name="chat-bubble-outline" size={64} color="#ccc" />
+          <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
           <Text style={styles.subText}>
             ค้นหาเพื่อนเพื่อเริ่มแชท
@@ -614,7 +624,7 @@ const ChatScreen = ({ route, navigation }) => {
             style={styles.searchButton}
             onPress={navigateToSearch}
           >
-            <Icon name="search" size={20} color="#fff" style={styles.searchIcon} />
+            <Text style={styles.searchIcon}>🔍</Text>
             <Text style={styles.searchButtonText}>ค้นหาเพื่อน</Text>
           </TouchableOpacity>
         </View>
@@ -640,7 +650,7 @@ const ChatScreen = ({ route, navigation }) => {
         style={styles.floatingButton}
         onPress={openPopup}
       >
-        <Icon name="more-vert" size={24} color="#fff" />
+        <Text style={styles.floatingIcon}>⋮</Text>
       </TouchableOpacity>
 
       {/* Popup Modal */}
@@ -669,7 +679,7 @@ const ChatScreen = ({ route, navigation }) => {
               style={styles.popupItem}
               onPress={createGroup}
             >
-              <Icon name="group-add" size={24} color="#007AFF" />
+              <Text style={styles.menuIcon}>👥</Text>
               <Text style={styles.popupText}>สร้างกลุ่ม</Text>
             </TouchableOpacity>
             
@@ -691,7 +701,7 @@ const ChatScreen = ({ route, navigation }) => {
                 }, 300);
               }}
             >
-              <Icon name="logout" size={24} color="#ff3b30" />
+              <Text style={styles.menuIcon}>🚪</Text>
               <Text style={[styles.popupText, { color: '#ff3b30' }]}>ออกจากระบบ</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -1103,7 +1113,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     marginHorizontal: 16,
     marginVertical: 8,
-  }
+  },
+
+  // Emoji Icon Styles
+  backIcon: {
+    fontSize: 20,
+    color: '#007AFF',
+  },
+  headerIcon: {
+    fontSize: 20,
+    color: '#007AFF',
+  },
+  emptyIcon: {
+    fontSize: 48,
+    color: '#ccc',
+    marginBottom: 16,
+  },
+  searchIcon: {
+    fontSize: 16,
+    color: '#fff',
+  },
+  floatingIcon: {
+    fontSize: 24,
+    color: '#fff',
+  },
+  menuIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  attachIcon: {
+    fontSize: 16,
+  },
+  closeIcon: {
+    fontSize: 16,
+    color: '#666',
+  },
+  sendIcon: {
+    fontSize: 20,
+    color: '#fff',
+  },
 });
 
 export default ChatScreen;

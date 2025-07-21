@@ -10,15 +10,30 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // เพิ่ม import
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://10.0.2.2:5000';
+const API_URL = 'http://192.168.2.38:5000';
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // ฟังก์ชันทดสอบ connection
+  const testConnection = async () => {
+    try {
+      console.log('Testing connection to:', `${API_URL}/api/auth/health`);
+      const response = await axios.get(`${API_URL}/api/auth/health`, { 
+        timeout: 5000 
+      });
+      console.log('Connection test success:', response.data);
+      Alert.alert('Connection Test', `Success: ${response.data.message}`);
+    } catch (error) {
+      console.log('Connection test failed:', error.message);
+      Alert.alert('Connection Test Failed', `Error: ${error.message}`);
+    }
+  };
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -29,9 +44,9 @@ const LoginScreen = ({ navigation }) => {
     try {
       setIsLoading(true);
       setError('');
-      console.log('Attempting login with:', { username });
+      console.log('Attempting login with:', { username, password });
 
-      const response = await axios.post(`${API_URL}/api/users/login`, {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
         username,
         password
       });
@@ -63,6 +78,10 @@ const LoginScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>เข้าสู่ระบบ</Text>
+
+      
+       
+        
         
         {error ? (
           <Text style={styles.errorText}>{error}</Text>
@@ -164,6 +183,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold'
+  },
+  testButton: {
+    backgroundColor: '#28a745',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  testButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold'
+  },
+  debugButton: {
+    backgroundColor: '#ffc107',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 20
   },
   errorText: {
     color: 'red',

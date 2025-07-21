@@ -12,10 +12,9 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://10.0.2.2:5000';
+const API_URL = 'http://192.168.2.38:5000';
 
 const AdminScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
@@ -130,7 +129,7 @@ const AdminScreen = ({ navigation, route }) => {
           <Image 
             source={{ uri: `${API_URL}/${user.profileImage}` }}
             style={styles.avatar}
-            defaultSource={require('../assets/default-avatar.png')}
+            defaultSource={require('../../assets/default-avatar.png')}
           />
         ) : (
           <View style={[styles.avatar, styles.emptyAvatar]}>
@@ -152,15 +151,15 @@ const AdminScreen = ({ navigation, route }) => {
     <View style={styles.actionButtons}>
       <TouchableOpacity 
         style={[styles.actionButton, styles.editButton]}
-        onPress={() => navigation.navigate('EditUser', { userId: user._id })}
+        onPress={() => navigation.navigate('UserDetail', { userId: user._id })}
       >
-        <Icon name="edit" size={18} color="#fff" />
+        <Text style={styles.actionIcon}>✏️</Text>
       </TouchableOpacity>
       <TouchableOpacity 
         style={[styles.actionButton, styles.deleteButton]}
         onPress={() => handleDeleteUser(user._id, user.username)}
       >
-        <Icon name="delete" size={18} color="#fff" />
+        <Text style={styles.actionIcon}>🗑️</Text>
       </TouchableOpacity>
     </View>
   </View>
@@ -210,7 +209,7 @@ const AdminScreen = ({ navigation, route }) => {
       style={styles.fab}
       onPress={() => navigation.navigate('AddUser')}
     >
-      <Icon name="add" size={24} color="#fff" />
+      <Text style={styles.fabIcon}>+</Text>
     </TouchableOpacity>
   </SafeAreaView>
 );
@@ -391,6 +390,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center'
+  },
+  actionIcon: {
+    fontSize: 18,
+    color: '#fff'
+  },
+  fabIcon: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold'
   }
 });
 

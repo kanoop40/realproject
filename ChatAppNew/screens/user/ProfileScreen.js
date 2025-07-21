@@ -12,11 +12,10 @@ import {
   TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
-import api from '../service/api';
+import api from '../../service/api';
 
-const API_URL = 'http://10.0.2.2:5000';
+const API_URL = 'http://192.168.2.38:5000';
 
 const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -115,7 +114,14 @@ const ProfileScreen = ({ navigation }) => {
         return;
       }
 
-      const response = await api.put('/users/update-profile', editForm);
+      // ส่งเฉพาะข้อมูลที่อนุญาตให้แก้ไข
+      const allowedData = {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim()
+      };
+
+      const response = await api.put('/users/update-profile', allowedData);
       setCurrentUser(response.data);
       setShowEditModal(false);
       Alert.alert('สำเร็จ', 'อัพเดทโปรไฟล์เรียบร้อยแล้ว');
@@ -230,14 +236,14 @@ const ProfileScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()} 
           style={styles.backButton}
         >
-          <Icon name="arrow-back" size={24} color="#333" />
+          <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>โปรไฟล์</Text>
         <TouchableOpacity 
           onPress={handleEditProfile}
           style={styles.editButton}
         >
-          <Icon name="edit" size={24} color="#007AFF" />
+          <Text style={styles.editIcon}>✏️</Text>
         </TouchableOpacity>
       </View>
 
@@ -253,7 +259,7 @@ const ProfileScreen = ({ navigation }) => {
               <Image
                 source={{ uri: `${API_URL}/${currentUser.avatar}` }}
                 style={styles.avatar}
-                defaultSource={require('../assets/default-avatar.png')}
+                defaultSource={require('../../assets/default-avatar.png')}
               />
             ) : (
               <View style={[styles.avatar, styles.defaultAvatar]}>
@@ -267,7 +273,7 @@ const ProfileScreen = ({ navigation }) => {
               {isUpdating ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Icon name="camera-alt" size={16} color="#fff" />
+                <Text style={styles.cameraIcon}>📷</Text>
               )}
             </View>
           </TouchableOpacity>
@@ -277,7 +283,7 @@ const ProfileScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.username}>@{currentUser?.username || ''}</Text>
           <View style={styles.roleContainer}>
-            <Icon name="verified-user" size={16} color="#007AFF" />
+            <Text style={styles.verifiedIcon}>✅</Text>
             <Text style={styles.roleText}>{translateRole(currentUser?.role)}</Text>
           </View>
         </View>
@@ -285,14 +291,14 @@ const ProfileScreen = ({ navigation }) => {
         {/* Details Section */}
         <View style={styles.detailsSection}>
           <View style={styles.detailItem}>
-            <Icon name="email" size={20} color="#666" />
+            <Text style={styles.emailIcon}>📧</Text>
             <Text style={styles.detailLabel}>อีเมล</Text>
             <Text style={styles.detailValue}>{currentUser?.email || ''}</Text>
           </View>
 
           {currentUser?.faculty && (
             <View style={styles.detailItem}>
-              <Icon name="school" size={20} color="#666" />
+              <Text style={styles.schoolIcon}>🏫</Text>
               <Text style={styles.detailLabel}>คณะ</Text>
               <Text style={styles.detailValue}>{currentUser.faculty}</Text>
             </View>
@@ -300,7 +306,7 @@ const ProfileScreen = ({ navigation }) => {
 
           {currentUser?.major && (
             <View style={styles.detailItem}>
-              <Icon name="library-books" size={20} color="#666" />
+              <Text style={styles.bookIcon}>📚</Text>
               <Text style={styles.detailLabel}>สาขา</Text>
               <Text style={styles.detailValue}>{currentUser.major}</Text>
             </View>
@@ -308,7 +314,7 @@ const ProfileScreen = ({ navigation }) => {
 
           {currentUser?.groupCode && currentUser?.role !== 'teacher' && (
             <View style={styles.detailItem}>
-              <Icon name="group" size={20} color="#666" />
+              <Text style={styles.groupIcon}>👥</Text>
               <Text style={styles.detailLabel}>รหัสกลุ่ม</Text>
               <Text style={styles.detailValue}>{currentUser.groupCode}</Text>
             </View>
@@ -318,7 +324,7 @@ const ProfileScreen = ({ navigation }) => {
         {/* Actions Section */}
         <View style={styles.actionsSection}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Icon name="logout" size={20} color="#ff3b30" />
+            <Text style={styles.logoutIcon}>🚪</Text>
             <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
           </TouchableOpacity>
         </View>
@@ -339,73 +345,82 @@ const ProfileScreen = ({ navigation }) => {
                 onPress={() => setShowEditModal(false)}
                 style={styles.closeButton}
               >
-                <Icon name="close" size={24} color="#333" />
+                <Text style={styles.closeIcon}>✕</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.editModalContent}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>ชื่อ</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editForm.firstName}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, firstName: text }))}
-                  placeholder="กรุณากรอกชื่อ"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>นามสกุล</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editForm.lastName}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, lastName: text }))}
-                  placeholder="กรุณากรอกนามสกุล"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>อีเมล</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editForm.email}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, email: text }))}
-                  placeholder="กรุณากรอกอีเมล"
-                  keyboardType="email-address"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>คณะ</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editForm.faculty}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, faculty: text }))}
-                  placeholder="กรุณากรอกคณะ"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>สาขา</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editForm.major}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, major: text }))}
-                  placeholder="กรุณากรอกสาขา"
-                />
-              </View>
-
-              {currentUser?.role !== 'teacher' && (
+              {/* ส่วนที่สามารถแก้ไขได้ */}
+              <View style={styles.editableSection}>
+                <Text style={styles.sectionTitle}>ข้อมูลที่สามารถแก้ไขได้</Text>
+                
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>รหัสกลุ่ม</Text>
+                  <Text style={styles.inputLabel}>ชื่อ</Text>
                   <TextInput
                     style={styles.input}
-                    value={editForm.groupCode}
-                    onChangeText={(text) => setEditForm(prev => ({ ...prev, groupCode: text }))}
-                    placeholder="กรุณากรอกรหัสกลุ่ม"
+                    value={editForm.firstName}
+                    onChangeText={(text) => setEditForm(prev => ({ ...prev, firstName: text }))}
+                    placeholder="กรุณากรอกชื่อ"
                   />
                 </View>
-              )}
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>นามสกุล</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.lastName}
+                    onChangeText={(text) => setEditForm(prev => ({ ...prev, lastName: text }))}
+                    placeholder="กรุณากรอกนามสกุล"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>อีเมล</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.email}
+                    onChangeText={(text) => setEditForm(prev => ({ ...prev, email: text }))}
+                    placeholder="กรุณากรอกอีเมล"
+                    keyboardType="email-address"
+                  />
+                </View>
+              </View>
+
+              {/* ส่วนที่ไม่สามารถแก้ไขได้ */}
+              <View style={styles.readOnlySection}>
+                <Text style={styles.sectionTitle}>ข้อมูลที่ไม่สามารถแก้ไขได้</Text>
+                
+                <View style={styles.readOnlyItem}>
+                  <Text style={styles.readOnlyLabel}>ชื่อผู้ใช้</Text>
+                  <Text style={styles.readOnlyValue}>@{currentUser?.username}</Text>
+                </View>
+
+                <View style={styles.readOnlyItem}>
+                  <Text style={styles.readOnlyLabel}>สถานะ</Text>
+                  <Text style={styles.readOnlyValue}>{translateRole(currentUser?.role)}</Text>
+                </View>
+
+                {currentUser?.faculty && (
+                  <View style={styles.readOnlyItem}>
+                    <Text style={styles.readOnlyLabel}>คณะ</Text>
+                    <Text style={styles.readOnlyValue}>{currentUser.faculty}</Text>
+                  </View>
+                )}
+
+                {currentUser?.major && (
+                  <View style={styles.readOnlyItem}>
+                    <Text style={styles.readOnlyLabel}>สาขา</Text>
+                    <Text style={styles.readOnlyValue}>{currentUser.major}</Text>
+                  </View>
+                )}
+
+                {currentUser?.groupCode && currentUser?.role !== 'teacher' && (
+                  <View style={styles.readOnlyItem}>
+                    <Text style={styles.readOnlyLabel}>รหัสกลุ่ม</Text>
+                    <Text style={styles.readOnlyValue}>{currentUser.groupCode}</Text>
+                  </View>
+                )}
+              </View>
             </ScrollView>
 
             <View style={styles.editModalActions}>
@@ -447,7 +462,7 @@ const ProfileScreen = ({ navigation }) => {
               style={styles.imagePickerOption}
               onPress={takePhoto}
             >
-              <Icon name="camera-alt" size={24} color="#007AFF" />
+              <Text style={styles.cameraPickerIcon}>📷</Text>
               <Text style={styles.imagePickerOptionText}>ถ่ายภาพ</Text>
             </TouchableOpacity>
             
@@ -455,7 +470,7 @@ const ProfileScreen = ({ navigation }) => {
               style={styles.imagePickerOption}
               onPress={selectImageFromLibrary}
             >
-              <Icon name="photo-library" size={24} color="#007AFF" />
+              <Text style={styles.libraryIcon}>🖼️</Text>
               <Text style={styles.imagePickerOptionText}>เลือกจากแกลเลอรี่</Text>
             </TouchableOpacity>
             
@@ -674,6 +689,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#f8f9fa',
   },
+  
+  // Section Styles
+  editableSection: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  readOnlySection: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  readOnlyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  readOnlyLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  readOnlyValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '400',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 10,
+  },
   editModalActions: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -755,6 +816,54 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
     fontWeight: '500',
   },
+  backIcon: {
+    fontSize: 24,
+    color: '#333'
+  },
+  editIcon: {
+    fontSize: 24,
+    color: '#007AFF'
+  },
+  cameraIcon: {
+    fontSize: 16,
+    color: '#fff'
+  },
+  verifiedIcon: {
+    fontSize: 16,
+    color: '#007AFF'
+  },
+  emailIcon: {
+    fontSize: 20,
+    color: '#666'
+  },
+  schoolIcon: {
+    fontSize: 20,
+    color: '#666'
+  },
+  bookIcon: {
+    fontSize: 20,
+    color: '#666'
+  },
+  groupIcon: {
+    fontSize: 20,
+    color: '#666'
+  },
+  logoutIcon: {
+    fontSize: 20,
+    color: '#ff3b30'
+  },
+  closeIcon: {
+    fontSize: 24,
+    color: '#333'
+  },
+  cameraPickerIcon: {
+    fontSize: 24,
+    color: '#007AFF'
+  },
+  libraryIcon: {
+    fontSize: 24,
+    color: '#007AFF'
+  }
 });
 
 export default ProfileScreen;

@@ -5,8 +5,10 @@ const generateToken = require('../utils/generateToken');
 const searchUsers = asyncHandler(async (req, res) => {
     try {
         const q = req.query.q ? req.query.q.trim() : '';
-        const currentUserId = req.user._id; // ได้จาก auth middleware
-        console.log('Search query:', q); // Debug log
+        const currentUserId = req.user._id;
+        const currentUserRole = req.user.role; // ได้จาก auth middleware
+        console.log('Search query:', q);
+        console.log('Current user role:', currentUserRole);
 
         // ถ้าไม่มีคำค้นหา ส่งarray ว่างกลับไป
         if (!q) {
@@ -16,17 +18,36 @@ const searchUsers = asyncHandler(async (req, res) => {
 
         // สร้าง regex สำหรับค้นหาแบบ case-insensitive
         const searchRegex = new RegExp(q, 'i');
-        console.log('Search regex:', searchRegex); // Debug log
+        console.log('Search regex:', searchRegex);
 
-        // ค้นหาผู้ใช้ที่ไม่ใช่ admin และไม่ใช่ตัวเอง โดยค้นหาเฉพาะชื่อและนามสกุล
+        // กำหนด role filter ตาม role ของผู้ใช้ปัจจุบัน
+        let roleFilter = {};
+        if (currentUserRole === 'student') {
+            // ผู้ใช้ปกติค้นหาเจอเฉพาะ student เท่านั้น
+            roleFilter = { role: 'student' };
+        } else if (currentUserRole === 'admin' || currentUserRole === 'teacher') {
+            // admin และ teacher ค้นหาได้ทุก role
+            roleFilter = {};
+        }
+
+        // ค้นหาเฉพาะชื่อและนามสกุล พร้อมกรอง role
         const query = {
             $and: [
-                { role: { $ne: 'admin' } },
+                roleFilter, // กรอง role
                 { _id: { $ne: currentUserId } }, // ไม่แสดงตัวเอง
                 {
                     $or: [
                         { firstName: searchRegex },
-                        { lastName: searchRegex }
+                        { lastName: searchRegex },
+                        { 
+                            $expr: {
+                                $regexMatch: {
+                                    input: { $concat: ['$firstName', ' ', '$lastName'] },
+                                    regex: q,
+                                    options: 'i'
+                                }
+                            }
+                        }
                     ]
                 }
             ]

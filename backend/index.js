@@ -12,6 +12,14 @@ const app = express();
 
 app.use(express.json());
 
+// Logging middleware 
+app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url} - ${new Date().toISOString()}`);
+    console.log('Headers:', req.headers['content-type']);
+    console.log('Body:', req.body);
+    next();
+});
+
 // Serve static files (for uploaded images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -44,4 +52,11 @@ app.use('/api/chats', chatRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const HOST = '0.0.0.0'; // Listen on all interfaces
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on port ${PORT} (all interfaces)`);
+  console.log(`Available on:`);
+  console.log(`  - http://localhost:${PORT}`);
+  console.log(`  - http://192.168.1.34:${PORT} (Ethernet)`);
+  console.log(`  - http://192.168.2.38:${PORT} (WiFi)`);
+});

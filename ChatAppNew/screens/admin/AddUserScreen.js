@@ -13,9 +13,8 @@ import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 
-const API_URL = 'http://10.0.2.2:5000';
+const API_URL = 'http://192.168.2.38:5000';
 
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },
@@ -23,9 +22,9 @@ const faculties = [
 ];
 
 const majors = {
-  Engineering: [
+  บริหารธุรกิจและเทคโนโลยีสารสนเทศ: [
     { label: 'เลือกสาขา', value: '1' },
-    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: 'DT' }
+    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: '345 เทคโนโลยีธุรกิจดิจิทัล' }
   ],
   '1': [
     { label: 'เลือกสาขา', value: '1' },
@@ -33,7 +32,7 @@ const majors = {
 };
 
 const groupCodes = {
-  'DT': [
+  '345 เทคโนโลยีธุรกิจดิจิทัล': [
     { label: 'เลือกกลุ่มเรียน', value: '1' },
     { label: 'DT26721N', value: 'DT26721N' },
     { label: 'DT26722N', value: 'DT26722N' }
@@ -190,7 +189,7 @@ const AddUserScreen = ({ navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-back" size={24} color="#333" />
+          <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>เพิ่มผู้ใช้งาน</Text>
         <View style={styles.placeholder} />
@@ -432,6 +431,10 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 5
+  },
+  backIcon: {
+    fontSize: 24,
+    color: '#333',
   },
   headerTitle: {
     flex: 1,

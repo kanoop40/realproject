@@ -33,6 +33,7 @@ const upload = multer({
 // @access  Private
 const getChats = asyncHandler(async (req, res) => {
     try {
+        console.log('getChats called by user:', req.user._id);
         const userId = req.user._id;
 
         const chatrooms = await Chatrooms.find({
@@ -40,6 +41,8 @@ const getChats = asyncHandler(async (req, res) => {
         })
         .populate('user_id', 'firstName lastName username avatar role')
         .sort({ updatedAt: -1 });
+
+        console.log(`Found ${chatrooms.length} chatrooms for user:`, userId);
 
         // Get last message for each chatroom
         const chatroomsWithLastMessage = await Promise.all(
@@ -65,8 +68,10 @@ const getChats = asyncHandler(async (req, res) => {
             })
         );
 
+        console.log('Returning chatrooms:', chatroomsWithLastMessage.length);
         res.json(chatroomsWithLastMessage);
     } catch (error) {
+        console.error('Error in getChats:', error);
         console.error('Error getting chats:', error);
         res.status(500).json({ 
             message: 'เกิดข้อผิดพลาดในการดึงข้อมูลแชท',

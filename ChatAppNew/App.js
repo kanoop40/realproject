@@ -5,12 +5,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider } from './context/AuthContext';
 import WelcomeScreen from './screens/WelcomeScreen';
 import LoginScreen from './screens/LoginScreen';
-import AdminScreen from './screens/AdminScreen';
-import AddUserScreen from './screens/AddUserScreen';
-import EditUserScreen from './screens/EditUserScreen'
-import ChatScreen from './screens/ChatScreen';
-import SearchUserScreen from './screens/SearchUserScreen';
-import ProfileScreen from './screens/ProfileScreen';
+import AdminScreen from './screens/admin/AdminScreen';
+import AddUserScreen from './screens/admin/AddUserScreen';
+import UserDetailScreen from './screens/admin/UserDetailScreen';
+
+import ChatScreen from './screens/user/ChatScreen';
+import SearchUserScreen from './screens/user/SearchUserScreen';
+import ProfileScreen from './screens/user/ProfileScreen';
+
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -21,11 +23,12 @@ export default function App() {
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Admin" component={AdminScreen} />
-           <Stack.Screen name="Chat" component={ChatScreen} />
-            <Stack.Screen name="Search" component={SearchUserScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-           <Stack.Screen name="AddUser" component={AddUserScreen} />
-           <Stack.Screen name="EditUser" component={EditUserScreen} options={{ headerShown: false }}/>
+          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="Search" component={SearchUserScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} /> 
+          <Stack.Screen name="AddUser" component={AddUserScreen} />
+          <Stack.Screen name="UserDetail" component={UserDetailScreen} />
+         
         </Stack.Navigator>
       </NavigationContainer>
     </AuthProvider>
