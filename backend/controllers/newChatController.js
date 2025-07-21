@@ -3,6 +3,8 @@ const Chatrooms = require('../models/ChatroomsModel');
 const Messages = require('../models/MessagesModel');
 const File = require('../models/FileModel');
 const User = require('../models/UserModel');
+const GroupChat = require('../models/GroupChatModel');
+const Notification = require('../models/NotificationModel');
 const multer = require('multer');
 const path = require('path');
 
@@ -20,11 +22,27 @@ const storage = multer.diskStorage({
 const upload = multer({ 
     storage: storage,
     limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB limit
+        fileSize: 50 * 1024 * 1024 // 50MB limit
     },
     fileFilter: function (req, file, cb) {
-        // Allow all file types
-        cb(null, true);
+        // Allow PDF, Word, Images and common file types
+        const allowedTypes = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'text/plain',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('รองรับเฉพาะไฟล์ PDF, Word, รูปภาพ และไฟล์เอกสารเท่านั้น'), false);
+        }
     }
 });
 
@@ -310,11 +328,204 @@ const deleteChatroom = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Delete a message
+// @route   DELETE /api/chats/messages/:id
+// @access  Private
+const deleteMessage = asyncHandler(async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const userId = req.user._id;
+
+        const message = await Messages.findById(messageId);
+
+        if (!message) {
+            return res.status(404).json({
+                message: 'ไม่พบข้อความ'
+            });
+        }
+
+        // ตรวจสอบว่าเป็นเจ้าของข้อความหรือไม่
+        if (message.user_id.toString() !== userId.toString()) {
+            return res.status(403).json({
+                message: 'คุณไม่มีสิทธิ์ลบข้อความนี้'
+            });
+        }
+
+        // อัพเดทข้อความเป็น "ลบแล้ว" แทนการลบจริง
+        message.isDeleted = true;
+        message.deletedAt = new Date();
+        message.deletedBy = userId;
+        message.content = 'ข้อความนี้ถูกลบแล้ว';
+        
+        await message.save();
+
+        res.json({
+            success: true,
+            message: 'ลบข้อความเรียบร้อยแล้ว',
+            data: message
+        });
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการลบข้อความ',
+            error: error.message
+        });
+    }
+});
+
+// @desc    Mark message as read
+// @route   POST /api/chats/messages/:id/read
+// @access  Private
+const markMessageAsRead = asyncHandler(async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const userId = req.user._id;
+
+        const message = await Messages.findById(messageId);
+
+        if (!message) {
+            return res.status(404).json({
+                message: 'ไม่พบข้อความ'
+            });
+        }
+
+        // ทำเครื่องหมายว่าอ่านแล้ว
+        await message.markAsRead(userId);
+
+        res.json({
+            success: true,
+            message: 'ทำเครื่องหมายอ่านแล้วเรียบร้อย'
+        });
+    } catch (error) {
+        console.error('Error marking message as read:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการทำเครื่องหมายข้อความ',
+            error: error.message
+        });
+    }
+});
+
+// @desc    Get unread messages count
+// @route   GET /api/chats/:id/unread-count
+// @access  Private
+const getUnreadCount = asyncHandler(async (req, res) => {
+    try {
+        const chatId = req.params.id;
+        const userId = req.user._id;
+
+        const unreadCount = await Messages.countDocuments({
+            chat_id: chatId,
+            user_id: { $ne: userId }, // ไม่นับข้อความของตัวเอง
+            readBy: { $not: { $elemMatch: { user: userId } } }
+        });
+
+        res.json({
+            success: true,
+            unreadCount: unreadCount
+        });
+    } catch (error) {
+        console.error('Error getting unread count:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการนับข้อความที่ยังไม่อ่าน',
+            error: error.message
+        });
+    }
+});
+
+// @desc    Mark all messages in chat as read
+// @route   POST /api/chats/:id/read-all
+// @access  Private
+const markAllAsRead = asyncHandler(async (req, res) => {
+    try {
+        const chatId = req.params.id;
+        const userId = req.user._id;
+
+        // หาข้อความทั้งหมดที่ยังไม่อ่าน
+        const unreadMessages = await Messages.find({
+            chat_id: chatId,
+            user_id: { $ne: userId },
+            readBy: { $not: { $elemMatch: { user: userId } } }
+        });
+
+        // ทำเครื่องหมายอ่านแล้วทีละข้อความ
+        for (const message of unreadMessages) {
+            await message.markAsRead(userId);
+        }
+
+        res.json({
+            success: true,
+            message: 'ทำเครื่องหมายอ่านทั้งหมดเรียบร้อยแล้ว',
+            markedCount: unreadMessages.length
+        });
+    } catch (error) {
+        console.error('Error marking all as read:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการทำเครื่องหมายอ่านทั้งหมด',
+            error: error.message
+        });
+    }
+});
+
+// @desc    Get chat participants
+// @route   GET /api/chats/:id/participants
+// @access  Private
+const getChatParticipants = asyncHandler(async (req, res) => {
+    try {
+        const chatId = req.params.id;
+        const userId = req.user._id;
+
+        // ตรวจสอบว่าผู้ใช้เป็นสมาชิกของแชทหรือไม่
+        const userChatroom = await Chatrooms.findOne({
+            _id: chatId,
+            user_id: userId
+        });
+
+        if (!userChatroom) {
+            return res.status(403).json({
+                message: 'คุณไม่มีสิทธิ์เข้าถึงแชทนี้'
+            });
+        }
+
+        // หาผู้เข้าร่วมทั้งหมด
+        const participants = await Chatrooms.find({ _id: chatId })
+            .populate('user_id', 'firstName lastName username avatar role isOnline lastSeen')
+            .select('user_id');
+
+        const participantList = participants.map(p => ({
+            _id: p.user_id._id,
+            firstName: p.user_id.firstName,
+            lastName: p.user_id.lastName,
+            username: p.user_id.username,
+            avatar: p.user_id.avatar,
+            role: p.user_id.role,
+            isOnline: p.user_id.isOnline,
+            lastSeen: p.user_id.lastSeen
+        }));
+
+        res.json({
+            success: true,
+            participants: participantList,
+            count: participantList.length
+        });
+    } catch (error) {
+        console.error('Error getting chat participants:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้เข้าร่วม',
+            error: error.message
+        });
+    }
+});
+
 module.exports = {
     getChats,
     getMessages,
     sendMessage: [upload.single('file'), sendMessage],
     createChatroom,
     markAsRead,
-    deleteChatroom
+    deleteChatroom,
+    deleteMessage,
+    markMessageAsRead,
+    getUnreadCount,
+    markAllAsRead,
+    getChatParticipants
 };

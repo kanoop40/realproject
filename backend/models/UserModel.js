@@ -32,13 +32,27 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    major: {
+    department: { // หน่วยงาน/คณะ
         type: String,
         required: true
     },
-    groupCode: {
+    major: {
         type: String,
-        required: true
+        required: false // ไม่บังคับสำหรับอาจารย์/เจ้าหน้าที่
+    },
+    groupCode: { // ห้องเรียน
+        type: String,
+        required: false
+    },
+    studentId: { // รหัสนักศึกษา
+        type: String,
+        unique: true,
+        sparse: true // อนุญาตให้เป็น null สำหรับไม่ใช่นักศึกษา
+    },
+    employeeId: { // รหัสพนักงาน
+        type: String,
+        unique: true,
+        sparse: true // อนุญาตให้เป็น null สำหรับนักศึกษา
     },
     avatar: {
         type: String,
@@ -53,6 +67,14 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['active', 'inactive'],
         default: 'active'
+    },
+    isOnline: {
+        type: Boolean,
+        default: false
+    },
+    lastSeen: {
+        type: Date,
+        default: Date.now
     }
 }, {
     timestamps: true

@@ -10,6 +10,11 @@ const messagesSchema = new mongoose.Schema({
         ref: 'Chatrooms',
         required: true
     },
+    group_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GroupChat',
+        default: null
+    },
     user_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
@@ -19,6 +24,11 @@ const messagesSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    messageType: {
+        type: String,
+        enum: ['text', 'file', 'image', 'system'],
+        default: 'text'
+    },
     time: {
         type: Date,
         default: Date.now
@@ -27,9 +37,70 @@ const messagesSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'File',
         default: null
+    },
+    readBy: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        readAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+    editedAt: {
+        type: Date,
+        default: null
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    replyTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Messages',
+        default: null
     }
 }, {
     timestamps: true
 });
+
+// Index สำหรับการค้นหา
+messagesSchema.index({ chat_id: 1, time: -1 });
+messagesSchema.index({ group_id: 1, time: -1 });
+messagesSchema.index({ user_id: 1 });
+
+// Method สำหรับทำเครื่องหมายว่าอ่านแล้ว
+messagesSchema.methods.markAsRead = function(userId) {
+    const existingRead = this.readBy.find(read => 
+        read.user.toString() === userId.toString()
+    );
+    
+    if (!existingRead) {
+        this.readBy.push({
+            user: userId,
+            readAt: new Date()
+        });
+        return this.save();
+    }
+    
+    return Promise.resolve(this);
+};
+
+// Method สำหรับตรวจสอบว่าอ่านแล้วหรือไม่
+messagesSchema.methods.isReadBy = function(userId) {
+    return this.readBy.some(read => 
+        read.user.toString() === userId.toString()
+    );
+};
 
 module.exports = mongoose.model('Messages', messagesSchema);
