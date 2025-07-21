@@ -6,11 +6,15 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+<<<<<<< HEAD
     "build": "echo 'No build step required'",
     "test": "echo 'No tests specified'",
     "create-admin": "node scripts/createAdmin.js",
     "create-test-users": "node scripts/createTestUsers.js",
     "reset-admin": "node scripts/resetAdmin.js"
+=======
+    "build": "npm install"
+>>>>>>> b8cdcc56e1044b5874c692bcf928d44d0e5fe77e
   },
   "keywords": ["chat", "university", "express", "socket.io"],
   "author": "Your Name",
