@@ -13,15 +13,13 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createPrivateChat } from '../../service/api';
-import api from '../../service/api';
+import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'http://192.168.2.38:5000';
-
 const ChatScreen = ({ route, navigation }) => {
-  const { socket } = useSocket();
-  const { user: authUser, loading: authLoading } = useAuth();
+  const { socket, joinChatroom, reconnectSocket } = useSocket();
+  const { user: authUser, loading: authLoading, login } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [chats, setChats] = useState([]);
@@ -49,6 +47,75 @@ const ChatScreen = ({ route, navigation }) => {
       }
     }
   }, [currentUser, recipientId]);
+
+  // Socket listeners สำหรับ real-time updates
+  useEffect(() => {
+    if (socket && currentUser) {
+      console.log('🔌 Setting up ChatScreen socket listeners');
+      console.log('🔌 Socket status:', socket.connected ? 'connected' : 'disconnected');
+      console.log('🔌 Socket ID:', socket.id);
+      
+      // ฟังข้อความใหม่จากทุกห้องแชท
+      const handleNewMessage = (data) => {
+        console.log('💬 ChatScreen received new message:', data);
+        console.log('💬 Message sender:', data.message?.sender);
+        console.log('💬 Current user:', currentUser._id);
+        
+        // ไม่ต้องอัพเดทถ้าเป็นข้อความของตัวเอง
+        if (data.message.sender._id === currentUser._id) {
+          console.log('👤 Ignoring own message in ChatScreen');
+          return;
+        }
+        
+        // อัพเดทรายการแชทเมื่อมีข้อความใหม่
+        setChats(prevChats => {
+          console.log('📝 Previous chats count:', prevChats.length);
+          const updatedChats = prevChats.map(chat => {
+            if (chat._id === data.chatroomId) {
+              console.log('📝 Updating chat with new message:', data.chatroomId);
+              return {
+                ...chat,
+                lastMessage: {
+                  content: data.message.content,
+                  timestamp: data.message.timestamp,
+                  sender: data.message.sender
+                },
+                unreadCount: (chat.unreadCount || 0) + 1
+              };
+            }
+            return chat;
+          });
+          console.log('📝 Updated chats count:', updatedChats.length);
+          return updatedChats;
+        });
+      };
+
+      // ฟังการอ่านข้อความ
+      const handleMessageRead = (data) => {
+        console.log('👁️ Message read update:', data);
+        
+        setChats(prevChats => {
+          return prevChats.map(chat => {
+            if (chat._id === data.chatroomId) {
+              return {
+                ...chat,
+                unreadCount: 0
+              };
+            }
+            return chat;
+          });
+        });
+      };
+
+      socket.on('newMessage', handleNewMessage);
+      socket.on('messageReadUpdate', handleMessageRead);
+
+      return () => {
+        socket.off('newMessage', handleNewMessage);
+        socket.off('messageReadUpdate', handleMessageRead);
+      };
+    }
+  }, [socket, currentUser]);
 
   // เพิ่ม focus listener เพื่อรีเฟรชแชทเมื่อกลับมาหน้านี้
   useFocusEffect(
@@ -137,6 +204,15 @@ const ChatScreen = ({ route, navigation }) => {
 
       console.log('ChatScreen: Setting current user from API');
       setCurrentUser(response.data);
+      
+      // อัพเดท AuthContext ด้วยข้อมูลที่ถูกต้องจาก API
+      if (authUser && (authUser._id !== response.data._id || 
+          authUser.firstName !== response.data.firstName ||
+          authUser.lastName !== response.data.lastName)) {
+        console.log('🔄 Updating AuthContext with correct user data from API');
+        const token = await AsyncStorage.getItem('userToken');
+        await login(response.data, token);
+      }
     } catch (error) {
       console.error('ChatScreen: Error loading user:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
@@ -159,6 +235,14 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('ChatScreen: Chats loaded:', response.data?.length || 0, 'chats');
       console.log('ChatScreen: Chat data sample:', response.data?.[0]);
       setChats(response.data || []);
+      
+      // Join ทุกห้องแชทที่ user เป็นสมาชิกเพื่อรับ real-time updates
+      if (joinChatroom && response.data) {
+        response.data.forEach(chat => {
+          console.log('🏠 Joining chatroom for real-time updates:', chat._id);
+          joinChatroom(chat._id);
+        });
+      }
     } catch (error) {
       console.error('ChatScreen: Error loading chats:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
@@ -170,7 +254,7 @@ const ChatScreen = ({ route, navigation }) => {
         ]);
       }
     }
-  }, [navigation]);
+  }, [navigation, joinChatroom]);
 
   const deleteChat = async (chatId) => {
     try {
@@ -260,12 +344,33 @@ const ChatScreen = ({ route, navigation }) => {
     navigation.navigate('Profile');
   };
 
-  const handleChatPress = (chat) => {
+  const handleChatPress = async (chat) => {
     // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
     const otherParticipant = chat.participants?.find(p => p._id !== currentUser._id);
     
     console.log('🔗 Opening chat with participant:', otherParticipant);
     console.log('🔗 Chat room name:', chat.roomName);
+    
+    // มาร์คข้อความว่าอ่านแล้วเมื่อเข้าแชท
+    if (chat.unreadCount > 0) {
+      try {
+        await api.put(`/chats/${chat._id}/read`);
+        
+        // อัพเดท local state
+        setChats(prevChats => {
+          return prevChats.map(c => {
+            if (c._id === chat._id) {
+              return { ...c, unreadCount: 0 };
+            }
+            return c;
+          });
+        });
+        
+        console.log('✅ Marked chat as read:', chat._id);
+      } catch (error) {
+        console.error('❌ Error marking chat as read:', error);
+      }
+    }
     
     navigation.navigate('PrivateChat', {
       chatroomId: chat._id,
@@ -301,7 +406,10 @@ const ChatScreen = ({ route, navigation }) => {
     
     return (
       <TouchableOpacity 
-        style={styles.chatItem}
+        style={[
+          styles.chatItem,
+          item.unreadCount > 0 && styles.chatItemUnread
+        ]}
         onPress={() => handleChatPress(item)}
         onLongPress={() => handleLongPressChat(item)}
         delayLongPress={500}
@@ -309,9 +417,16 @@ const ChatScreen = ({ route, navigation }) => {
         <View style={styles.avatarContainer}>
           {otherParticipant?.avatar ? (
             <Image
-              source={{ uri: `${API_URL}/${otherParticipant.avatar}` }}
+              source={{ uri: `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}` }}
               style={styles.avatar}
               defaultSource={require('../../assets/default-avatar.png')}
+              onError={(error) => {
+                console.log('❌ Avatar load error:', error.nativeEvent);
+                console.log('❌ Avatar URL:', `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}`);
+              }}
+              onLoad={() => {
+                console.log('✅ Avatar loaded successfully:', otherParticipant.avatar);
+              }}
             />
           ) : (
             <View style={[styles.avatar, styles.defaultAvatar]}>
@@ -327,17 +442,24 @@ const ChatScreen = ({ route, navigation }) => {
               </Text>
             </View>
           )}
+          {item.unreadCount > 0 && <View style={styles.onlineIndicator} />}
         </View>
         
         <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>
+          <Text style={[
+            styles.chatName,
+            item.unreadCount > 0 && styles.chatNameUnread
+          ]}>
             {otherParticipant ? 
               `${otherParticipant.firstName} ${otherParticipant.lastName}` :
               'แชทส่วนตัว'
             }
           </Text>
           {item.lastMessage && (
-            <Text style={styles.lastMessage} numberOfLines={1}>
+            <Text style={[
+              styles.lastMessage,
+              item.unreadCount > 0 && styles.lastMessageUnread
+            ]} numberOfLines={1}>
               {item.lastMessage.content}
             </Text>
           )}
@@ -345,7 +467,10 @@ const ChatScreen = ({ route, navigation }) => {
         
         <View style={styles.chatMeta}>
           {item.lastMessage && (
-            <Text style={styles.timestamp}>
+            <Text style={[
+              styles.timestamp,
+              item.unreadCount > 0 && styles.timestampUnread
+            ]}>
               {formatTime(item.lastMessage.timestamp)}
             </Text>
           )}
@@ -372,7 +497,9 @@ const ChatScreen = ({ route, navigation }) => {
     chatsCount: chats.length,
     recipientId,
     isLoading,
-    authLoading
+    authLoading,
+    socketConnected: socket ? 'connected' : 'disconnected',
+    socketId: socket?.id || 'no-id'
   });
 
   return (
@@ -432,6 +559,37 @@ const ChatScreen = ({ route, navigation }) => {
             {length: 80, offset: 80 * index, index}
           )}
         />
+      )}
+
+      {/* Debug Panel - Remove in production */}
+      {__DEV__ && (
+        <View style={styles.debugPanel}>
+          <Text style={styles.debugText}>
+            Socket: {socket?.connected ? '🟢' : '🔴'} | ID: {socket?.id || 'none'}
+          </Text>
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => {
+              if (socket) {
+                console.log('🧪 Testing socket emit...');
+                socket.emit('test', { message: 'test from ChatScreen' });
+              }
+            }}
+          >
+            <Text style={styles.debugButtonText}>Test Socket</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.debugButton, { backgroundColor: '#ff9500' }]}
+            onPress={() => {
+              console.log('🔄 Manual reconnect...');
+              if (reconnectSocket) {
+                reconnectSocket();
+              }
+            }}
+          >
+            <Text style={styles.debugButtonText}>Reconnect</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Floating Action Button */}
@@ -543,6 +701,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
     backgroundColor: '#fff'
   },
+  chatItemUnread: {
+    backgroundColor: '#f8f9ff',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF'
+  },
   avatarContainer: {
     marginRight: 12,
     position: 'relative'
@@ -571,12 +734,25 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff'
   },
   unreadText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold'
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#34c759',
+    borderWidth: 2,
+    borderColor: '#fff'
   },
   chatInfo: {
     flex: 1,
@@ -584,13 +760,21 @@ const styles = StyleSheet.create({
   },
   chatName: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#333',
     marginBottom: 4
+  },
+  chatNameUnread: {
+    fontWeight: 'bold',
+    color: '#000'
   },
   lastMessage: {
     fontSize: 14,
     color: '#666'
+  },
+  lastMessageUnread: {
+    color: '#333',
+    fontWeight: '500'
   },
   chatMeta: {
     justifyContent: 'center',
@@ -599,6 +783,10 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 12,
     color: '#999'
+  },
+  timestampUnread: {
+    color: '#007AFF',
+    fontWeight: '600'
   },
 
   // Empty State Styles
@@ -639,6 +827,28 @@ const styles = StyleSheet.create({
     color: '#999',
     marginVertical: 10,
     textAlign: 'center'
+  },
+
+  // Debug Panel Styles
+  debugPanel: {
+    position: 'absolute',
+    top: 100,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    padding: 10,
+    borderRadius: 8,
+    minWidth: 150,
+  },
+  debugButton: {
+    backgroundColor: '#007AFF',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 5,
+  },
+  debugButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
   },
 
   // Floating Button Styles

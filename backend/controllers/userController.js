@@ -401,7 +401,17 @@ const getUserById = asyncHandler(async (req, res) => {
             faculty: user.faculty,
             major: user.major,
             groupCode: user.groupCode,
-            role: user.role
+            role: user.role,
+            avatar: user.avatar,
+            status: user.status,
+            isOnline: user.isOnline,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            lastLogin: user.lastLogin,
+            // สถิติการใช้งาน (ให้ค่าเริ่มต้นถ้าไม่มี)
+            messageCount: user.messageCount || 0,
+            chatRoomsCount: user.chatRoomsCount || 0,
+            fileUploadsCount: user.fileUploadsCount || 0
         });
     } else {
         res.status(404);
@@ -500,8 +510,39 @@ const uploadAvatar = asyncHandler(async (req, res) => {
             throw new Error('กรุณาเลือกไฟล์รูปภาพ');
         }
 
+        // ค้นหาข้อมูลผู้ใช้เดิมเพื่อดู avatar เก่า
+        const existingUser = await User.findById(userId);
+        if (!existingUser) {
+            res.status(404);
+            throw new Error('ไม่พบข้อมูลผู้ใช้');
+        }
+
+        // ลบรูป avatar เก่าถ้ามี
+        if (existingUser.avatar) {
+            const fs = require('fs');
+            const path = require('path');
+            
+            try {
+                // แปลง avatar path ให้เป็น full path
+                const oldAvatarPath = path.join(__dirname, '..', existingUser.avatar);
+                console.log('🗑️ Attempting to delete old avatar:', oldAvatarPath);
+                
+                // ตรวจสอบว่าไฟล์มีอยู่จริงก่อนลบ
+                if (fs.existsSync(oldAvatarPath)) {
+                    fs.unlinkSync(oldAvatarPath);
+                    console.log('✅ Old avatar deleted successfully');
+                } else {
+                    console.log('⚠️ Old avatar file not found');
+                }
+            } catch (deleteError) {
+                console.error('❌ Error deleting old avatar:', deleteError);
+                // ไม่ให้ error นี้หยุดการอัพโหลดใหม่
+            }
+        }
+
         // แปลง path ให้เป็น forward slash สำหรับ URL
         const avatarPath = req.file.path.replace(/\\/g, '/');
+        console.log('📸 New avatar path:', avatarPath);
 
         // อัพเดตข้อมูล avatar ในฐานข้อมูล
         const updatedUser = await User.findByIdAndUpdate(
@@ -513,14 +554,18 @@ const uploadAvatar = asyncHandler(async (req, res) => {
             }
         );
 
-        if (!updatedUser) {
-            res.status(404);
-            throw new Error('ไม่พบข้อมูลผู้ใช้');
-        }
+        console.log('✅ Avatar updated successfully for user:', userId);
 
         res.json({
             message: 'อัพโหลดรูปโปรไฟล์สำเร็จ',
-            avatar: avatarPath
+            avatar: avatarPath,
+            user: {
+                _id: updatedUser._id,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                username: updatedUser.username,
+                avatar: updatedUser.avatar
+            }
         });
     } catch (error) {
         console.error('Error uploading avatar:', error);

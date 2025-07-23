@@ -77,6 +77,10 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+    lastLogin: {
+        type: Date,
+        default: null
+    },
     pushToken: {
         type: String,
         default: null

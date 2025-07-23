@@ -141,9 +141,38 @@ mongoose.connect(MONGO_URI, {
 
 // Socket.IO connection handling
 const activeUsers = new Map();
+const jwt = require('jsonwebtoken');
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     console.log('👤 User connected:', socket.id);
+    
+    // Authenticate socket connection
+    try {
+        const token = socket.handshake.auth.token;
+        const userId = socket.handshake.auth.userId;
+        
+        if (token) {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            socket.userId = decoded.userId || userId;
+            activeUsers.set(socket.userId, socket.id);
+            
+            // อัพเดทสถานะออนไลน์
+            const User = require('./models/UserModel');
+            await User.findByIdAndUpdate(socket.userId, {
+                isOnline: true,
+                lastSeen: new Date()
+            });
+            
+            console.log(`✅ User ${socket.userId} authenticated and connected`);
+            
+            // แจ้งผู้ใช้อื่นว่าผู้ใช้นี้ออนไลน์
+            socket.broadcast.emit('user_online', socket.userId);
+        }
+    } catch (error) {
+        console.error('❌ Socket authentication error:', error);
+        socket.disconnect();
+        return;
+    }
 
     // เมื่อผู้ใช้เข้าร่วม
     socket.on('join', async (userId) => {

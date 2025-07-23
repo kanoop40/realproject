@@ -28,6 +28,13 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
 
+    // อัปเดตสถานะออนไลน์และเวลา login ล่าสุด
+    await User.findByIdAndUpdate(user._id, { 
+      isOnline: true,
+      lastLogin: new Date(),
+      lastSeen: new Date()
+    });
+
     // สร้าง token
     console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
     console.log('JWT_SECRET value:', process.env.JWT_SECRET ? '[SET]' : '[NOT SET]');
@@ -47,6 +54,23 @@ const loginUser = async (req, res) => {
   } catch (error) {
     console.log('Login error:', error.message);
     res.status(500).json({ message: 'Login failed', error: error.message });
+  }
+};
+
+// @desc    Logout user
+// @route   POST /api/auth/logout
+// @access  Private
+const logoutUser = async (req, res) => {
+  try {
+    // อัปเดตสถานะออฟไลน์
+    await User.findByIdAndUpdate(req.user._id, { 
+      isOnline: false,
+      lastSeen: new Date()
+    });
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Logout failed', error: error.message });
   }
 };
 
@@ -78,5 +102,6 @@ const checkAuthStatus = async (req, res) => {
 
 module.exports = {
   loginUser,
+  logoutUser,
   checkAuthStatus
 };

@@ -12,10 +12,7 @@ import {
   TextInput,
   Modal
 } from 'react-native';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://192.168.2.38:5000';
+import api, { API_URL } from '../../service/api';
 
 const UserDetailScreen = ({ navigation, route }) => {
   const { userId } = route.params;
@@ -37,20 +34,11 @@ const UserDetailScreen = ({ navigation, route }) => {
   const fetchUserDetails = async () => {
     try {
       setIsLoading(true);
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        navigation.replace('Login');
-        return;
-      }
-
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      };
-
-      const response = await axios.get(`${API_URL}/api/users/${userId}`, config);
+      
+      // ใช้ api instance (มี interceptor ใส่ token อัตโนมัติ)
+      const response = await api.get(`/users/${userId}`);
+      console.log('✅ User data received:', response.data);
+      console.log('📸 Avatar path:', response.data.avatar);
       setUser(response.data);
       
       // เซ็ตข้อมูลในฟอร์มแก้ไข
@@ -62,8 +50,12 @@ const UserDetailScreen = ({ navigation, route }) => {
       });
     } catch (error) {
       console.error('Error fetching user details:', error);
-      Alert.alert('ผิดพลาด', 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
-      navigation.goBack();
+      if (error.response?.status === 401) {
+        navigation.replace('Login');
+      } else {
+        Alert.alert('ผิดพลาด', 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
+        navigation.goBack();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -71,25 +63,16 @@ const UserDetailScreen = ({ navigation, route }) => {
 
   const handleEditUser = async () => {
     try {
-      if (!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) {
+      if (!editForm.firstName.trim() || !editForm.lastName.trim()) {
         Alert.alert('ผิดพลาด', 'กรุณากรอกข้อมูลให้ครบถ้วน');
         return;
       }
 
       setIsUpdating(true);
-      const token = await AsyncStorage.getItem('userToken');
-      
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      };
 
       const updateData = {
         firstName: editForm.firstName.trim(),
-        lastName: editForm.lastName.trim(),
-        email: editForm.email.trim()
+        lastName: editForm.lastName.trim()
       };
 
       // เพิ่มรหัสผ่านเฉพาะเมื่อมีการกรอก
@@ -97,7 +80,8 @@ const UserDetailScreen = ({ navigation, route }) => {
         updateData.password = editForm.password.trim();
       }
 
-      await axios.put(`${API_URL}/api/users/${userId}`, updateData, config);
+      // ใช้ api instance
+      await api.put(`/users/${userId}`, updateData);
       
       Alert.alert('สำเร็จ', 'แก้ไขข้อมูลผู้ใช้เรียบร้อยแล้ว', [
         {
@@ -184,9 +168,21 @@ const UserDetailScreen = ({ navigation, route }) => {
           <View style={styles.avatarContainer}>
             {user.avatar ? (
               <Image
-                source={{ uri: `${API_URL}/${user.avatar}` }}
+                source={{ 
+                  uri: user.avatar.startsWith('http') 
+                    ? user.avatar 
+                    : `${API_URL}/${user.avatar.replace(/\\/g, '/')}`
+                }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
+                onError={(error) => {
+                  console.log('❌ Avatar load error:', error.nativeEvent.error);
+                  console.log('❌ Avatar path:', user.avatar);
+                  console.log('❌ Full URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/')}`);
+                }}
+                onLoad={() => {
+                  console.log('✅ Avatar loaded successfully:', user.avatar);
+                }}
               />
             ) : (
               <View style={[styles.avatar, styles.defaultAvatar]}>
@@ -195,11 +191,21 @@ const UserDetailScreen = ({ navigation, route }) => {
                 </Text>
               </View>
             )}
+            {/* Online Status Indicator */}
+            <View style={[styles.statusIndicator, { backgroundColor: user.isOnline ? '#34C759' : '#8E8E93' }]} />
           </View>
           <Text style={styles.userName}>
             {user.firstName} {user.lastName}
           </Text>
           <Text style={styles.userRole}>{translateRole(user.role)}</Text>
+          <Text style={styles.userEmail}>{user.email}</Text>
+          
+          {/* Status Badge */}
+          <View style={[styles.statusBadge, { backgroundColor: user.isOnline ? '#34C759' : '#8E8E93' }]}>
+            <Text style={styles.statusBadgeText}>
+              {user.isOnline ? '🟢 กำลังใช้งาน' : '⚪ ออฟไลน์'}
+            </Text>
+          </View>
         </View>
 
         {/* User Information */}
@@ -253,9 +259,9 @@ const UserDetailScreen = ({ navigation, route }) => {
           )}
 
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>สถานะบัญชี:</Text>
-            <Text style={[styles.infoValue, { color: user.status === 'active' ? '#34C759' : '#ff3b30' }]}>
-              {user.status === 'active' ? 'ใช้งานได้' : 'ไม่ใช้งาน'}
+            <Text style={styles.infoLabel}>สถานะ:</Text>
+            <Text style={[styles.infoValue, { color: user.isOnline ? '#34C759' : '#8E8E93' }]}>
+              {user.isOnline ? '🟢 กำลังใช้งาน' : '⚪ ออฟไลน์'}
             </Text>
           </View>
 
@@ -268,6 +274,13 @@ const UserDetailScreen = ({ navigation, route }) => {
             <Text style={styles.infoLabel}>แก้ไขล่าสุด:</Text>
             <Text style={styles.infoValue}>{formatDate(user.updatedAt)}</Text>
           </View>
+
+          {user.lastLogin && (
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>เข้าสู่ระบบล่าสุด:</Text>
+              <Text style={styles.infoValue}>{formatDate(user.lastLogin)}</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -321,18 +334,6 @@ const UserDetailScreen = ({ navigation, route }) => {
                 value={editForm.lastName}
                 onChangeText={(text) => setEditForm(prev => ({ ...prev, lastName: text }))}
                 placeholder="กรอกนามสกุล"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>อีเมล *</Text>
-              <TextInput
-                style={styles.formInput}
-                value={editForm.email}
-                onChangeText={(text) => setEditForm(prev => ({ ...prev, email: text }))}
-                placeholder="กรอกอีเมล"
-                keyboardType="email-address"
-                autoCapitalize="none"
               />
             </View>
 
@@ -527,6 +528,34 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 20
+  },
+  userEmail: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 10,
+    textAlign: 'center'
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#fff'
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginTop: 10
+  },
+  statusBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600'
   },
   formGroup: {
     marginBottom: 20

@@ -15,10 +15,8 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { searchUsers, createPrivateChat } from '../../service/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api from '../../service/api';
+import api, { API_URL } from '../../service/api'; // ใช้ API_URL เดียวกัน
 import { AuthContext } from '../../context/AuthContext';
-
-const API_URL = 'http://192.168.2.38:5000';
 
 const SearchUserScreen = ({ navigation }) => {
   // Add safety check for context and navigation

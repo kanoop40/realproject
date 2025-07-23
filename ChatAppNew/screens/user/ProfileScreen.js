@@ -13,9 +13,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import api from '../../service/api';
-
-const API_URL = 'http://192.168.2.38:5000';
+import api, { API_URL } from '../../service/api';
 
 const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -49,6 +47,8 @@ const ProfileScreen = ({ navigation }) => {
       console.log('Fetching current user with token:', token?.substring(0, 20) + '...');
       const response = await api.get('/users/current');
       console.log('Current user response:', response.data);
+      console.log('User avatar from API:', response.data.avatar);
+      console.log('Full avatar URL will be:', `${API_URL}/${response.data.avatar}`);
       setCurrentUser(response.data);
       
       // Initialize edit form with current data
@@ -194,13 +194,22 @@ const ProfileScreen = ({ navigation }) => {
         name: 'avatar.jpg',
       });
 
-      const response = await api.post('/users/upload-avatar', formData, {
+      const response = await api.post('/users/avatar', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      setCurrentUser(prev => ({ ...prev, avatar: response.data.avatar }));
+      console.log('✅ Avatar upload response:', response.data);
+      
+      // อัพเดทข้อมูลผู้ใช้
+      const newAvatarPath = response.data.avatar;
+      setCurrentUser(prev => ({ 
+        ...prev, 
+        avatar: newAvatarPath 
+      }));
+      
+      console.log('📸 New avatar path set:', newAvatarPath);
       Alert.alert('สำเร็จ', 'อัพโหลดรูปโปรไฟล์เรียบร้อยแล้ว');
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -260,6 +269,9 @@ const ProfileScreen = ({ navigation }) => {
                 source={{ uri: `${API_URL}/${currentUser.avatar}` }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
+                onLoad={() => console.log('✅ Avatar image loaded successfully')}
+                onError={(error) => console.error('❌ Avatar image load error:', error)}
+                onLoadStart={() => console.log('🔄 Avatar image loading started')}
               />
             ) : (
               <View style={[styles.avatar, styles.defaultAvatar]}>

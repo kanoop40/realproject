@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Fixed API URL
-const API_URL = 'http://192.168.2.38:5000';
+const API_URL = 'http://192.168.2.52:5000';
 
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 

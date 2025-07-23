@@ -14,10 +14,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
-import api from '../../service/api';
+import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
-
-const API_URL = 'http://192.168.2.38:5000';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -27,6 +25,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const flatListRef = React.useRef(null); // เพิ่ม ref สำหรับ FlatList
 
   // ข้อมูลแชทจาก route params
   const { chatroomId, roomName, recipientId, recipientName, recipientAvatar } = route.params || {};
@@ -52,7 +52,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
       // ฟังข้อความใหม่
       const handleNewMessage = (data) => {
         console.log('💬 New message received:', data);
-        setMessages(prevMessages => [...prevMessages, data.message]);
+        if (data.message && data.message.sender && data.message.sender._id !== currentUser?._id) {
+          // ตรวจสอบว่าข้อความนี้มีอยู่แล้วหรือไม่
+          setMessages(prevMessages => {
+            const messageExists = prevMessages.some(msg => 
+              msg._id === data.message._id
+            );
+            
+            if (messageExists) {
+              console.log('🔄 Message already exists, skipping...');
+              return prevMessages;
+            }
+            
+            console.log('✅ Adding new message to chat');
+            const newMessages = [...prevMessages, {
+              _id: data.message._id,
+              content: data.message.content,
+              sender: data.message.sender,
+              timestamp: data.message.timestamp,
+              file: data.message.file,
+              user_id: data.message.sender // ความเข้ากันได้
+            }];
+            
+            // Scroll ไปข้อความใหม่หลังจากอัพเดท state
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+            
+            return newMessages;
+          });
+          
+          // มาร์คข้อความว่าอ่านแล้วเมื่อผู้ใช้อยู่ในหน้าแชท
+          if (chatroomId) {
+            api.put(`/chats/${chatroomId}/read`).catch(err => {
+              console.log('Error marking message as read:', err);
+            });
+          }
+        }
       };
 
       socket.on('newMessage', handleNewMessage);
@@ -98,6 +134,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       // มาร์คข้อความว่าอ่านแล้ว
       await api.put(`/chats/${chatroomId}/read`);
+      
+      // Scroll ไปข้อความล่าสุดเมื่อโหลดเสร็จ
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
@@ -108,17 +149,45 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
     setIsSending(true);
     const messageToSend = newMessage.trim();
+    const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
+    
+    // Optimistic UI - เพิ่มข้อความทันทีก่อนส่งไปเซิร์ฟเวอร์
+    const optimisticMessage = {
+      _id: tempId,
+      content: messageToSend || 'ไฟล์แนบ',
+      sender: currentUser,
+      timestamp: new Date().toISOString(),
+      file: selectedFile ? {
+        file_name: selectedFile.name,
+        file_path: selectedFile.uri,
+        size: selectedFile.size
+      } : null,
+      user_id: currentUser,
+      isOptimistic: true // ใช้เพื่อระบุว่าเป็นข้อความชั่วคราว
+    };
+    
+    setMessages(prev => {
+      const newMessages = [...prev, optimisticMessage];
+      // Scroll ไปข้อความใหม่
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+      return newMessages;
+    });
+    
     setNewMessage('');
+    const fileToSend = selectedFile;
+    setSelectedFile(null);
 
     try {
       const formData = new FormData();
       formData.append('content', messageToSend || 'ไฟล์แนบ');
       
-      if (selectedFile) {
+      if (fileToSend) {
         formData.append('file', {
-          uri: selectedFile.uri,
-          type: selectedFile.mimeType,
-          name: selectedFile.name
+          uri: fileToSend.uri,
+          type: fileToSend.mimeType,
+          name: fileToSend.name
         });
       }
 
@@ -128,12 +197,26 @@ const PrivateChatScreen = ({ route, navigation }) => {
         },
       });
 
-      // เพิ่มข้อความใหม่ไปยัง state
-      setMessages(prev => [...prev, response.data]);
-      setSelectedFile(null);
+      // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
+      setMessages(prev => {
+        const updatedMessages = prev.map(msg => 
+          msg._id === tempId ? { ...response.data, isOptimistic: false } : msg
+        );
+        // Scroll อีกครั้งเมื่อได้ response จริง
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return updatedMessages;
+      });
+      
+      console.log('✅ Message sent successfully:', response.data._id);
     } catch (error) {
-      console.error('Error sending message:', error);
-      setNewMessage(messageToSend); // คืนข้อความถ้าส่งไม่สำเร็จ
+      console.error('❌ Error sending message:', error);
+      
+      // ลบข้อความชั่วคราวถ้าส่งไม่สำเร็จ
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
+      setNewMessage(messageToSend); // คืนข้อความ
+      setSelectedFile(fileToSend); // คืนไฟล์
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งข้อความได้');
     } finally {
       setIsSending(false);
@@ -208,11 +291,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         <View style={[
           styles.messageBubble,
-          isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble
+          isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
+          item.isOptimistic && styles.optimisticMessage
         ]}>
           <Text style={[
             styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.otherMessageText
+            isMyMessage ? styles.myMessageText : styles.otherMessageText,
+            item.isOptimistic && styles.optimisticMessageText
           ]}>
             {item.content}
           </Text>
@@ -243,7 +328,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
             styles.messageTime,
             isMyMessage ? styles.myMessageTime : styles.otherMessageTime
           ]}>
-            {formatTime(item.timestamp)}
+            {item.isOptimistic ? 'กำลังส่ง...' : formatTime(item.timestamp)}
           </Text>
         </View>
       </View>
@@ -302,8 +387,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       {/* รายการข้อความ */}
       <FlatList
+        ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) => {
+          // ใช้ _id เป็นหลัก แต่ถ้าไม่มีให้สร้าง unique key
+          if (item._id) {
+            return item._id;
+          }
+          return `message_${index}_${item.timestamp}_${item.sender?._id || 'unknown'}`;
+        }}
         renderItem={renderMessage}
         style={styles.messagesList}
         contentContainerStyle={styles.messagesContainer}
@@ -312,7 +404,34 @@ const PrivateChatScreen = ({ route, navigation }) => {
         maxToRenderPerBatch={15}
         windowSize={10}
         initialNumToRender={12}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10
+        }}
+        onContentSizeChange={() => {
+          // Auto scroll เมื่อ content size เปลี่ยน (มีข้อความใหม่)
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }}
+        onScroll={(event) => {
+          const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+          const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+          setShowScrollToBottom(!isAtBottom);
+        }}
+        scrollEventThrottle={16}
       />
+
+      {/* Scroll to Bottom Button */}
+      {showScrollToBottom && (
+        <TouchableOpacity
+          style={styles.scrollToBottomButton}
+          onPress={() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+            setShowScrollToBottom(false);
+          }}
+        >
+          <Text style={styles.scrollToBottomIcon}>↓</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Input สำหรับพิมพ์ข้อความ */}
       <View style={styles.inputContainer}>
@@ -518,6 +637,13 @@ const styles = StyleSheet.create({
   otherMessageTime: {
     color: '#999'
   },
+  // Optimistic message styles
+  optimisticMessage: {
+    opacity: 0.7
+  },
+  optimisticMessageText: {
+    fontStyle: 'italic'
+  },
 
   // Input Styles
   inputContainer: {
@@ -605,6 +731,29 @@ const styles = StyleSheet.create({
   sendIcon: {
     fontSize: 20,
     color: '#fff',
+  },
+  
+  // Scroll to Bottom Button
+  scrollToBottomButton: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    backgroundColor: 'rgba(0, 122, 255, 0.9)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  scrollToBottomIcon: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 

@@ -353,17 +353,30 @@ const sendMessage = asyncHandler(async (req, res) => {
 
         // ส่ง notification ไปยังผู้เข้าร่วมแชทคนอื่น ๆ
         try {
-            const allChatrooms = await Chatrooms.find({ chat_id: id })
-                .populate('user_id', 'firstName lastName pushToken');
-            
+            let recipients = [];
             const sender = message.user_id;
             const senderName = `${sender.firstName} ${sender.lastName}`;
             
-            // หาผู้เข้าร่วมคนอื่น ๆ (ไม่ใช่คนส่ง)
-            const recipients = allChatrooms
-                .filter(room => room.user_id._id.toString() !== userId.toString())
-                .map(room => room.user_id)
-                .filter(user => user.pushToken); // เฉพาะคนที่มี push token
+            // หาผู้เข้าร่วมแชทคนอื่น ๆ รองรับทั้ง user_id และ participants
+            if (chatroom.participants && chatroom.participants.length > 0) {
+                // Use participants array (new schema)
+                const participantIds = chatroom.participants
+                    .filter(id => id.toString() !== userId.toString());
+                
+                recipients = await User.find({
+                    _id: { $in: participantIds },
+                    pushToken: { $exists: true, $ne: null }
+                });
+            } else if (chatroom.user_id && chatroom.user_id.length > 0) {
+                // Use user_id array (old schema)
+                const userIds = chatroom.user_id
+                    .filter(id => id.toString() !== userId.toString());
+                
+                recipients = await User.find({
+                    _id: { $in: userIds },
+                    pushToken: { $exists: true, $ne: null }
+                });
+            }
 
             // ส่ง notification ไปยังแต่ละคน
             for (const recipient of recipients) {
@@ -373,6 +386,19 @@ const sendMessage = asyncHandler(async (req, res) => {
                     content.trim(),
                     id
                 );
+                
+                // ส่ง socket notification ด้วย
+                const io = req.app.get('io') || req.io;
+                if (io) {
+                    io.to(recipient._id.toString()).emit('receiveNotification', {
+                        type: 'new_message',
+                        title: `ข้อความใหม่จาก ${senderName}`,
+                        message: content.trim(),
+                        chatroomId: id,
+                        senderId: userId,
+                        timestamp: new Date()
+                    });
+                }
             }
             
             console.log(`📲 Sent notifications to ${recipients.length} recipients`);
@@ -385,17 +411,26 @@ const sendMessage = asyncHandler(async (req, res) => {
         try {
             const io = req.app.get('io') || req.io;
             if (io) {
+                // Populate sender data สำหรับ socket broadcast
+                const populatedMessage = await Messages.findById(message._id)
+                    .populate('user_id', 'firstName lastName username avatar role')
+                    .populate('file_id');
+                
                 io.to(id).emit('newMessage', {
                     message: {
-                        _id: message._id,
-                        content: message.content,
-                        sender: message.user_id,
-                        timestamp: message.time,
-                        file: message.file_id || null
+                        _id: populatedMessage._id,
+                        content: populatedMessage.content,
+                        sender: populatedMessage.user_id,
+                        timestamp: populatedMessage.time,
+                        file: populatedMessage.file_id || null,
+                        user_id: populatedMessage.user_id // เพิ่มเพื่อ backward compatibility
                     },
                     chatroomId: id
                 });
-                console.log('📡 Message broadcasted via Socket.IO');
+                console.log('📡 Message broadcasted via Socket.IO to room:', id);
+                console.log('📡 Broadcasted message sender:', populatedMessage.user_id.firstName, populatedMessage.user_id.lastName);
+            } else {
+                console.warn('⚠️ Socket.IO instance not found');
             }
         } catch (socketError) {
             console.error('Error broadcasting via Socket.IO:', socketError);

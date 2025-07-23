@@ -11,8 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login } from '../service/api';
+import { useAuth } from '../context/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
+  const { login: authLogin } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,14 +39,9 @@ const LoginScreen = ({ navigation }) => {
       // เก็บข้อมูลผู้ใช้และ token  
       const userData = response.data;
       
-      try {
-        await AsyncStorage.setItem('userToken', userData.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(userData));
-        console.log('✅ User data saved to AsyncStorage');
-      } catch (storageError) {
-        console.error('❌ Error saving to AsyncStorage:', storageError);
-        // ดำเนินการต่อได้ แม้ save ไม่สำเร็จ
-      }
+      // ใช้ AuthContext สำหรับ login
+      await authLogin(userData, userData.token);
+      console.log('✅ AuthContext updated with user data');
 
       // นำทางตาม role
       if (userData.role === 'admin') {

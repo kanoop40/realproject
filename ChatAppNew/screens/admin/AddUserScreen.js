@@ -14,8 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://192.168.2.38:5000';
+import api, { API_URL } from '../../service/api'; // ใช้ api และ API_URL เดียวกัน
 
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },

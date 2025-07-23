@@ -11,10 +11,8 @@ import {
   Image
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://192.168.2.38:5000';
+import api, { API_URL } from '../../service/api'; // ใช้ api instance แทน axios
 
 const AdminScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
@@ -26,20 +24,13 @@ const AdminScreen = ({ navigation, route }) => {
     setIsLoading(true);
     setError('');
 
-    const token = await AsyncStorage.getItem('userToken');
-    if (!token) {
-      navigation.replace('Login');
-      return;
-    }
+    console.log('🔄 AdminScreen: Fetching users...');
+    console.log('🌐 API URL:', API_URL);
 
-    const config = {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    };
-
-    const response = await axios.get(`${API_URL}/api/users`, config);
+    // ใช้ api instance ที่มี interceptor แล้ว (ไม่ต้อง config token เอง)
+    const response = await api.get('/users');
+    
+    console.log('✅ Users fetched successfully:', response.data?.length || 0, 'users');
     
     // เพิ่มการตรวจสอบข้อมูล
     if (response.data) {
@@ -48,12 +39,18 @@ const AdminScreen = ({ navigation, route }) => {
       setError('ไม่พบข้อมูลผู้ใช้');
     }
   } catch (error) {
-    console.error('Error fetching users:', error.response?.data || error);
+    console.error('❌ Error fetching users:', error.response?.data || error.message);
+    console.error('❌ Error status:', error.response?.status);
+    console.error('❌ Request URL:', `${API_URL}/api/users`);
+    
     if (error.response?.status === 401) {
+      console.log('🔐 Unauthorized, clearing token and redirecting');
       await AsyncStorage.removeItem('userToken');
       navigation.replace('Login');
+    } else if (error.code === 'NETWORK_ERROR' || error.message === 'Network Error') {
+      setError(`ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้\nURL: ${API_URL}\nตรวจสอบการเชื่อมต่อเครือข่าย`);
     } else {
-      setError(error.response?.data?.message || 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
+      setError(error.response?.data?.message || `เกิดข้อผิดพลาด: ${error.message}`);
     }
   } finally {
     setIsLoading(false);
@@ -69,19 +66,6 @@ const AdminScreen = ({ navigation, route }) => {
 
   const handleDeleteUser = async (userId, username) => {
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        navigation.replace('Login');
-        return;
-      }
-
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      };
-
       Alert.alert(
         'ลบผู้ใช้',
         `คุณแน่ใจหรือไม่ที่จะลบ ${username}?`,
@@ -95,7 +79,8 @@ const AdminScreen = ({ navigation, route }) => {
             style: 'destructive',
             onPress: async () => {
               try {
-                await axios.delete(`${API_URL}/api/users/${userId}`, config);
+                // ใช้ api instance (มี interceptor ใส่ token อัตโนมัติ)
+                await api.delete(`/users/${userId}`);
                 fetchUsers();
                 Alert.alert('สำเร็จ', 'ลบผู้ใช้เรียบร้อยแล้ว');
               } catch (error) {
@@ -127,9 +112,16 @@ const AdminScreen = ({ navigation, route }) => {
       <View style={styles.avatarContainer}>
         {user.avatar ? (
           <Image 
-            source={{ uri: `${API_URL}/${user.avatar}` }}
+            source={{ uri: `${API_URL}/${user.avatar.replace(/\\/g, '/')}` }}
             style={styles.avatar}
             defaultSource={require('../../assets/default-avatar.png')}
+            onError={(error) => {
+              console.log('❌ Avatar load error in AdminScreen:', error.nativeEvent);
+              console.log('❌ Avatar URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/')}`);
+            }}
+            onLoad={() => {
+              console.log('✅ Avatar loaded successfully in AdminScreen:', user.avatar);
+            }}
           />
         ) : (
           <View style={[styles.avatar, styles.emptyAvatar]}>
@@ -169,7 +161,14 @@ const AdminScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.container}>
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>ผู้ใช้งาน</Text>
+      <View>
+        <Text style={styles.headerTitle}>ผู้ใช้งาน</Text>
+        {__DEV__ && (
+          <Text style={styles.debugText}>
+            API: {API_URL} | Users: {users.length}
+          </Text>
+        )}
+      </View>
       <TouchableOpacity 
         style={styles.logoutButton}
         onPress={handleLogout}
@@ -184,6 +183,7 @@ const AdminScreen = ({ navigation, route }) => {
       </View>
     ) : error ? (
       <View style={styles.errorContainer}>
+        <Text style={styles.errorIcon}>⚠️</Text>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
@@ -191,6 +191,19 @@ const AdminScreen = ({ navigation, route }) => {
         >
           <Text style={styles.retryButtonText}>ลองใหม่อีกครั้ง</Text>
         </TouchableOpacity>
+        {__DEV__ && (
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: '#666', marginTop: 10 }]}
+            onPress={() => {
+              console.log('📊 Debug Info:');
+              console.log('API_URL:', API_URL);
+              console.log('Users count:', users.length);
+              console.log('Error:', error);
+            }}
+          >
+            <Text style={styles.retryButtonText}>Show Debug Info</Text>
+          </TouchableOpacity>
+        )}
       </View>
     ) : users.length === 0 ? (
       <View style={styles.emptyContainer}>
@@ -235,6 +248,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333'
+  },
+  debugText: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2
   },
   logoutButton: {
     padding: 8,
@@ -365,11 +383,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20
   },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16
+  },
   errorText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#ff3b30',
     textAlign: 'center',
-    marginBottom: 15
+    marginBottom: 15,
+    lineHeight: 20
   },
   retryButton: {
     backgroundColor: '#007AFF',

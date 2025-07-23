@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { loginUser, checkAuthStatus } = require('../controllers/authController');
+const { loginUser, logoutUser, checkAuthStatus } = require('../controllers/authController');
 const { protect } = require('../Middleware/authMiddleware');
 
 // @route   GET /api/auth/health
@@ -19,6 +19,11 @@ router.get('/health', (req, res) => {
 // @desc    Login user
 // @access  Public
 router.post('/login', loginUser);
+
+// @route   POST /api/auth/logout
+// @desc    Logout user
+// @access  Private
+router.post('/logout', protect, logoutUser);
 
 // @route   GET /api/auth/status
 // @desc    Check auth status

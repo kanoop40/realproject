@@ -60,8 +60,8 @@ router.get('/current', protect, getCurrentUser);
 // Update profile route
 router.put('/update-profile', protect, updateProfile);
 
-// Upload avatar route
-router.post('/upload-avatar', protect, upload.single('avatar'), uploadAvatar);
+// Upload avatar route (เปลี่ยนจาก upload-avatar เป็น avatar)
+router.post('/avatar', protect, upload.single('avatar'), uploadAvatar);
 
 // Push token route
 router.post('/push-token', protect, updatePushToken);
