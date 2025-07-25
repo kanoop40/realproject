@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         auto: true
     },
-    username: {
+    username: { // รหัสนักศึกษา/พนักงาน (ใช้เป็น login ID)
         type: String,
         required: true,
         unique: true
@@ -44,16 +44,6 @@ const userSchema = new mongoose.Schema({
     groupCode: { // ห้องเรียน
         type: String,
         required: false
-    },
-    studentId: { // รหัสนักศึกษา
-        type: String,
-        unique: true,
-        sparse: true // อนุญาตให้เป็น null สำหรับไม่ใช่นักศึกษา
-    },
-    employeeId: { // รหัสพนักงาน
-        type: String,
-        unique: true,
-        sparse: true // อนุญาตให้เป็น null สำหรับนักศึกษา
     },
     avatar: {
         type: String,

@@ -48,13 +48,18 @@ const messagesSchema = new mongoose.Schema({
             default: Date.now
         }
     }],
+    isDeleted: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     editedAt: {
         type: Date,
         default: null
     },
-    isDeleted: {
-        type: Boolean,
-        default: false
+    replyTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Messages',
+        default: null
     },
     deletedAt: {
         type: Date,
@@ -62,12 +67,7 @@ const messagesSchema = new mongoose.Schema({
     },
     deletedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    },
-    replyTo: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Messages',
+        ref: 'User',  
         default: null
     }
 }, {

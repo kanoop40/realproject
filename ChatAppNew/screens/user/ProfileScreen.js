@@ -266,11 +266,19 @@ const ProfileScreen = ({ navigation }) => {
           >
             {currentUser?.avatar ? (
               <Image
-                source={{ uri: `${API_URL}/${currentUser.avatar}` }}
+                source={{ 
+                  uri: currentUser.avatar.startsWith('http') 
+                    ? currentUser.avatar 
+                    : `${API_URL}/${currentUser.avatar.replace(/\\/g, '/')}`
+                }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
                 onLoad={() => console.log('✅ Avatar image loaded successfully')}
-                onError={(error) => console.error('❌ Avatar image load error:', error)}
+                onError={(error) => {
+                  console.error('❌ Avatar image load error:', error);
+                  console.log('❌ Avatar path:', currentUser.avatar);
+                  console.log('❌ Full URL:', `${API_URL}/${currentUser.avatar.replace(/\\/g, '/')}`);
+                }}
                 onLoadStart={() => console.log('🔄 Avatar image loading started')}
               />
             ) : (
@@ -297,6 +305,14 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.roleContainer}>
             <Text style={styles.verifiedIcon}>✅</Text>
             <Text style={styles.roleText}>{translateRole(currentUser?.role)}</Text>
+          </View>
+          
+          {/* Online Status */}
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusDot, { backgroundColor: currentUser?.isOnline ? '#34C759' : '#8E8E93' }]} />
+            <Text style={[styles.statusText, { color: currentUser?.isOnline ? '#34C759' : '#8E8E93' }]}>
+              {currentUser?.isOnline ? 'ออนไลน์' : 'ออฟไลน์'}
+            </Text>
           </View>
         </View>
 
@@ -875,6 +891,26 @@ const styles = StyleSheet.create({
   libraryIcon: {
     fontSize: 24,
     color: '#007AFF'
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    alignSelf: 'center'
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '500'
   }
 });
 

@@ -436,7 +436,13 @@ const getCurrentUser = asyncHandler(async (req, res) => {
             major: user.major,
             groupCode: user.groupCode,
             role: user.role,
-            avatar: user.avatar
+            avatar: user.avatar,
+            status: user.status,
+            isOnline: user.isOnline,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            lastLogin: user.lastLogin,
+            lastSeen: user.lastSeen
         });
     } else {
         res.status(404);

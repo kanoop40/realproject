@@ -561,36 +561,7 @@ const ChatScreen = ({ route, navigation }) => {
         />
       )}
 
-      {/* Debug Panel - Remove in production */}
-      {__DEV__ && (
-        <View style={styles.debugPanel}>
-          <Text style={styles.debugText}>
-            Socket: {socket?.connected ? '🟢' : '🔴'} | ID: {socket?.id || 'none'}
-          </Text>
-          <TouchableOpacity
-            style={styles.debugButton}
-            onPress={() => {
-              if (socket) {
-                console.log('🧪 Testing socket emit...');
-                socket.emit('test', { message: 'test from ChatScreen' });
-              }
-            }}
-          >
-            <Text style={styles.debugButtonText}>Test Socket</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.debugButton, { backgroundColor: '#ff9500' }]}
-            onPress={() => {
-              console.log('🔄 Manual reconnect...');
-              if (reconnectSocket) {
-                reconnectSocket();
-              }
-            }}
-          >
-            <Text style={styles.debugButtonText}>Reconnect</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      
 
       {/* Floating Action Button */}
       <TouchableOpacity
