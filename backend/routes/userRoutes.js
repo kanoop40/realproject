@@ -9,6 +9,7 @@ const {
     updateUserProfile,
     getUsers,
     deleteUser,
+    cleanupOrphanedData,
     createUser,
     updateUser,
     searchUsers,
@@ -16,7 +17,12 @@ const {
     getCurrentUser,
     updateProfile,
     uploadAvatar,
-    updatePushToken
+    updatePushToken,
+    getUsersForGroupCreation,
+    getMajors,
+    getClassCodes,
+    getClassCodesByMajor,
+    getUsersByClassCode
 } = require('../controllers/userController');
 const { protect, admin } = require('../Middleware/authMiddleware');
 
@@ -54,6 +60,24 @@ router.post('/login', authUser);
 // Search route ต้องอยู่ก่อน /:id
 router.get('/search', protect, searchUsers);
 
+// Get users for group creation (ไม่ต้อง admin permission)
+router.get('/for-group', protect, (req, res, next) => {
+    console.log('🎯 Route hit: /users/for-group');
+    getUsersForGroupCreation(req, res, next);
+});
+
+// Get majors for teachers
+router.get('/majors', protect, getMajors);
+
+// Get class codes for teachers
+router.get('/class-codes', protect, getClassCodes);
+
+// Get class codes by major
+router.get('/class-codes-by-major/:major', protect, getClassCodesByMajor);
+
+// Get users by class code
+router.get('/by-class/:classCode', protect, getUsersByClassCode);
+
 // Get current user route
 router.get('/current', protect, getCurrentUser);
 
@@ -76,9 +100,15 @@ router.route('/')
     .get(protect, admin, getUsers)
     .post(protect, admin, createUser);
 
+// System cleanup route - เฉพาะ admin เท่านั้น
+router.post('/cleanup-orphaned-data', protect, admin, cleanupOrphanedData);
+
 // ย้าย route /:id ไปไว้ด้านล่างสุด
 router.route('/:id')
-    .get(protect, getUserById)
+    .get(protect, (req, res, next) => {
+        console.log('🎯 Route hit: /users/:id with id =', req.params.id);
+        getUserById(req, res, next);
+    })
     .delete(protect, admin, deleteUser)
     .put(protect, admin, updateUser);
 

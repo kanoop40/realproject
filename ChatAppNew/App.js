@@ -14,6 +14,8 @@ import ChatScreen from './screens/user/ChatScreen';
 import PrivateChatScreen from './screens/user/PrivateChatScreen';
 import SearchUserScreen from './screens/user/SearchUserScreen';
 import ProfileScreen from './screens/user/ProfileScreen';
+import CreateGroupScreen from './screens/user/CreateGroupScreen';
+import GroupChatScreen from './screens/user/GroupChatScreen';
 import NotificationService from './service/notificationService';
 
 const Stack = createNativeStackNavigator();
@@ -50,6 +52,8 @@ export default function App() {
             <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
             <Stack.Screen name="Search" component={SearchUserScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} /> 
+            <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+            <Stack.Screen name="GroupChat" component={GroupChatScreen} /> 
             <Stack.Screen name="AddUser" component={AddUserScreen} />
             <Stack.Screen name="UserDetail" component={UserDetailScreen} />
           </Stack.Navigator>

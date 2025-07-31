@@ -8,13 +8,23 @@ const Notification = require('../models/NotificationModel');
 // @route   POST /api/groups
 // @access  Private
 const createGroup = asyncHandler(async (req, res) => {
-    const { groupName, description, autoInviteSettings, settings } = req.body;
     const userId = req.user._id;
+    let groupName, description, members;
 
-    // ตรวจสอบสิทธิ์ (เฉพาะอาจารย์และเจ้าหน้าที่สามารถสร้างกลุ่มได้)
-    if (!['teacher', 'staff', 'admin'].includes(req.user.role)) {
-        res.status(403);
-        throw new Error('ไม่มีสิทธิ์ในการสร้างกลุ่ม');
+    // ตรวจสอบว่าเป็น FormData หรือ JSON
+    if (req.body.members && typeof req.body.members === 'string') {
+        // FormData - parse JSON string
+        try {
+            members = JSON.parse(req.body.members);
+            groupName = req.body.groupName;
+            description = req.body.description;
+        } catch (error) {
+            res.status(400);
+            throw new Error('ข้อมูลสมาชิกไม่ถูกต้อง');
+        }
+    } else {
+        // Regular JSON
+        ({ groupName, description, members } = req.body);
     }
 
     if (!groupName || groupName.trim() === '') {
@@ -22,23 +32,46 @@ const createGroup = asyncHandler(async (req, res) => {
         throw new Error('กรุณาใส่ชื่อกลุ่ม');
     }
 
-    const group = await GroupChat.create({
-        groupName: groupName.trim(),
-        description: description || '',
-        creator: userId,
-        members: [{
+    // จัดการรูปภาพกลุ่ม
+    let groupAvatar = null;
+    if (req.file) {
+        groupAvatar = req.file.path.replace(/\\/g, '/'); // แปลง path ให้ใช้ forward slash
+    }
+
+    // ถ้ามี members ที่ส่งมา ให้ใช้แบบนั้น (สำหรับกลุ่มธรรมดา)
+    let groupMembers;
+    if (members && Array.isArray(members)) {
+        // สร้างกลุ่มธรรมดาโดยผู้ใช้ทั่วไป
+        groupMembers = members;
+    } else {
+        // ตรวจสอบสิทธิ์ (เฉพาะอาจารย์และเจ้าหน้าที่สามารถสร้างกลุ่มอัตโนมัติได้)
+        if (!['teacher', 'staff', 'admin'].includes(req.user.role)) {
+            res.status(403);
+            throw new Error('ไม่มีสิทธิ์ในการสร้างกลุ่มอัตโนมัติ');
+        }
+        // สร้างกลุ่มอัตโนมัติ - เพิ่มเฉพาะผู้สร้าง
+        groupMembers = [{
             user: userId,
             role: 'admin',
             joinedAt: new Date()
-        }],
-        autoInviteSettings: autoInviteSettings || { enabled: false },
-        settings: settings || {}
+        }];
+    }
+
+    const group = await GroupChat.create({
+        groupName: groupName.trim(),
+        description: description || '',
+        groupAvatar: groupAvatar, // เพิ่มรูปภาพกลุ่ม
+        creator: userId,
+        members: groupMembers,
+        autoInviteSettings: req.body.autoInviteSettings || { enabled: false },
+        settings: req.body.settings || {}
     });
 
-    await group.populate('creator', 'firstName lastName username role');
-    await group.populate('members.user', 'firstName lastName username role');
+    await group.populate('creator', 'firstName lastName username role avatar');
+    await group.populate('members.user', 'firstName lastName username role avatar');
 
     // ถ้าเปิด Auto Invite ให้เชิญสมาชิกทันที
+    const autoInviteSettings = req.body.autoInviteSettings || { enabled: false };
     if (autoInviteSettings && autoInviteSettings.enabled) {
         await processAutoInvite(group);
     }
@@ -232,10 +265,20 @@ const leaveGroup = asyncHandler(async (req, res) => {
         throw new Error('ไม่พบกลุ่ม');
     }
 
-    // ไม่สามารถออกถ้าเป็นผู้สร้างกลุ่ม
+    // ตรวจสอบว่าเป็นสมาชิกหรือไม่
+    const isMember = group.members.some(member => 
+        member.user.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+        res.status(403);
+        throw new Error('คุณไม่ได้เป็นสมาชิกของกลุ่มนี้');
+    }
+
+    // ถ้าเป็นผู้สร้างกลุ่ม แนะนำให้ลบกลุ่มแทน
     if (group.creator.toString() === userId.toString()) {
         res.status(400);
-        throw new Error('ผู้สร้างกลุ่มไม่สามารถออกจากกลุ่มได้ หากต้องการให้ลบกลุ่ม');
+        throw new Error('ผู้สร้างกลุ่มไม่สามารถออกจากกลุ่มได้ กรุณาลบกลุ่มแทน หรือโอนสิทธิ์ให้สมาชิกคนอื่นก่อน');
     }
 
     await group.removeMember(userId);
@@ -253,43 +296,59 @@ const deleteGroup = asyncHandler(async (req, res) => {
     const groupId = req.params.id;
     const userId = req.user._id;
 
+    console.log('🗑️ Attempting to delete group:', groupId, 'by user:', userId);
+
     const group = await GroupChat.findById(groupId);
     
     if (!group) {
+        console.log('❌ Group not found:', groupId);
         res.status(404);
         throw new Error('ไม่พบกลุ่ม');
     }
 
+    console.log('🔍 Found group creator:', group.creator, 'Current user:', userId);
+    console.log('🔍 Creator type:', typeof group.creator, 'User type:', typeof userId);
+    console.log('🔍 Creator string:', group.creator.toString(), 'User string:', userId.toString());
+
     // เฉพาะผู้สร้างกลุ่มเท่านั้นที่ลบได้
     if (group.creator.toString() !== userId.toString()) {
+        console.log('❌ User not authorized - Creator:', group.creator.toString(), 'User:', userId.toString());
         res.status(403);
         throw new Error('เฉพาะผู้สร้างกลุ่มเท่านั้นที่สามารถลบกลุ่มได้');
     }
 
-    // อัพเดทสถานะเป็น inactive แทนการลบ
+    console.log('✅ User authorized to delete group');
+
+    // ลบกลุ่มออกจากฐานข้อมูล (หรือตั้งเป็น inactive)
     group.isActive = false;
     await group.save();
 
-    // ส่งการแจ้งเตือนให้สมาชิกทั้งหมด
+    console.log(`🗑️ กลุ่ม "${group.groupName}" ถูกลบโดย ${req.user.firstName} ${req.user.lastName}`);
+
+    // ส่งการแจ้งเตือนให้สมาชิกทั้งหมด (ยกเว้นผู้สร้าง)
     const memberIds = group.members
         .filter(member => member.user.toString() !== userId.toString())
         .map(member => member.user);
 
     for (const memberId of memberIds) {
-        await Notification.createNotification({
-            recipient: memberId,
-            sender: userId,
-            type: 'system',
-            title: 'กลุ่มถูกลบ',
-            message: `กลุ่ม "${group.groupName}" ได้ถูกลบโดยผู้สร้างกลุ่ม`,
-            group_id: groupId,
-            data: { groupName: group.groupName }
-        });
+        try {
+            await Notification.createNotification({
+                recipient: memberId,
+                sender: userId,
+                type: 'system',
+                title: 'กลุ่มถูกลบ',
+                message: `กลุ่ม "${group.groupName}" ได้ถูกลบโดยผู้สร้างกลุ่ม`,
+                group_id: groupId,
+                data: { groupName: group.groupName }
+            });
+        } catch (notifError) {
+            console.error('Error sending delete notification:', notifError);
+        }
     }
 
     res.json({
         success: true,
-        message: 'ลบกลุ่มสำเร็จ'
+        message: `ลบกลุ่ม "${group.groupName}" สำเร็จ`
     });
 });
 
@@ -417,6 +476,140 @@ const searchGroups = asyncHandler(async (req, res) => {
     });
 });
 
+// @desc    ส่งข้อความในกลุ่ม
+// @route   POST /api/groups/:id/messages
+// @access  Private
+const sendGroupMessage = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const { content } = req.body;
+    const userId = req.user._id;
+
+    if (!content || content.trim() === '') {
+        res.status(400);
+        throw new Error('กรุณาใส่ข้อความ');
+    }
+
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็นสมาชิกหรือไม่
+    const isMember = group.members.some(member => 
+        member.user.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์ส่งข้อความในกลุ่มนี้');
+    }
+
+    // สร้างข้อความใหม่
+    const message = await Messages.create({
+        content: content.trim(),
+        user_id: userId,
+        chat_id: groupId,
+        group_id: groupId,
+        messageType: 'text',
+        time: new Date()
+    });
+
+    await message.populate('user_id', 'firstName lastName username role avatar');
+
+    console.log('📝 Created message with sender info:', {
+        messageId: message._id,
+        content: message.content,
+        sender: {
+            _id: message.user_id._id,
+            firstName: message.user_id.firstName,
+            lastName: message.user_id.lastName,
+            avatar: message.user_id.avatar
+        }
+    });
+
+    // อัปเดท lastActivity ของกลุ่ม
+    group.lastActivity = new Date();
+    await group.save();
+
+    // ส่ง real-time message ไปยังสมาชิกทุกคน
+    const io = req.app.get('io');
+    if (io) {
+        io.to(groupId).emit('newMessage', {
+            chatroomId: groupId,
+            message: {
+                _id: message._id,
+                content: message.content,
+                sender: message.user_id, // ใช้ populated user_id เป็น sender
+                timestamp: message.time
+            }
+        });
+        console.log('📤 Group message emitted to room:', groupId);
+    }
+
+    // แปลง response เพื่อให้ตรงกับที่ frontend คาดหวัง
+    const responseMessage = {
+        _id: message._id,
+        content: message.content,
+        sender: message.user_id, // ใช้ populated user_id เป็น sender
+        timestamp: message.time,
+        messageType: message.messageType
+    };
+
+    res.status(201).json({
+        success: true,
+        data: responseMessage,
+        message: 'ส่งข้อความสำเร็จ'
+    });
+});
+
+// @desc    ดึงข้อความในกลุ่ม
+// @route   GET /api/groups/:id/messages
+// @access  Private
+const getGroupMessages = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user._id;
+    const { page = 1, limit = 50 } = req.query;
+
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็นสมาชิกหรือไม่
+    const isMember = group.members.some(member => 
+        member.user.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์เข้าถึงข้อความในกลุ่มนี้');
+    }
+
+    const messages = await Messages.find({ chat_id: groupId })
+        .populate('user_id', 'firstName lastName username role avatar')
+        .sort({ time: 1 }) // เรียงจากเก่าไปใหม่
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit));
+
+    // แปลง field names เพื่อให้ตรงกับที่ frontend คาดหวัง
+    const transformedMessages = messages.map(message => ({
+        _id: message._id,
+        content: message.content,
+        sender: message.user_id, // แปลง user_id เป็น sender
+        timestamp: message.time, // แปลง time เป็น timestamp
+        messageType: message.messageType,
+        readBy: message.readBy
+    }));
+
+    res.json({
+        success: true,
+        data: transformedMessages,
+        count: transformedMessages.length
+    });
+});
+
 module.exports = {
     createGroup,
     getUserGroups,
@@ -426,5 +619,7 @@ module.exports = {
     leaveGroup,
     deleteGroup,
     updateAutoInviteSettings,
-    searchGroups
+    searchGroups,
+    sendGroupMessage,
+    getGroupMessages
 };

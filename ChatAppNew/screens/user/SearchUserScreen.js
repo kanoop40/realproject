@@ -372,7 +372,7 @@ const SearchUserScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
   },
   header: {
     flexDirection: 'row',
@@ -380,9 +380,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingTop: 50,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    borderBottomWidth: 0, // ลบเส้นขอบ
+    borderBottomColor: 'transparent',
   },
   backButton: {
     padding: 8,
@@ -396,13 +396,13 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
     marginHorizontal: 16,
     marginVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#D4A500', // เปลี่ยนเป็นสีเหลืองเข้มกว่า
   },
   searchIcon: {
     marginRight: 8,
@@ -443,12 +443,12 @@ const styles = StyleSheet.create({
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
     padding: 16,
     marginBottom: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#D4A500', // เปลี่ยนเป็นสีเหลืองเข้มกว่า
   },
   avatarContainer: {
     marginRight: 12,
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../service/api';
-import * as Notifications from 'expo-notifications';
+import NotificationService from '../service/notificationService';
 
 const SocketContext = createContext();
 
@@ -67,6 +67,10 @@ export const SocketProvider = ({ children }) => {
         const user = JSON.parse(userString);
         console.log('👤 User for socket:', user.firstName, user.lastName, user._id);
         
+        // อัพเดท NotificationService ด้วยข้อมูล user ที่ถูกต้อง
+        NotificationService.setCurrentUser(user);
+        console.log('🔔 Updated NotificationService with user:', user.firstName, user.lastName, user._id);
+        
         const socketURL = API_URL.replace('/api', '');
         console.log('🌐 Connecting to socket URL:', socketURL);
         
@@ -114,48 +118,32 @@ export const SocketProvider = ({ children }) => {
         });
 
         // Listen for notifications
-        socketInstance.on('receiveNotification', (notification) => {
+        socketInstance.on('receiveNotification', async (notification) => {
           console.log('🔔 Received notification:', notification);
           
-          // แสดง notification ใน app
-          Notifications.scheduleNotificationAsync({
-            content: {
-              title: notification.title,
-              body: notification.message,
-              sound: 'default',
-              data: {
-                chatroomId: notification.chatroomId,
-                senderId: notification.senderId
-              }
-            },
-            trigger: null, // แสดงทันที
-          });
+          // ใช้ NotificationService แทน
+          await NotificationService.handleNewMessage(
+            notification.message,
+            notification.title.replace('ข้อความใหม่จาก ', ''),
+            notification.chatroomId,
+            notification.senderId
+          );
         });
 
         // ฟัง new message เพื่อแสดง notification เมื่อไม่ได้อยู่ในแชท
-        socketInstance.on('newMessage', (data) => {
+        socketInstance.on('newMessage', async (data) => {
           console.log('🔔 SocketContext: New message received:', data);
           console.log('🔔 Message sender ID:', data.message.sender._id);
           console.log('🔔 Current user ID:', user._id);
           
-          // แสดง notification เฉพาะเมื่อไม่ใช่ข้อความของตัวเอง
-          if (data.message.sender._id !== user._id) {
-            console.log('📱 Showing notification for new message');
-            Notifications.scheduleNotificationAsync({
-              content: {
-                title: `ข้อความใหม่จาก ${data.message.sender.firstName} ${data.message.sender.lastName}`,
-                body: data.message.content,
-                sound: 'default',
-                data: {
-                  chatroomId: data.chatroomId,
-                  senderId: data.message.sender._id
-                }
-              },
-              trigger: null,
-            });
-          } else {
-            console.log('👤 Skipping notification for own message');
-          }
+          // ใช้ NotificationService เพื่อจัดการ notification
+          const senderName = `${data.message.sender.firstName} ${data.message.sender.lastName}`;
+          await NotificationService.handleNewMessage(
+            data.message.content,
+            senderName,
+            data.chatroomId,
+            data.message.sender._id
+          );
         });
 
         // Listen for user online/offline status

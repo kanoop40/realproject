@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NotificationService from '../service/notificationService';
 
 const AuthContext = createContext({});
 
@@ -17,6 +18,9 @@ export const AuthProvider = ({ children }) => {
       if (userDataStr) {
         const userData = JSON.parse(userDataStr);
         setUser(userData);
+        
+        // อัปเดต NotificationService ด้วยข้อมูลผู้ใช้ที่โหลดมา
+        NotificationService.setCurrentUser(userData);
         
         // ตรวจสอบว่ามี currentUser หรือไม่ ถ้าไม่มีให้เพิ่ม
         const currentUserStr = await AsyncStorage.getItem('currentUser');
@@ -40,6 +44,9 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
       console.log('💾 AuthContext: Saved user data with both keys (userData & currentUser)');
       setUser(userData);
+      
+      // อัปเดต NotificationService ด้วยข้อมูลผู้ใช้ใหม่
+      NotificationService.setCurrentUser(userData);
     } catch (error) {
       console.error('Error saving user data:', error);
     }
@@ -51,6 +58,10 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.removeItem('userData');
       await AsyncStorage.removeItem('currentUser');
       console.log('🗑️ AuthContext: Removed all user data');
+      
+      // ล้างข้อมูลจาก NotificationService
+      NotificationService.clearCurrentUser();
+      
       setUser(null);
     } catch (error) {
       console.error('Error removing user data:', error);

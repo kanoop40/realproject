@@ -95,7 +95,7 @@ const WelcomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white'
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   content: {
     flex: 1,
@@ -107,11 +107,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20
+    gap: 20,
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   loadingText: {
     fontSize: 16,
-    color: '#666',
+    color: '#333', // เปลี่ยนเป็นสีเข้ม
     textAlign: 'center'
   },
   logo: {
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     marginBottom: 20
   },
   loginButton: {
-    backgroundColor: '#FFB800',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
     width: 150,
     paddingVertical: 12,
     borderRadius: 8

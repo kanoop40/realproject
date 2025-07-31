@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
 const {
     createGroup,
     getUserGroups,
@@ -9,9 +11,40 @@ const {
     leaveGroup,
     deleteGroup,
     updateAutoInviteSettings,
-    searchGroups
+    searchGroups,
+    sendGroupMessage,
+    getGroupMessages
 } = require('../controllers/groupChatController');
 const { protect } = require('../Middleware/authMiddleware');
+
+// Multer configuration for group avatar uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/avatars/');
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'group-avatar-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: function (req, file, cb) {
+        const filetypes = /jpeg|jpg|png|gif/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimetype && extname) {
+            return cb(null, true);
+        } else {
+            cb(new Error('กรุณาเลือกไฟล์รูปภาพเท่านั้น'));
+        }
+    }
+});
 
 // ใช้ middleware protect สำหรับทุก route
 router.use(protect);
@@ -26,7 +59,7 @@ router.get('/search', searchGroups);
 
 // @route   POST /api/groups
 // @desc    สร้างกลุ่มใหม่
-router.post('/', createGroup);
+router.post('/', upload.single('groupAvatar'), createGroup);
 
 // @route   GET /api/groups/:id
 // @desc    ดึงข้อมูลกลุ่มเฉพาะ
@@ -51,5 +84,13 @@ router.post('/:id/leave', leaveGroup);
 // @route   PUT /api/groups/:id/auto-invite
 // @desc    อัพเดทการตั้งค่า Auto Invite
 router.put('/:id/auto-invite', updateAutoInviteSettings);
+
+// @route   POST /api/groups/:id/messages
+// @desc    ส่งข้อความในกลุ่ม
+router.post('/:id/messages', sendGroupMessage);
+
+// @route   GET /api/groups/:id/messages
+// @desc    ดึงข้อความในกลุ่ม
+router.get('/:id/messages', getGroupMessages);
 
 module.exports = router;

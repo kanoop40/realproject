@@ -44,7 +44,17 @@
 - ไม่ต้องเป็นเพื่อนก่อน
 - Real-time notifications
 
-### 🔍 Search System
+### �️ Data Management
+- **Cascade Deletion**: เมื่อลบ user ข้อมูลทั้งหมดจะถูกลบไปด้วย
+  - ข้อความที่ user ส่ง
+  - กลุ่มที่ user สร้าง
+  - ไฟล์ที่ user อัปโหลด
+  - การแจ้งเตือนที่เกี่ยวข้อง
+  - การเป็นสมาชิกในกลุ่มต่างๆ
+- **System Cleanup**: ทำความสะอาดข้อมูลเก่าอัตโนมัติ
+- **Orphaned Data Cleanup**: ลบข้อมูลที่ไม่มีเจ้าของ
+
+### �🔍 Search System
 - ค้นหาผู้ใช้ในระบบได้
 - ค้นหากลุ่มแชท
 
@@ -149,6 +159,8 @@ curl https://chatapp-backend.onrender.com/
 - `GET /api/users/:id` - ดูข้อมูลผู้ใช้
 - `PUT /api/users/profile` - แก้ไขโปรไฟล์
 - `POST /api/users/avatar` - อัปโหลดรูปโปรไฟล์
+- `DELETE /api/users/:id` - ลบผู้ใช้ (Admin เท่านั้น) 🗑️ **Cascade Deletion**
+- `POST /api/users/cleanup-orphaned-data` - ทำความสะอาดข้อมูลเก่า (Admin เท่านั้น)
 
 ### Chats
 - `GET /api/chats` - ดูรายการแชท
@@ -265,7 +277,51 @@ npm run reset-admin       # รีเซ็ต admin password
 - Cold start ใช้เวลา 30-60 วินาที
 - ควร upgrade เป็น paid plan สำหรับ production
 
-## 🐛 Troubleshooting
+## �️ Maintenance Scripts
+
+### การทดสอบการลบ User
+```bash
+# ทดสอบว่าถ้าลบ user จะมีผลกระทบอะไรบ้าง (ไม่ลบจริง)
+node scripts/test-user-deletion.js user@example.com
+```
+
+### การทำความสะอาดข้อมูล
+```bash
+# ทำความสะอาดข้อมูลเก่าที่เหลือค้างในระบบ
+node scripts/cleanup-orphaned-data.js
+
+# หรือเรียกผ่าน API (Admin เท่านั้น)
+curl -X POST http://localhost:5000/api/users/cleanup-orphaned-data \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+### การสร้าง Admin
+```bash
+# สร้าง admin user
+node scripts/createAdmin.js
+```
+
+### การสร้าง Test Users
+```bash
+# สร้าง test users
+node scripts/createTestUsers.js
+```
+
+## 🗑️ User Deletion (Cascade)
+
+เมื่อลบ user ข้อมูลทั้งหมดจะถูกลบไปด้วย:
+
+1. **ข้อความทั้งหมดที่ user ส่ง** - ลบออกจากทุกแชท/กลุ่ม
+2. **กลุ่มที่ user สร้าง** - ลบกลุ่มทั้งหมดพร้อมข้อความ
+3. **รูปกลุ่มและ avatar** - ลบไฟล์จากระบบไฟล์
+4. **การเป็นสมาชิกกลุ่ม** - ถอน user ออกจากกลุ่มที่เป็นสมาชิก
+5. **ห้องแชทส่วนตัว** - ลบห้องที่ user เป็นผู้เข้าร่วม
+6. **ไฟล์ที่อัปโหลด** - ลบทั้งไฟล์และ records
+7. **การแจ้งเตือน** - ลบการแจ้งเตือนที่เกี่ยวข้อง
+
+**⚠️ การลบนี้ไม่สามารถย้อนกลับได้ กรุณาใช้ test script ก่อน**
+
+## �🐛 Troubleshooting
 
 ### 1. Build Failed
 ```bash

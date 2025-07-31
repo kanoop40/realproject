@@ -21,7 +21,7 @@ const fileSchema = new mongoose.Schema({
     Messages_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Messages',
-        required: true
+        required: false // เปลี่ยนเป็น false เพื่อให้สร้าง File ก่อน Message ได้
     },
     chat_id: {
         type: mongoose.Schema.Types.ObjectId,

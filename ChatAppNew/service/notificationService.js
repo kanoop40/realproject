@@ -15,6 +15,23 @@ Notifications.setNotificationHandler({
 
 class NotificationService {
   expoPushToken = null;
+  currentUserId = null;
+  currentUserName = null;
+
+  // อัปเดตข้อมูลผู้ใช้ปัจจุบัน
+  setCurrentUser(user) {
+    this.currentUserId = user?._id || null;
+    this.currentUserName = user ? `${user.firstName} ${user.lastName}` : null;
+    console.log('🔔 NotificationService: Updated current user:', this.currentUserName, this.currentUserId);
+  }
+
+  // ล้างข้อมูลผู้ใช้เมื่อ logout
+  clearCurrentUser() {
+    console.log('🔔 NotificationService: Clearing current user data');
+    this.currentUserId = null;
+    this.currentUserName = null;
+    this.expoPushToken = null;
+  }
 
   // ขออนุญาตและลงทะเบียน push notifications
   async registerForPushNotificationsAsync() {
@@ -82,7 +99,23 @@ class NotificationService {
   }
 
   // จัดการเมื่อมีข้อความใหม่
-  async handleNewMessage(message, senderName, chatroomId) {
+  async handleNewMessage(message, senderName, chatroomId, senderId) {
+    console.log('🔔 NotificationService: handleNewMessage called');
+    console.log('🔔 Sender ID:', senderId, 'Type:', typeof senderId);
+    console.log('🔔 Current User ID:', this.currentUserId, 'Type:', typeof this.currentUserId);
+    console.log('🔔 Are they equal?', senderId === this.currentUserId);
+    console.log('🔔 String comparison:', String(senderId) === String(this.currentUserId));
+    
+    // ตรวจสอบว่าข้อความมาจากตัวเองหรือไม่
+    if (senderId && this.currentUserId && String(senderId) === String(this.currentUserId)) {
+      console.log('🔔 NotificationService: Skipping notification for own message');
+      return;
+    }
+
+    console.log('🔔 NotificationService: Showing notification for message from:', senderName);
+    console.log('🔔 Current user:', this.currentUserName, 'Current ID:', this.currentUserId);
+    console.log('🔔 Sender ID:', senderId);
+
     const title = `ข้อความใหม่จาก ${senderName}`;
     const body = message.length > 50 ? `${message.substring(0, 50)}...` : message;
     
@@ -90,6 +123,7 @@ class NotificationService {
       type: 'new_message',
       chatroomId,
       senderName,
+      senderId,
     });
   }
 
@@ -98,11 +132,13 @@ class NotificationService {
     // เมื่อแอปเปิดอยู่และได้รับ notification
     Notifications.addNotificationReceivedListener(notification => {
       console.log('🔔 Notification received:', notification);
+      console.log('🔔 Current user when notification received:', this.currentUserName);
     });
 
     // เมื่อผู้ใช้แตะ notification
     Notifications.addNotificationResponseReceivedListener(response => {
       console.log('👆 Notification tapped:', response);
+      console.log('👆 Current user when notification tapped:', this.currentUserName);
       
       const data = response.notification.request.content.data;
       

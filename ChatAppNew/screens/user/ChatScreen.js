@@ -16,6 +16,7 @@ import { createPrivateChat } from '../../service/api';
 import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
+import NotificationService from '../../service/notificationService';
 
 const ChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, reconnectSocket } = useSocket();
@@ -60,6 +61,7 @@ const ChatScreen = ({ route, navigation }) => {
         console.log('💬 ChatScreen received new message:', data);
         console.log('💬 Message sender:', data.message?.sender);
         console.log('💬 Current user:', currentUser._id);
+        console.log('💬 Chatroom ID:', data.chatroomId);
         
         // ไม่ต้องอัพเดทถ้าเป็นข้อความของตัวเอง
         if (data.message.sender._id === currentUser._id) {
@@ -67,36 +69,51 @@ const ChatScreen = ({ route, navigation }) => {
           return;
         }
         
-        // อัพเดทรายการแชทเมื่อมีข้อความใหม่
+        // รีเฟรชรายการแชทเพื่อให้ได้ unread count ที่ถูกต้องจาก server
+        console.log('🔄 Refreshing chat list to get updated unread count...');
+        
+        // อัพเดทรายการแชทเมื่อมีข้อความใหม่ และรีเฟรชข้อมูลจาก server
+        setTimeout(() => {
+          loadChats();
+        }, 500); // รอสักครู่เพื่อให้ server process ข้อความก่อน
+        
+        // อัพเดท local state แบบชั่วคราวก่อนที่จะรีเฟรช
         setChats(prevChats => {
-          console.log('📝 Previous chats count:', prevChats.length);
           const updatedChats = prevChats.map(chat => {
             if (chat._id === data.chatroomId) {
               console.log('📝 Updating chat with new message:', data.chatroomId);
+              
               return {
                 ...chat,
                 lastMessage: {
                   content: data.message.content,
                   timestamp: data.message.timestamp,
                   sender: data.message.sender
-                },
-                unreadCount: (chat.unreadCount || 0) + 1
+                }
               };
             }
             return chat;
           });
-          console.log('📝 Updated chats count:', updatedChats.length);
           return updatedChats;
         });
       };
 
       // ฟังการอ่านข้อความ
       const handleMessageRead = (data) => {
-        console.log('👁️ Message read update:', data);
+        console.log('👁️ Message read update received:', data);
+        console.log('👁️ Chatroom ID:', data.chatroomId);
         
+        // รีเฟรชรายการแชทเพื่อให้ได้ unread count ที่ถูกต้องจาก server
+        console.log('🔄 Refreshing chat list to get updated unread count after read...');
+        setTimeout(() => {
+          loadChats();
+        }, 200); // รอสักครู่เพื่อให้ server process การอ่านข้อความ
+        
+        // อัพเดท local state แบบชั่วคราวก่อนที่จะรีเฟรช
         setChats(prevChats => {
-          return prevChats.map(chat => {
+          const updatedChats = prevChats.map(chat => {
             if (chat._id === data.chatroomId) {
+              console.log('👁️ Resetting unreadCount for chat:', data.chatroomId);
               return {
                 ...chat,
                 unreadCount: 0
@@ -104,15 +121,16 @@ const ChatScreen = ({ route, navigation }) => {
             }
             return chat;
           });
+          return updatedChats;
         });
       };
 
       socket.on('newMessage', handleNewMessage);
-      socket.on('messageReadUpdate', handleMessageRead);
+      socket.on('messageRead', handleMessageRead); // เปลี่ยนจาก messageReadUpdate เป็น messageRead
 
       return () => {
         socket.off('newMessage', handleNewMessage);
-        socket.off('messageReadUpdate', handleMessageRead);
+        socket.off('messageRead', handleMessageRead); // เปลี่ยนจาก messageReadUpdate เป็น messageRead
       };
     }
   }, [socket, currentUser]);
@@ -205,6 +223,9 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('ChatScreen: Setting current user from API');
       setCurrentUser(response.data);
       
+      // อัปเดต NotificationService ด้วยข้อมูลผู้ใช้ที่ถูกต้อง
+      NotificationService.setCurrentUser(response.data);
+      
       // อัพเดท AuthContext ด้วยข้อมูลที่ถูกต้องจาก API
       if (authUser && (authUser._id !== response.data._id || 
           authUser.firstName !== response.data.firstName ||
@@ -231,14 +252,52 @@ const ChatScreen = ({ route, navigation }) => {
   const loadChats = useCallback(async () => {
     try {
       console.log('ChatScreen: Loading chats...');
-      const response = await api.get('/chats');
-      console.log('ChatScreen: Chats loaded:', response.data?.length || 0, 'chats');
-      console.log('ChatScreen: Chat data sample:', response.data?.[0]);
-      setChats(response.data || []);
+      const [chatsResponse, groupsResponse] = await Promise.all([
+        api.get('/chats'),
+        api.get('/groups')
+      ]);
+      
+      console.log('ChatScreen: Chats loaded:', chatsResponse.data?.length || 0, 'chats');
+      console.log('ChatScreen: Groups loaded:', groupsResponse.data?.data?.length || 0, 'groups');
+      
+      // รวม private chats และ group chats
+      const privateChats = chatsResponse.data || [];
+      const groupChats = (groupsResponse.data?.data || []).map(group => ({
+        ...group,
+        _id: group._id,
+        roomName: group.groupName,
+        isGroup: true,
+        participants: group.members,
+        lastMessage: group.lastMessage || null,
+        unreadCount: 0 // TODO: implement unread count for groups
+      }));
+      
+      console.log('🔍 Private chats:', privateChats.length);
+      console.log('🔍 Group chats:', groupChats.length);
+      console.log('🔍 Sample group chat:', groupChats[0] ? {
+        id: groupChats[0]._id,
+        name: groupChats[0].roomName,
+        isGroup: groupChats[0].isGroup
+      } : 'none');
+      
+      const allChats = [...privateChats, ...groupChats].sort((a, b) => {
+        const aTime = a.lastMessage?.timestamp || a.lastActivity || a.createdAt;
+        const bTime = b.lastMessage?.timestamp || b.lastActivity || b.createdAt;
+        return new Date(bTime) - new Date(aTime);
+      });
+      
+      console.log('🔍 All chats after sort:', allChats.map(chat => ({
+        id: chat._id,
+        name: chat.roomName || 'private',
+        isGroup: chat.isGroup || false
+      })));
+      
+      setChats(allChats);
+      console.log('✅ Updated chats state with', allChats.length, 'items');
       
       // Join ทุกห้องแชทที่ user เป็นสมาชิกเพื่อรับ real-time updates
-      if (joinChatroom && response.data) {
-        response.data.forEach(chat => {
+      if (joinChatroom) {
+        allChats.forEach(chat => {
           console.log('🏠 Joining chatroom for real-time updates:', chat._id);
           joinChatroom(chat._id);
         });
@@ -259,7 +318,67 @@ const ChatScreen = ({ route, navigation }) => {
   const deleteChat = async (chatId) => {
     try {
       console.log('🗑️ Deleting chat:', chatId);
-      const response = await api.delete(`/chats/${chatId}`);
+      console.log('🔍 Current chats in state:', chats.length, 'items');
+      console.log('🔍 Chat IDs in state:', chats.map(c => c._id));
+      
+      // ตรวจสอบว่าเป็น group chat หรือ private chat
+      const chatToDelete = chats.find(chat => chat._id === chatId);
+      console.log('🔍 Found chat to delete:', chatToDelete ? {
+        id: chatToDelete._id,
+        name: chatToDelete.roomName || 'private',
+        isGroup: chatToDelete.isGroup,
+        hasIsGroupProperty: 'isGroup' in chatToDelete
+      } : 'not found');
+      
+      // ถ้าไม่พบ chat ใน state ให้ลองทั้งสอง endpoint
+      if (!chatToDelete) {
+        console.log('⚠️ Chat not found in state, trying both endpoints...');
+        
+        // ลอง group endpoint ก่อน
+        try {
+          console.log('🎯 Trying group endpoint:', `/groups/${chatId}`);
+          const response = await api.delete(`/groups/${chatId}`);
+          console.log('✅ Chat deleted as group successfully:', response.data);
+          
+          // รีเฟรชรายการแชทใหม่
+          console.log('🔄 Refreshing chat list after deletion...');
+          await loadChats();
+          
+          setChatToDelete(null);
+          Alert.alert('สำเร็จ', 'ลบกลุ่มแชทเรียบร้อยแล้ว');
+          return;
+        } catch (groupError) {
+          console.log('❌ Group endpoint failed:', groupError.response?.status);
+          
+          // ถ้า group endpoint ไม่ได้ ลอง private chat endpoint
+          try {
+            console.log('🎯 Trying private chat endpoint:', `/chats/${chatId}`);
+            const response = await api.delete(`/chats/${chatId}`);
+            console.log('✅ Chat deleted as private chat successfully:', response.data);
+            
+            // รีเฟรชรายการแชทใหม่
+            console.log('🔄 Refreshing chat list after deletion...');
+            await loadChats();
+            
+            setChatToDelete(null);
+            Alert.alert('สำเร็จ', 'ลบแชทส่วนตัวเรียบร้อยแล้ว');
+            return;
+          } catch (privateError) {
+            console.log('❌ Private chat endpoint also failed:', privateError.response?.status);
+            throw privateError; // ส่งต่อ error เพื่อให้ catch block ด้านล่างจัดการ
+          }
+        }
+      }
+      
+      const isGroupChat = chatToDelete?.isGroup;
+      
+      console.log('🔍 Chat type:', isGroupChat ? 'Group Chat' : 'Private Chat');
+      
+      // ใช้ endpoint ที่ถูกต้องตามประเภทของแชท
+      const endpoint = isGroupChat ? `/groups/${chatId}` : `/chats/${chatId}`;
+      console.log('🎯 Using endpoint:', endpoint);
+      
+      const response = await api.delete(endpoint);
       console.log('✅ Chat deleted successfully:', response.data);
       
       // รีเฟรชรายการแชทใหม่
@@ -312,8 +431,7 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const createGroup = () => {
-    // TODO: Navigate to create group screen
-    Alert.alert('สร้างกลุ่ม', 'ฟีเจอร์นี้จะพัฒนาต่อไป');
+    navigation.navigate('CreateGroup');
     closePopup();
   };
 
@@ -345,42 +463,53 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const handleChatPress = async (chat) => {
-    // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
-    const otherParticipant = chat.participants?.find(p => p._id !== currentUser._id);
-    
-    console.log('🔗 Opening chat with participant:', otherParticipant);
-    console.log('🔗 Chat room name:', chat.roomName);
-    
-    // มาร์คข้อความว่าอ่านแล้วเมื่อเข้าแชท
-    if (chat.unreadCount > 0) {
-      try {
-        await api.put(`/chats/${chat._id}/read`);
-        
-        // อัพเดท local state
-        setChats(prevChats => {
-          return prevChats.map(c => {
-            if (c._id === chat._id) {
-              return { ...c, unreadCount: 0 };
-            }
-            return c;
+    if (chat.isGroup) {
+      // นำทางไปยังหน้าแชทกลุ่ม
+      navigation.navigate('GroupChat', {
+        groupId: chat._id,
+        groupName: chat.roomName,
+        groupImage: chat.groupImage
+      });
+    } else {
+      // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
+      const otherParticipant = chat.participants?.find(p => p._id !== currentUser._id);
+      
+      console.log('🔗 Opening chat with participant:', otherParticipant);
+      console.log('🔗 Chat room name:', chat.roomName);
+      
+      // มาร์คข้อความว่าอ่านแล้วเมื่อเข้าแชท
+      if (chat.unreadCount > 0) {
+        try {
+          console.log('📖 Marking chat as read:', chat._id, 'unreadCount:', chat.unreadCount);
+          await api.put(`/chats/${chat._id}/read`);
+          
+          // อัพเดท local state
+          setChats(prevChats => {
+            return prevChats.map(c => {
+              if (c._id === chat._id) {
+                console.log('📖 Local state updated - unreadCount reset to 0 for:', c._id);
+                return { ...c, unreadCount: 0 };
+              }
+              return c;
+            });
           });
-        });
-        
-        console.log('✅ Marked chat as read:', chat._id);
-      } catch (error) {
-        console.error('❌ Error marking chat as read:', error);
+          
+          console.log('✅ Marked chat as read:', chat._id);
+        } catch (error) {
+          console.error('❌ Error marking chat as read:', error);
+        }
       }
+      
+      navigation.navigate('PrivateChat', {
+        chatroomId: chat._id,
+        roomName: chat.roomName,
+        recipientId: otherParticipant?._id,
+        recipientName: otherParticipant ? 
+          `${otherParticipant.firstName} ${otherParticipant.lastName}` : 
+          'แชทส่วนตัว',
+        recipientAvatar: otherParticipant?.avatar
+      });
     }
-    
-    navigation.navigate('PrivateChat', {
-      chatroomId: chat._id,
-      roomName: chat.roomName,
-      recipientId: otherParticipant?._id,
-      recipientName: otherParticipant ? 
-        `${otherParticipant.firstName} ${otherParticipant.lastName}` : 
-        'แชทส่วนตัว',
-      recipientAvatar: otherParticipant?.avatar
-    });
   };
 
   const formatTime = (timestamp) => {
@@ -392,91 +521,141 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const renderChatItem = useCallback(({ item }) => {
-    // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
-    const otherParticipant = item.participants?.find(p => p._id !== currentUser._id);
-    
-    // Debug logging
-    console.log('Rendering chat item:', {
-      chatId: item._id,
-      roomName: item.roomName,
-      participants: item.participants,
-      otherParticipant: otherParticipant,
-      currentUserId: currentUser._id
-    });
-    
-    return (
-      <TouchableOpacity 
-        style={[
-          styles.chatItem,
-          item.unreadCount > 0 && styles.chatItemUnread
-        ]}
-        onPress={() => handleChatPress(item)}
-        onLongPress={() => handleLongPressChat(item)}
-        delayLongPress={500}
-      >
-        <View style={styles.avatarContainer}>
-          {otherParticipant?.avatar ? (
-            <Image
-              source={{ uri: `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}` }}
-              style={styles.avatar}
-              defaultSource={require('../../assets/default-avatar.png')}
-              onError={(error) => {
-                console.log('❌ Avatar load error:', error.nativeEvent);
-                console.log('❌ Avatar URL:', `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}`);
-              }}
-              onLoad={() => {
-                console.log('✅ Avatar loaded successfully:', otherParticipant.avatar);
-              }}
-            />
-          ) : (
-            <View style={[styles.avatar, styles.defaultAvatar]}>
-              <Text style={styles.avatarText}>
-                {otherParticipant?.firstName?.[0]?.toUpperCase() || '?'}
-              </Text>
+    if (item.isGroup) {
+      // Render group chat item
+      return (
+        <TouchableOpacity 
+          style={[
+            styles.chatItem,
+            item.unreadCount > 0 && styles.chatItemUnread
+          ]}
+          onPress={() => handleChatPress(item)}
+          onLongPress={() => handleLongPressChat(item)}
+          delayLongPress={500}
+        >
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, styles.groupAvatar]}>
+              <Text style={styles.groupAvatarText}>👥</Text>
             </View>
-          )}
-          {item.unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>
-                {item.unreadCount > 99 ? '99+' : item.unreadCount}
-              </Text>
-            </View>
-          )}
-          {item.unreadCount > 0 && <View style={styles.onlineIndicator} />}
-        </View>
-        
-        <View style={styles.chatInfo}>
-          <Text style={[
-            styles.chatName,
-            item.unreadCount > 0 && styles.chatNameUnread
-          ]}>
-            {otherParticipant ? 
-              `${otherParticipant.firstName} ${otherParticipant.lastName}` :
-              'แชทส่วนตัว'
-            }
-          </Text>
-          {item.lastMessage && (
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>
+                  {item.unreadCount > 99 ? '99+' : item.unreadCount.toString()}
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.chatInfo}>
             <Text style={[
-              styles.lastMessage,
-              item.unreadCount > 0 && styles.lastMessageUnread
-            ]} numberOfLines={1}>
-              {item.lastMessage.content}
-            </Text>
-          )}
-        </View>
-        
-        <View style={styles.chatMeta}>
-          {item.lastMessage && (
-            <Text style={[
-              styles.timestamp,
-              item.unreadCount > 0 && styles.timestampUnread
+              styles.chatName,
+              item.unreadCount > 0 && styles.chatNameUnread
             ]}>
-              {formatTime(item.lastMessage.timestamp)}
+              {item.roomName}
             </Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
+            <Text style={styles.groupSubtitle}>
+              {item.participants?.length || 0} สมาชิก
+            </Text>
+            {item.lastMessage && (
+              <Text style={[
+                styles.lastMessage,
+                item.unreadCount > 0 && styles.lastMessageUnread
+              ]} numberOfLines={1}>
+                {item.lastMessage.content}
+              </Text>
+            )}
+          </View>
+          
+          <View style={styles.chatMeta}>
+            {item.lastMessage && (
+              <Text style={[
+                styles.timestamp,
+                item.unreadCount > 0 && styles.timestampUnread
+              ]}>
+                {formatTime(item.lastMessage.timestamp)}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    } else {
+      // Render private chat item (existing code)
+      const otherParticipant = item.participants?.find(p => p._id !== currentUser._id);
+      
+      return (
+        <TouchableOpacity 
+          style={[
+            styles.chatItem,
+            item.unreadCount > 0 && styles.chatItemUnread
+          ]}
+          onPress={() => handleChatPress(item)}
+          onLongPress={() => handleLongPressChat(item)}
+          delayLongPress={500}
+        >
+          <View style={styles.avatarContainer}>
+            {otherParticipant?.avatar ? (
+              <Image
+                source={{ uri: `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}` }}
+                style={styles.avatar}
+                defaultSource={require('../../assets/default-avatar.png')}
+                onError={(error) => {
+                  console.log('❌ Avatar load error:', error.nativeEvent);
+                  console.log('❌ Avatar URL:', `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}`);
+                }}
+                onLoad={() => {
+                  console.log('✅ Avatar loaded successfully:', otherParticipant.avatar);
+                }}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.defaultAvatar]}>
+                <Text style={styles.avatarText}>
+                  {otherParticipant?.firstName?.[0]?.toUpperCase() || '?'}
+                </Text>
+              </View>
+            )}
+            {/* แสดงจำนวนข้อความที่ยังไม่อ่าน */}
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>
+                  {item.unreadCount > 99 ? '99+' : item.unreadCount.toString()}
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.chatInfo}>
+            <Text style={[
+              styles.chatName,
+              item.unreadCount > 0 && styles.chatNameUnread
+            ]}>
+              {otherParticipant ? 
+                `${otherParticipant.firstName} ${otherParticipant.lastName}` :
+                'แชทส่วนตัว'
+              }
+            </Text>
+            {item.lastMessage && (
+              <Text style={[
+                styles.lastMessage,
+                item.unreadCount > 0 && styles.lastMessageUnread
+              ]} numberOfLines={1}>
+                {item.lastMessage.content}
+              </Text>
+            )}
+          </View>
+          
+          <View style={styles.chatMeta}>
+            {item.lastMessage && (
+              <Text style={[
+                styles.timestamp,
+                item.unreadCount > 0 && styles.timestampUnread
+              ]}>
+                {formatTime(item.lastMessage.timestamp)}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    }
   }, [currentUser]);
 
   if (isLoading || authLoading) {
@@ -632,13 +811,13 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff'
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff'
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   header: {
     flexDirection: 'row',
@@ -646,36 +825,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     paddingTop: 50,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd'
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    borderBottomWidth: 0, // ลบเส้นขอบ
+    borderBottomColor: 'transparent'
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333'
+    color: '#333' // เปลี่ยนเป็นสีเข้ม
   },
   iconButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: '#f5f5f5'
+    backgroundColor: '#E6B800' // เปลี่ยนเป็นสีเหลืองเข้ม
   },
   
   // Chat List Styles
   chatsList: {
-    flex: 1
+    flex: 1,
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   chatItem: {
     flexDirection: 'row',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff'
+    backgroundColor: '#E6B800' // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
   },
   chatItemUnread: {
-    backgroundColor: '#f8f9ff',
+    backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
     borderLeftWidth: 4,
-    borderLeftColor: '#007AFF'
+    borderLeftColor: '#FFA500' // เปลี่ยนเป็นสีส้ม
   },
   avatarContainer: {
     marginRight: 12,
@@ -696,23 +874,42 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#666'
   },
+  groupAvatar: {
+    backgroundColor: '#FFA500',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  groupAvatarText: {
+    fontSize: 24,
+    color: '#fff'
+  },
+  groupSubtitle: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 2
+  },
   unreadBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#ff3b30',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF3B30', // สีแดงสดใส
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff'
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
   unreadText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingHorizontal: 4,
   },
   onlineIndicator: {
     position: 'absolute',
@@ -721,9 +918,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#34c759',
-    borderWidth: 2,
-    borderColor: '#fff'
+    backgroundColor: '#34c759'
   },
   chatInfo: {
     flex: 1,
@@ -765,7 +960,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20
+    padding: 20,
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   emptyText: {
     fontSize: 18,
@@ -782,7 +978,7 @@ const styles = StyleSheet.create({
   searchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
@@ -827,7 +1023,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     right: 20,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -858,7 +1054,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   popupContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลืองเหมือนพื้นหลัง
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingVertical: 16,
@@ -887,7 +1083,7 @@ const styles = StyleSheet.create({
   },
   popupDivider: {
     height: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้ม
     marginHorizontal: 16,
     marginVertical: 8,
   },
@@ -895,7 +1091,7 @@ const styles = StyleSheet.create({
   // Emoji Icon Styles
   headerIcon: {
     fontSize: 20,
-    color: '#007AFF',
+    color: '#333', // เปลี่ยนเป็นสีเข้ม
   },
   emptyIcon: {
     fontSize: 48,

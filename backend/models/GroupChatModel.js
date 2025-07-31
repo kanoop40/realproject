@@ -10,6 +10,10 @@ const groupChatSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    groupAvatar: {
+        type: String,
+        default: null
+    },
     description: {
         type: String,
         default: ''

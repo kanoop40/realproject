@@ -171,7 +171,7 @@ const getChats = asyncHandler(async (req, res) => {
             participantsLength: chatrooms[0].participants?.length || 0
         } : 'none');
 
-        // Get last message for each chatroom
+        // Get last message for each chatroom และนับข้อความที่ยังไม่ได้อ่าน
         const chatroomsWithLastMessage = await Promise.all(
             chatrooms.map(async (chatroom) => {
                 const lastMessage = await Messages.findOne({
@@ -179,6 +179,15 @@ const getChats = asyncHandler(async (req, res) => {
                 })
                 .populate('user_id', 'firstName lastName username')
                 .sort({ time: -1 });
+
+                // นับข้อความที่คนอื่นส่งมาให้ผู้ใช้ปัจจุบันที่ยังไม่ได้อ่าน
+                const unreadCount = await Messages.countDocuments({
+                    chat_id: chatroom._id,
+                    user_id: { $ne: userId }, // ข้อความที่ไม่ใช่ของเราเอง (คนอื่นส่งมา)
+                    'readBy.user': { $ne: userId } // และเรายังไม่ได้อ่าน
+                });
+
+                console.log(`📋 Chat ${chatroom._id} unread messages from others:`, unreadCount);
 
                 // ใช้ participants สำหรับ private chats, user_id สำหรับ group chats
                 const participants = chatroom.participants?.length > 0 
@@ -200,7 +209,7 @@ const getChats = asyncHandler(async (req, res) => {
                         sender: lastMessage.user_id,
                         timestamp: lastMessage.time
                     } : null,
-                    unreadCount: 0 // TODO: Implement unread count logic
+                    unreadCount: unreadCount // แสดงจำนวนข้อความที่ยังไม่ได้อ่านจริง
                 };
             })
         );
@@ -267,13 +276,26 @@ const getMessages = asyncHandler(async (req, res) => {
         console.log(`📨 Found ${messages.length} messages`);
 
         res.json({
-            messages: messages.map(msg => ({
-                _id: msg._id,
-                content: msg.content,
-                sender: msg.user_id,
-                timestamp: msg.time,
-                file: msg.file_id || null
-            }))
+            messages: messages.map(msg => {
+                // สำหรับข้อความที่ส่งโดยผู้ใช้ปัจจุบัน: isRead หมายถึงมีคนอื่นอ่านแล้วหรือไม่
+                // สำหรับข้อความของคนอื่น: isRead จะเป็น false เสมอ (เพราะเราไม่ต้องการแสดงสถานะนี้)
+                let isRead = false;
+                if (msg.user_id.toString() === userId.toString()) {
+                    // ข้อความของเราเอง: ตรวจสอบว่ามีคนอื่นอ่านหรือไม่
+                    isRead = msg.readBy && msg.readBy.some(read => 
+                        read.user && read.user.toString() !== userId.toString()
+                    );
+                }
+                
+                return {
+                    _id: msg._id,
+                    content: msg.content,
+                    sender: msg.user_id,
+                    timestamp: msg.time,
+                    file: msg.file_id || null,
+                    isRead: isRead
+                };
+            })
         });
     } catch (error) {
         console.error('❌ Error getting messages:', error);
@@ -294,9 +316,13 @@ const sendMessage = asyncHandler(async (req, res) => {
         const userId = req.user._id;
         const file = req.file;
 
-        if (!content || content.trim() === '') {
-            return res.status(400).json({ message: 'กรุณากรอกข้อความ' });
+        // แยกเช็คเงื่อนไข: ต้องมีอย่างน้อย content หรือ file
+        if ((!content || content.trim() === '') && !file) {
+            return res.status(400).json({ message: 'กรุณากรอกข้อความหรือแนบไฟล์' });
         }
+
+        // ถ้ามีไฟล์แต่ไม่มี content ให้ใช้ค่า default
+        const messageContent = content?.trim() || (file ? 'ไฟล์แนบ' : '');
 
         // Check if user is participant in this chatroom (รองรับทั้ง user_id และ participants)
         const chatroom = await Chatrooms.findOne({
@@ -316,7 +342,17 @@ const sendMessage = asyncHandler(async (req, res) => {
 
         let fileDoc = null;
         
-        // If file is uploaded, save file info to database
+        // Create message first
+        const message = new Messages({
+            chat_id: id,
+            user_id: userId,
+            content: messageContent,
+            file_id: null // จะอัปเดตทีหลังถ้ามีไฟล์
+        });
+
+        await message.save();
+
+        // If file is uploaded, save file info to database and link to message
         if (file) {
             fileDoc = new File({
                 file_name: file.originalname,
@@ -324,25 +360,14 @@ const sendMessage = asyncHandler(async (req, res) => {
                 user_id: userId,
                 chat_id: id,
                 size: file.size.toString(),
-                file_type: file.mimetype
+                file_type: file.mimetype,
+                Messages_id: message._id // เชื่อมโยงกับ message ที่สร้างแล้ว
             });
             await fileDoc.save();
-        }
 
-        // Create message
-        const message = new Messages({
-            chat_id: id,
-            user_id: userId,
-            content: content.trim(),
-            file_id: fileDoc ? fileDoc._id : null
-        });
-
-        await message.save();
-
-        // Update message with file reference if needed
-        if (fileDoc) {
-            fileDoc.Messages_id = message._id;
-            await fileDoc.save();
+            // อัปเดต message ให้มี file_id
+            message.file_id = fileDoc._id;
+            await message.save();
         }
 
         // Populate message for response
@@ -495,6 +520,8 @@ const markAsRead = asyncHandler(async (req, res) => {
         const { id } = req.params;
         const userId = req.user._id;
 
+        console.log('📖 markAsRead called for chat:', id, 'by user:', userId);
+
         // Check if user is participant in this chatroom (รองรับทั้ง user_id และ participants)
         const chatroom = await Chatrooms.findOne({
             _id: id,
@@ -505,16 +532,33 @@ const markAsRead = asyncHandler(async (req, res) => {
         });
 
         if (!chatroom) {
+            console.log('❌ User not authorized to mark messages as read');
             return res.status(403).json({
                 message: 'คุณไม่มีสิทธิ์เข้าถึงแชทนี้'
             });
         }
 
-        // This would be used for notification system
-        // For now, just return success
+        // อัพเดทข้อความทั้งหมดในแชทนี้ให้ถูกมาร์คว่าอ่านแล้วสำหรับผู้ใช้นี้
+        await Messages.updateMany(
+            { 
+                chat_id: id,
+                user_id: { $ne: userId }, // ไม่ต้องมาร์คข้อความของตัวเองเป็นอ่านแล้ว
+                'readBy.user': { $ne: userId } // ยังไม่ได้อ่าน
+            },
+            { 
+                $push: { 
+                    readBy: { 
+                        user: userId, 
+                        readAt: new Date() 
+                    } 
+                }
+            }
+        );
+
+        console.log('✅ Messages marked as read successfully');
         res.json({ message: 'อ่านข้อความแล้ว' });
     } catch (error) {
-        console.error('Error marking as read:', error);
+        console.error('❌ Error marking as read:', error);
         res.status(500).json({
             message: 'เกิดข้อผิดพลาดในการอัพเดทสถานะอ่านข้อความ',
             error: error.message
@@ -531,6 +575,17 @@ const deleteChatroom = asyncHandler(async (req, res) => {
         const userId = req.user._id;
 
         console.log('🗑️ Deleting chatroom:', id, 'by user:', userId);
+        console.log('🔍 UserId type:', typeof userId, 'UserId string:', userId.toString());
+
+        // ตรวจสอบว่า chatroom มีอยู่หรือไม่
+        const existingChatroom = await Chatrooms.findById(id);
+        console.log('🔍 Chatroom exists:', !!existingChatroom);
+        
+        if (existingChatroom) {
+            console.log('📋 Chatroom type:', existingChatroom.type);
+            console.log('📋 Chatroom user_id:', existingChatroom.user_id);
+            console.log('📋 Chatroom participants:', existingChatroom.participants);
+        }
 
         // Check if user is participant in this chatroom
         // For private chats, check participants array; for group chats, check user_id
@@ -542,7 +597,7 @@ const deleteChatroom = asyncHandler(async (req, res) => {
             ]
         });
 
-        console.log('🔍 Found chatroom:', chatroom ? 'yes' : 'no');
+        console.log('🔍 Found chatroom with permissions:', chatroom ? 'yes' : 'no');
 
         if (!chatroom) {
             console.log('❌ User not authorized to delete this chat');
@@ -603,18 +658,29 @@ const deleteMessage = asyncHandler(async (req, res) => {
             });
         }
 
-        // อัพเดทข้อความเป็น "ลบแล้ว" แทนการลบจริง
-        message.isDeleted = true;
-        message.deletedAt = new Date();
-        message.deletedBy = userId;
-        message.content = 'ข้อความนี้ถูกลบแล้ว';
-        
-        await message.save();
+        // เพิ่ม userId ใน isDeleted array (soft delete per user)
+        if (!message.isDeleted.includes(userId)) {
+            message.isDeleted.push(userId);
+            await message.save();
+        }
+
+        // ส่ง socket event ให้ client อื่นๆ
+        const io = req.app.get('io');
+        if (io) {
+            io.to(message.chat_id.toString()).emit('message_deleted', {
+                chatroomId: message.chat_id,
+                messageId: messageId,
+                deletedBy: userId
+            });
+        }
 
         res.json({
             success: true,
             message: 'ลบข้อความเรียบร้อยแล้ว',
-            data: message
+            data: {
+                messageId,
+                deletedBy: userId
+            }
         });
     } catch (error) {
         console.error('Error deleting message:', error);

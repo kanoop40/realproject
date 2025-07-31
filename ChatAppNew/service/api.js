@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Fixed API URL
-const API_URL = 'http://172.20.10.2:5000';
+const API_URL = 'http://172.22.103.179:5000';
 
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
@@ -165,6 +165,12 @@ export const updateUser = (userId, userData) => {
 export const deleteUser = (userId) => {
   console.log('🗑️ Deleting user:', userId);
   return api.delete(`/users/${userId}`);
+};
+
+// Chat message functions
+export const deleteMessage = (messageId) => {
+  console.log('🗑️ Deleting message:', messageId);
+  return api.delete(`/chats/messages/${messageId}`);
 };
 
 // Notification functions

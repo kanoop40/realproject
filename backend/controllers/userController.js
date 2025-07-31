@@ -1,6 +1,8 @@
 const asyncHandler = require('express-async-handler');
 const User = require('../models/UserModel');
 const generateToken = require('../utils/generateToken');
+const fs = require('fs').promises;
+const path = require('path');
 
 const searchUsers = asyncHandler(async (req, res) => {
     try {
@@ -94,14 +96,229 @@ const getUsers = asyncHandler(async (req, res) => {
 const deleteUser = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id);
     
-    if (user) {
-        await user.deleteOne();  // เปลี่ยนจาก remove() เป็น deleteOne()
-        res.json({ message: 'User removed' });
-    } else {
+    if (!user) {
         res.status(404);
         throw new Error('User not found');
     }
+
+    console.log(`🗑️ Starting cascade deletion for user: ${user.firstName} ${user.lastName} (${user._id})`);
+
+    try {
+        // Import required models
+        const Messages = require('../models/MessagesModel');
+        const GroupChat = require('../models/GroupChatModel');
+        const Chatrooms = require('../models/ChatroomsModel');
+        const File = require('../models/FileModel');
+        const Notification = require('../models/NotificationModel');
+
+        // 1. ลบข้อความทั้งหมดที่ user นั้นส่ง
+        console.log('🗑️ Deleting all messages sent by user...');
+        const deletedMessages = await Messages.deleteMany({ user_id: user._id });
+        console.log(`✅ Deleted ${deletedMessages.deletedCount} messages`);
+
+        // 2. ลบกลุ่มทั้งหมดที่ user นั้นสร้าง (creator)
+        console.log('🗑️ Deleting groups created by user...');
+        const groupsToDelete = await GroupChat.find({ creator: user._id });
+        console.log(`📊 Found ${groupsToDelete.length} groups to delete`);
+        
+        for (const group of groupsToDelete) {
+            console.log(`🗑️ Deleting group: ${group.groupName} (${group._id})`);
+            
+            // ลบรูปกลุ่มถ้ามี
+            if (group.groupImage) {
+                try {
+                    const groupImagePath = path.join(__dirname, '..', 'uploads', group.groupImage);
+                    await fs.unlink(groupImagePath);
+                    console.log(`✅ Deleted group image: ${group.groupImage}`);
+                } catch (imageError) {
+                    console.log(`⚠️ Could not delete group image: ${imageError.message}`);
+                }
+            }
+            
+            if (group.groupAvatar) {
+                try {
+                    const groupAvatarPath = path.join(__dirname, '..', 'uploads', group.groupAvatar);
+                    await fs.unlink(groupAvatarPath);
+                    console.log(`✅ Deleted group avatar: ${group.groupAvatar}`);
+                } catch (avatarError) {
+                    console.log(`⚠️ Could not delete group avatar: ${avatarError.message}`);
+                }
+            }
+            
+            // ลบข้อความในกลุ่มนี้ด้วย
+            await Messages.deleteMany({ group_id: group._id });
+            // ลบกลุ่ม
+            await GroupChat.deleteOne({ _id: group._id });
+        }
+
+        // 3. ลบ user ออกจากกลุ่มที่เป็นสมาชิก (แต่ไม่ใช่ creator)
+        console.log('🗑️ Removing user from groups where they are members...');
+        const updateResult = await GroupChat.updateMany(
+            { 'members.user': user._id },
+            { $pull: { members: { user: user._id } } }
+        );
+        console.log(`✅ Removed user from ${updateResult.modifiedCount} groups`);
+
+        // 4. ลบ chatrooms ที่ user เป็นส่วนหนึ่ง
+        console.log('🗑️ Deleting chatrooms where user is participant...');
+        const chatroomsToDelete = await Chatrooms.find({
+            $or: [
+                { user_id: user._id },
+                { participants: user._id },
+                { 'members.userId': user._id }
+            ]
+        });
+        console.log(`📊 Found ${chatroomsToDelete.length} chatrooms to process`);
+        
+        for (const chatroom of chatroomsToDelete) {
+            // ลบข้อความในห้องแชทนี้
+            await Messages.deleteMany({ chat_id: chatroom._id });
+            // ลบห้องแชท
+            await Chatrooms.deleteOne({ _id: chatroom._id });
+        }
+
+        // 5. ลบไฟล์ที่ user อัปโหลด
+        console.log('🗑️ Deleting files uploaded by user...');
+        const filesToDelete = await File.find({ uploadedBy: user._id });
+        console.log(`📊 Found ${filesToDelete.length} files to delete`);
+        
+        // ลบไฟล์จากระบบไฟล์
+        for (const file of filesToDelete) {
+            try {
+                if (file.file_path) {
+                    const fullPath = path.join(__dirname, '..', file.file_path);
+                    await fs.unlink(fullPath);
+                    console.log(`✅ Deleted file from filesystem: ${file.file_name}`);
+                }
+            } catch (fileError) {
+                console.log(`⚠️ Could not delete file ${file.file_name}: ${fileError.message}`);
+            }
+        }
+        
+        // ลบ records จากฐานข้อมูล
+        const deletedFiles = await File.deleteMany({ uploadedBy: user._id });
+        console.log(`✅ Deleted ${deletedFiles.deletedCount} file records from database`);
+
+        // 5.1 ลบรูป avatar ของ user ถ้ามี
+        if (user.avatar) {
+            try {
+                const avatarPath = path.join(__dirname, '..', 'uploads', user.avatar);
+                await fs.unlink(avatarPath);
+                console.log(`✅ Deleted user avatar: ${user.avatar}`);
+            } catch (avatarError) {
+                console.log(`⚠️ Could not delete user avatar: ${avatarError.message}`);
+            }
+        }
+
+        // 6. ลบการแจ้งเตือนที่เกี่ยวข้องกับ user
+        console.log('🗑️ Deleting notifications related to user...');
+        const deletedNotifications = await Notification.deleteMany({
+            $or: [
+                { userId: user._id },
+                { fromUserId: user._id }
+            ]
+        });
+        console.log(`✅ Deleted ${deletedNotifications.deletedCount} notifications`);
+
+        // 7. สุดท้าย ลบ user
+        console.log('🗑️ Deleting user account...');
+        await user.deleteOne();
+        console.log('✅ User account deleted successfully');
+
+        console.log('🎉 Cascade deletion completed successfully');
+        res.json({ 
+            message: 'User and all related data removed successfully',
+            deletedData: {
+                messages: deletedMessages.deletedCount,
+                groups: groupsToDelete.length,
+                groupMemberships: updateResult.modifiedCount,
+                chatrooms: chatroomsToDelete.length,
+                files: filesToDelete.length,
+                fileRecords: deletedFiles.deletedCount,
+                notifications: deletedNotifications.deletedCount,
+                userAvatar: user.avatar ? 'deleted' : 'none'
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error during cascade deletion:', error);
+        res.status(500);
+        throw new Error(`Failed to delete user and related data: ${error.message}`);
+    }
 });
+
+// ฟังก์ชันสำหรับทำความสะอาดข้อมูลเก่าที่อาจเหลือค้างในระบบ
+const cleanupOrphanedData = asyncHandler(async (req, res) => {
+    console.log('🧹 Starting system cleanup for orphaned data...');
+    
+    try {
+        const Messages = require('../models/MessagesModel');
+        const GroupChat = require('../models/GroupChatModel');
+        const Chatrooms = require('../models/ChatroomsModel');
+        const File = require('../models/FileModel');
+        const User = require('../models/UserModel');
+
+        let cleanupResults = {
+            orphanedMessages: 0,
+            orphanedFiles: 0,
+            emptyGroups: 0,
+            emptyChatrooms: 0
+        };
+
+        // 1. ลบข้อความที่ user_id ไม่มีอยู่จริงในระบบ
+        console.log('🧹 Cleaning orphaned messages...');
+        const allUserIds = await User.find({}, { _id: 1 });
+        const validUserIds = allUserIds.map(user => user._id);
+        
+        const orphanedMessages = await Messages.deleteMany({
+            user_id: { $nin: validUserIds }
+        });
+        cleanupResults.orphanedMessages = orphanedMessages.deletedCount;
+        console.log(`✅ Cleaned ${orphanedMessages.deletedCount} orphaned messages`);
+
+        // 2. ลบไฟล์ที่ uploadedBy ไม่มีอยู่จริง
+        console.log('🧹 Cleaning orphaned files...');
+        const orphanedFiles = await File.deleteMany({
+            uploadedBy: { $nin: validUserIds }
+        });
+        cleanupResults.orphanedFiles = orphanedFiles.deletedCount;
+        console.log(`✅ Cleaned ${orphanedFiles.deletedCount} orphaned files`);
+
+        // 3. ลบกลุ่มที่ไม่มีสมาชิกเหลือ
+        console.log('🧹 Cleaning empty groups...');
+        const emptyGroups = await GroupChat.deleteMany({
+            $or: [
+                { members: { $size: 0 } },
+                { members: { $exists: false } }
+            ]
+        });
+        cleanupResults.emptyGroups = emptyGroups.deletedCount;
+        console.log(`✅ Cleaned ${emptyGroups.deletedCount} empty groups`);
+
+        // 4. ลบ chatrooms ที่ไม่มี participants
+        console.log('🧹 Cleaning empty chatrooms...');
+        const emptyChatrooms = await Chatrooms.deleteMany({
+            $and: [
+                { $or: [{ participants: { $size: 0 } }, { participants: { $exists: false } }] },
+                { $or: [{ user_id: { $size: 0 } }, { user_id: { $exists: false } }] }
+            ]
+        });
+        cleanupResults.emptyChatrooms = emptyChatrooms.deletedCount;
+        console.log(`✅ Cleaned ${emptyChatrooms.deletedCount} empty chatrooms`);
+
+        console.log('🎉 System cleanup completed successfully');
+        res.json({
+            message: 'System cleanup completed successfully',
+            cleanupResults
+        });
+
+    } catch (error) {
+        console.error('❌ Error during system cleanup:', error);
+        res.status(500);
+        throw new Error(`System cleanup failed: ${error.message}`);
+    }
+});
+
 const updateUser = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id);
     
@@ -608,19 +825,293 @@ const updatePushToken = asyncHandler(async (req, res) => {
     }
 });
 
+// ดึงรายชื่อผู้ใช้สำหรับสร้างกลุ่ม (ไม่ต้อง admin permission)
+const getUsersForGroupCreation = asyncHandler(async (req, res) => {
+    try {
+        const currentUserId = req.user._id;
+        const currentUserRole = req.user.role;
+        
+        console.log('Getting users for group creation, user role:', currentUserRole);
+
+        // กำหนด role filter ตาม role ของผู้ใช้ปัจจุบัน
+        let roleFilter = {};
+        if (currentUserRole === 'student') {
+            // นักศึกษาเลือกได้เฉพาะนักศึกษาและอาจารย์
+            roleFilter = { role: { $in: ['student', 'อาจารย์', 'teacher'] } };
+        } else if (currentUserRole === 'อาจารย์' || currentUserRole === 'teacher') {
+            // อาจารย์เลือกได้ทุกคนยกเว้น admin
+            roleFilter = { role: { $ne: 'admin' } };
+        } else if (currentUserRole === 'admin') {
+            // admin เลือกได้ทุกคนยกเว้นตัวเอง
+            roleFilter = { role: { $ne: 'admin' } };
+        }
+
+        const users = await User.find({
+            $and: [
+                roleFilter,
+                { _id: { $ne: currentUserId } }, // ไม่รวมตัวเอง
+            ]
+        }).select('firstName lastName avatar role classCode')
+          .sort({ firstName: 1, lastName: 1 });
+
+        console.log(`Found ${users.length} users for group creation`);
+        res.json(users);
+    } catch (error) {
+        console.error('Error getting users for group creation:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+const getMajors = asyncHandler(async (req, res) => {
+    try {
+        const currentUserRole = req.user.role;
+        
+        if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
+            return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลสาขาได้' });
+        }
+
+        // หาสาขาที่มีอยู่และนับจำนวนรหัสกลุ่มเรียนในแต่ละสาขา
+        const majors = await User.aggregate([
+            {
+                $match: {
+                    major: { $exists: true, $ne: null, $ne: '', $ne: '1' },
+                    role: { $ne: 'admin' }
+                }
+            },
+            {
+                $group: {
+                    _id: '$major',
+                    users: { $addToSet: '$_id' },
+                    classCodes: { 
+                        $addToSet: {
+                            $cond: [
+                                { $ne: ['$classCode', null] },
+                                '$classCode',
+                                '$groupCode'
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    major: '$_id',
+                    userCount: { $size: '$users' },
+                    classCodeCount: { 
+                        $size: {
+                            $filter: {
+                                input: '$classCodes',
+                                cond: { $and: [{ $ne: ['$$this', null] }, { $ne: ['$$this', ''] }, { $ne: ['$$this', '1'] }] }
+                            }
+                        }
+                    },
+                    _id: 0
+                }
+            },
+            {
+                $sort: { major: 1 }
+            }
+        ]);
+
+        console.log(`Found ${majors.length} majors`);
+        res.json(majors);
+    } catch (error) {
+        console.error('Error getting majors:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+const getClassCodesByMajor = asyncHandler(async (req, res) => {
+    try {
+        const { major } = req.params;
+        const currentUserRole = req.user.role;
+        
+        if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
+            return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลกลุ่มเรียนได้' });
+        }
+
+        // หา groupCode ที่มีอยู่ในสาขานั้น
+        const classCodes = await User.aggregate([
+            {
+                $match: {
+                    major: major,
+                    groupCode: { $exists: true, $ne: null, $ne: '', $ne: '1' },
+                    role: { $ne: 'admin' }
+                }
+            },
+            {
+                $group: {
+                    _id: '$groupCode',
+                    userCount: { $sum: 1 }
+                }
+            },
+            {
+                $match: {
+                    _id: { $ne: null, $ne: '', $ne: '1' }
+                }
+            },
+            {
+                $project: {
+                    classCode: '$_id',
+                    userCount: 1,
+                    _id: 0
+                }
+            },
+            {
+                $sort: { classCode: 1 }
+            }
+        ]);
+
+        console.log(`Found ${classCodes.length} class codes for major: ${major}`);
+        res.json(classCodes);
+    } catch (error) {
+        console.error('Error getting class codes by major:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// ฟังก์ชันเดิม
+const getClassCodes = asyncHandler(async (req, res) => {
+    try {
+        const currentUserRole = req.user.role;
+        
+        if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
+            return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลกลุ่มเรียนได้' });
+        }
+
+        // หา classCode ที่มีอยู่และนับจำนวนผู้ใช้ในแต่ละ class
+        const classCodes = await User.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { classCode: { $exists: true, $ne: null, $ne: '' } },
+                        { groupCode: { $exists: true, $ne: null, $ne: '' } }
+                    ],
+                    role: { $ne: 'admin' }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $cond: [
+                            { $ne: ['$classCode', null] },
+                            '$classCode',
+                            '$groupCode'
+                        ]
+                    },
+                    userCount: { $sum: 1 }
+                }
+            },
+            {
+                $match: {
+                    _id: { $ne: null, $ne: '' }
+                }
+            },
+            {
+                $project: {
+                    classCode: '$_id',
+                    userCount: 1,
+                    _id: 0
+                }
+            },
+            {
+                $sort: { classCode: 1 }
+            }
+        ]);
+
+        console.log(`Found ${classCodes.length} class codes`);
+        res.json(classCodes);
+    } catch (error) {
+        console.error('Error getting class codes:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+const getUsersByClassCode = asyncHandler(async (req, res) => {
+    try {
+        const { classCode } = req.params;
+        const currentUserId = req.user._id;
+        const currentUserRole = req.user.role;
+        
+        if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
+            return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถดึงผู้ใช้ตามกลุ่มเรียนได้' });
+        }
+
+        const users = await User.find({
+            groupCode: classCode,
+            _id: { $ne: currentUserId }, // ไม่รวมตัวเอง
+            role: { $ne: 'admin' } // ไม่รวม admin
+        }).select('firstName lastName avatar role groupCode')
+          .sort({ firstName: 1, lastName: 1 });
+
+        console.log(`Found ${users.length} users in class ${classCode}`);
+        res.json(users);
+    } catch (error) {
+        console.error('Error getting users by class code:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// ฟังก์ชันเดิมที่มีอยู่แล้ว
+const getUsersForGroupCreation_OLD = asyncHandler(async (req, res) => {
+    try {
+        const currentUserId = req.user._id;
+        const currentUserRole = req.user.role;
+        
+        console.log('Getting users for group creation. Current user role:', currentUserRole);
+
+        // กำหนด role filter ตาม role ของผู้ใช้ปัจจุบัน
+        let roleFilter = {};
+        if (currentUserRole === 'student') {
+            // นักศึกษาเห็นเฉพาะ student และ teacher เท่านั้น
+            roleFilter = { role: { $in: ['student', 'teacher'] } };
+        } else if (currentUserRole === 'teacher') {
+            // teacher เห็นได้ทุก role ยกเว้น admin
+            roleFilter = { role: { $ne: 'admin' } };
+        } else if (currentUserRole === 'admin') {
+            // admin เห็นได้ทุก role
+            roleFilter = {};
+        }
+
+        const users = await User.find({
+            $and: [
+                roleFilter,
+                { _id: { $ne: currentUserId } } // ไม่แสดงตัวเอง
+            ]
+        })
+        .select('firstName lastName username role avatar')
+        .sort({ firstName: 1, lastName: 1 })
+        .limit(100); // จำกัดจำนวนไม่เกิน 100 คน
+
+        console.log(`Found ${users.length} users for group creation`);
+
+        res.json(users);
+    } catch (error) {
+        console.error('Error getting users for group creation:', error);
+        res.status(500);
+        throw new Error('ไม่สามารถดึงรายชื่อผู้ใช้ได้');
+    }
+});
+
 module.exports = {
     authUser,
     registerUser,
     getUserProfile,
     updateUserProfile,
     getUserById,
-    getCurrentUser,    // เพิ่ม getCurrentUser
-    getUsers,         // เพิ่ม getUsers
+    getCurrentUser,
+    getUsers,
     deleteUser,
+    cleanupOrphanedData,
     createUser,
     searchUsers,
-    updateUser,        // เพิ่ม deleteUser
-    updateProfile,     // เพิ่ม updateProfile
-    uploadAvatar,      // เพิ่ม uploadAvatar
-    updatePushToken    // เพิ่ม updatePushToken
+    updateUser,
+    updateProfile,
+    uploadAvatar,
+    updatePushToken,
+    getUsersForGroupCreation,
+    getMajors,
+    getClassCodes,
+    getClassCodesByMajor,
+    getUsersByClassCode
 };

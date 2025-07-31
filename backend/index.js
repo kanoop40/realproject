@@ -226,11 +226,43 @@ io.on('connection', async (socket) => {
     });
 
     // การอ่านข้อความ
-    socket.on('messageRead', (data) => {
-        socket.to(data.chatroomId).emit('messageReadUpdate', {
-            messageId: data.messageId,
-            readBy: data.readBy
-        });
+    socket.on('messageRead', async (data) => {
+        try {
+            console.log('📖 Message read event received:', data);
+            console.log('📖 Broadcasting to chatroom:', data.chatroomId);
+            console.log('📖 Read by user:', data.userId);
+            
+            // อัพเดทฐานข้อมูลให้ข้อความถูกมาร์คว่าอ่านแล้ว
+            const Messages = require('./models/MessagesModel');
+            await Messages.updateMany(
+                { 
+                    chat_id: data.chatroomId,
+                    user_id: { $ne: data.userId }, // ไม่ต้องมาร์คข้อความของตัวเองเป็นอ่านแล้ว
+                    'readBy.user': { $ne: data.userId } // ยังไม่ได้อ่าน
+                },
+                { 
+                    $push: { 
+                        readBy: { 
+                            user: data.userId, 
+                            readAt: new Date() 
+                        } 
+                    }
+                }
+            );
+            
+            console.log('✅ Messages marked as read in database');
+            
+            // ส่งการแจ้งเตือนการอ่านข้อความไปยังคนอื่นในห้องแชท
+            socket.to(data.chatroomId).emit('messageRead', {
+                chatroomId: data.chatroomId,
+                readBy: data.userId,
+                timestamp: new Date()
+            });
+            
+            console.log('✅ MessageRead event broadcasted to chatroom');
+        } catch (error) {
+            console.error('❌ Error handling messageRead event:', error);
+        }
     });
 
     // แจ้งเตือนแบบ real-time

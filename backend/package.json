@@ -11,7 +11,9 @@
     "test": "echo 'No tests specified'",
     "create-admin": "node scripts/createAdmin.js",
     "create-test-users": "node scripts/createTestUsers.js",
-    "reset-admin": "node scripts/resetAdmin.js"
+    "reset-admin": "node scripts/resetAdmin.js",
+    "cleanup-orphaned-data": "node scripts/cleanup-orphaned-data.js",
+    "test-user-deletion": "node scripts/test-user-deletion.js"
   },
   "keywords": [
     "chat",

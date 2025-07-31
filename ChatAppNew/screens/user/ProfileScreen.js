@@ -301,9 +301,9 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.userName}>
             {currentUser?.firstName || ''} {currentUser?.lastName || ''}
           </Text>
-          <Text style={styles.username}>@{currentUser?.username || ''}</Text>
+          <Text style={styles.username}>{currentUser?.username || ''}</Text>
           <View style={styles.roleContainer}>
-            <Text style={styles.verifiedIcon}>✅</Text>
+            <Text style={styles.verifiedIcon}></Text>
             <Text style={styles.roleText}>{translateRole(currentUser?.role)}</Text>
           </View>
           
@@ -314,19 +314,19 @@ const ProfileScreen = ({ navigation }) => {
               {currentUser?.isOnline ? 'ออนไลน์' : 'ออฟไลน์'}
             </Text>
           </View>
-        </View>
+       
 
         {/* Details Section */}
         <View style={styles.detailsSection}>
           <View style={styles.detailItem}>
-            <Text style={styles.emailIcon}>📧</Text>
+            <Text style={styles.emailIcon}></Text>
             <Text style={styles.detailLabel}>อีเมล</Text>
             <Text style={styles.detailValue}>{currentUser?.email || ''}</Text>
           </View>
 
           {currentUser?.faculty && (
             <View style={styles.detailItem}>
-              <Text style={styles.schoolIcon}>🏫</Text>
+              <Text style={styles.schoolIcon}></Text>
               <Text style={styles.detailLabel}>คณะ</Text>
               <Text style={styles.detailValue}>{currentUser.faculty}</Text>
             </View>
@@ -334,7 +334,7 @@ const ProfileScreen = ({ navigation }) => {
 
           {currentUser?.major && (
             <View style={styles.detailItem}>
-              <Text style={styles.bookIcon}>📚</Text>
+              <Text style={styles.bookIcon}></Text>
               <Text style={styles.detailLabel}>สาขา</Text>
               <Text style={styles.detailValue}>{currentUser.major}</Text>
             </View>
@@ -342,17 +342,17 @@ const ProfileScreen = ({ navigation }) => {
 
           {currentUser?.groupCode && currentUser?.role !== 'teacher' && (
             <View style={styles.detailItem}>
-              <Text style={styles.groupIcon}>👥</Text>
+              <Text style={styles.groupIcon}></Text>
               <Text style={styles.detailLabel}>รหัสกลุ่ม</Text>
               <Text style={styles.detailValue}>{currentUser.groupCode}</Text>
             </View>
           )}
         </View>
-
+ </View>
         {/* Actions Section */}
         <View style={styles.actionsSection}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={styles.logoutIcon}></Text>
             <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
           </TouchableOpacity>
         </View>
@@ -414,41 +414,6 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* ส่วนที่ไม่สามารถแก้ไขได้ */}
-              <View style={styles.readOnlySection}>
-                <Text style={styles.sectionTitle}>ข้อมูลที่ไม่สามารถแก้ไขได้</Text>
-                
-                <View style={styles.readOnlyItem}>
-                  <Text style={styles.readOnlyLabel}>ชื่อผู้ใช้</Text>
-                  <Text style={styles.readOnlyValue}>@{currentUser?.username}</Text>
-                </View>
-
-                <View style={styles.readOnlyItem}>
-                  <Text style={styles.readOnlyLabel}>สถานะ</Text>
-                  <Text style={styles.readOnlyValue}>{translateRole(currentUser?.role)}</Text>
-                </View>
-
-                {currentUser?.faculty && (
-                  <View style={styles.readOnlyItem}>
-                    <Text style={styles.readOnlyLabel}>คณะ</Text>
-                    <Text style={styles.readOnlyValue}>{currentUser.faculty}</Text>
-                  </View>
-                )}
-
-                {currentUser?.major && (
-                  <View style={styles.readOnlyItem}>
-                    <Text style={styles.readOnlyLabel}>สาขา</Text>
-                    <Text style={styles.readOnlyValue}>{currentUser.major}</Text>
-                  </View>
-                )}
-
-                {currentUser?.groupCode && currentUser?.role !== 'teacher' && (
-                  <View style={styles.readOnlyItem}>
-                    <Text style={styles.readOnlyLabel}>รหัสกลุ่ม</Text>
-                    <Text style={styles.readOnlyValue}>{currentUser.groupCode}</Text>
-                  </View>
-                )}
-              </View>
             </ScrollView>
 
             <View style={styles.editModalActions}>
@@ -518,18 +483,18 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: '#333', // เปลี่ยนเป็นสีเข้ม
   },
   header: {
     flexDirection: 'row',
@@ -537,9 +502,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    borderBottomWidth: 0, // ลบเส้นขอบ
+    borderBottomColor: 'transparent',
   },
   backButton: {
     padding: 8,
@@ -577,7 +542,7 @@ const styles = StyleSheet.create({
   defaultAvatar: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
   },
   avatarText: {
     fontSize: 48,
@@ -591,7 +556,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,

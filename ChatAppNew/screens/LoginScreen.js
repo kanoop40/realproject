@@ -121,7 +121,7 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff'
+    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   content: {
     flex: 1,
@@ -132,7 +132,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 30
+    marginBottom: 30,
+    color: '#333' // เปลี่ยนเป็นสีเข้ม
   },
   form: {
     width: '100%'
@@ -150,10 +151,11 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
-    fontSize: 16
+    fontSize: 16,
+    backgroundColor: '#fff' // เพิ่มพื้นหลังสีขาว
   },
   loginButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -187,7 +189,7 @@ const styles = StyleSheet.create({
     marginBottom: 20
   },
   errorText: {
-    color: 'red',
+    color: '#d32f2f', // เปลี่ยนเป็นสีแดงเข้ม
     textAlign: 'center',
     marginBottom: 10
   }
