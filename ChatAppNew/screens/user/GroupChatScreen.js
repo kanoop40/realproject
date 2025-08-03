@@ -46,6 +46,8 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showMessageActions, setShowMessageActions] = useState(false);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [selectedModalImage, setSelectedModalImage] = useState(null);
   
   const flatListRef = useRef(null);
 
@@ -83,7 +85,30 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         if (data.chatroomId === groupId) {
           // เพิ่มข้อความใหม่ที่ท้าย array (ข้อความล่าสุดอยู่ล่าง)
-          setMessages(prevMessages => [...prevMessages, data.message]);
+          // แก้ไขข้อมูล message ที่ได้รับจาก socket ให้มี fileUrl หากเป็น image/file
+          const messageToAdd = { ...data.message };
+          
+          // ตรวจสอบและแก้ไข fileUrl
+          if (messageToAdd.messageType === 'image') {
+            if (!messageToAdd.fileUrl) {
+              // ถ้าไม่มี fileUrl สำหรับรูปภาพ แสดงว่ามีปัญหาการอัปโหลด
+              console.warn('⚠️ Image message missing fileUrl:', messageToAdd._id);
+              messageToAdd.fileUrl = null; // ไม่สร้าง fallback URL ที่ผิด
+            } else {
+              console.log('✅ Image fileUrl from backend:', messageToAdd.fileUrl);
+            }
+          }
+          
+          if (messageToAdd.messageType === 'file') {
+            if (!messageToAdd.fileUrl) {
+              console.warn('⚠️ File message missing fileUrl:', messageToAdd._id);
+              messageToAdd.fileUrl = null; // ไม่สร้าง fallback URL ที่ผิด
+            } else {
+              console.log('✅ File fileUrl from backend:', messageToAdd.fileUrl);
+            }
+          }
+          
+          setMessages(prevMessages => [...prevMessages, messageToAdd]);
           
           // เลื่อนไปข้อความล่าสุดเมื่อมีข้อความใหม่
           setTimeout(() => {
@@ -149,8 +174,21 @@ const GroupChatScreen = ({ route, navigation }) => {
         setHasScrolledToEnd(false); // Reset flag
         // บังคับ scroll ไปข้อความล่าสุดทันทีหลังโหลด
         setTimeout(() => {
-          console.log('🎯 Force scrolling to end after loading');
-          flatListRef.current?.scrollToEnd({ animated: false });
+          console.log('🎯 Force scrolling to end after loading, messages:', response.data.data.length);
+          if (response.data.data.length > 0) {
+            // ลอง scrollToIndex ไปข้อความสุดท้าย
+            try {
+              flatListRef.current?.scrollToIndex({ 
+                index: response.data.data.length - 1, 
+                animated: false,
+                viewPosition: 1 // scroll ให้ item อยู่ด้านล่างสุด
+              });
+            } catch (error) {
+              // ถ้า scrollToIndex ไม่ได้ ให้ใช้ scrollToEnd
+              console.log('ScrollToIndex failed, using scrollToEnd');
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }
+          }
           // ให้เวลา layout เสร็จก่อน
           setTimeout(() => {
             setIsScrollingToEnd(false);
@@ -216,7 +254,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันส่งรูปภาพ
+  // ฟังก์ชันส่งรูปภาพ (ปรับปรุงให้เหมือน PrivateChat)
   const sendImage = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -238,50 +276,87 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         const asset = result.assets[0];
         
-        // Optimistic UI for image
-        const tempImageMessage = {
-          _id: `temp_img_${Date.now()}`,
-          content: '📷 รูปภาพ',
-          messageType: 'image',
-          sender: authUser,
-          timestamp: new Date().toISOString(),
-          fileUrl: asset.uri, // Use local URI for immediate display
-          isTemporary: true,
-          isSending: true
-        };
-        
-        // เพิ่มข้อความ temp ที่ท้าย array (ข้อความใหม่อยู่ล่าง)
-        setMessages(prevMessages => [...prevMessages, tempImageMessage]);
-        setIsUploadingFile(true);
-        
-        const formData = new FormData();
-        formData.append('file', {
-          uri: asset.uri,
-          type: asset.mimeType || 'image/jpeg',
-          name: asset.fileName || `image_${Date.now()}.jpg`,
-        });
-        formData.append('groupId', groupId);
-
-        console.log('📤 Uploading image to group:', groupId);
-        const response = await api.post(`/groups/${groupId}/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 120000, // 2 minutes timeout for image upload
-        });
-
-        console.log('✅ Image uploaded to group:', response.data);
-        
-        // Remove temporary message since real one will come via socket
-        setMessages(prevMessages => 
-          prevMessages.filter(msg => msg._id !== tempImageMessage._id)
+        // ถาม user ว่าจะพิมพ์ข้อความด้วยหรือไม่
+        Alert.prompt(
+          'ส่งรูปภาพ',
+          'คุณต้องการเพิ่มข้อความด้วยหรือไม่?',
+          [
+            {
+              text: 'ยกเลิก',
+              style: 'cancel',
+            },
+            {
+              text: 'ส่งเฉพาะรูป',
+              onPress: () => uploadImageWithMessage(asset, '📷 รูปภาพ'),
+            },
+            {
+              text: 'เพิ่มข้อความ',
+              onPress: (text) => uploadImageWithMessage(asset, text || '📷 รูปภาพ'),
+            },
+          ],
+          'plain-text',
+          '',
+          'default'
         );
-        
-        // เลื่อนไปข้อความล่าสุดหลังส่งรูปสำเร็จ
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
       }
+    } catch (error) {
+      console.error('❌ Error selecting image:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเลือกรูปภาพได้');
+    }
+  };
+
+  // ฟังก์ชันอัปโหลดรูปพร้อมข้อความ
+  const uploadImageWithMessage = async (asset, messageText) => {
+    try {
+      // Optimistic UI for image
+      const tempImageMessage = {
+        _id: `temp_img_${Date.now()}`,
+        content: messageText,
+        messageType: 'image',
+        sender: authUser,
+        timestamp: new Date().toISOString(),
+        fileUrl: asset.uri, // Use local URI for immediate display
+        fileName: asset.fileName || `image_${Date.now()}.jpg`,
+        isTemporary: true,
+        isSending: true
+      };
+      
+      // เพิ่มข้อความ temp ที่ท้าย array (ข้อความใหม่อยู่ล่าง)
+      setMessages(prevMessages => [...prevMessages, tempImageMessage]);
+      setIsUploadingFile(true);
+      
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        type: asset.mimeType || 'image/jpeg',
+        name: asset.fileName || `image_${Date.now()}.jpg`,
+      });
+      formData.append('groupId', groupId);
+      
+      // เพิ่มข้อความหากมี
+      if (messageText && messageText !== '📷 รูปภาพ') {
+        formData.append('content', messageText);
+      }
+
+      console.log('📤 Uploading image to group with message:', groupId, messageText);
+      const response = await api.post(`/groups/${groupId}/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000, // 2 minutes timeout for image upload
+      });
+
+      console.log('✅ Image uploaded to group:', response.data);
+      
+      // Remove temporary message since real one will come via socket
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg._id !== tempImageMessage._id)
+      );
+      
+      // เลื่อนไปข้อความล่าสุดหลังส่งรูปสำเร็จ
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (error) {
       console.error('❌ Error sending image:', error);
       // Remove temporary message on error
@@ -302,7 +377,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันส่งไฟล์
+  // ฟังก์ชันส่งไฟล์ (ปรับปรุงให้เหมือน PrivateChat)
   const sendFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -311,31 +386,97 @@ const GroupChatScreen = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setIsUploadingFile(true);
         setShowAttachmentMenu(false);
         
         const asset = result.assets[0];
-        const formData = new FormData();
         
-        formData.append('file', {
-          uri: asset.uri,
-          type: asset.mimeType || 'application/octet-stream',
-          name: asset.name || `file_${Date.now()}`,
-        });
-        formData.append('groupId', groupId);
-
-        console.log('📤 Uploading file to group:', groupId);
-        const response = await api.post(`/groups/${groupId}/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 120000, // 2 minutes timeout for file upload
-        });
-
-        console.log('✅ File uploaded to group:', response.data);
+        // ถาม user ว่าจะพิมพ์ข้อความด้วยหรือไม่
+        Alert.prompt(
+          'ส่งไฟล์',
+          'คุณต้องการเพิ่มข้อความด้วยหรือไม่?',
+          [
+            {
+              text: 'ยกเลิก',
+              style: 'cancel',
+            },
+            {
+              text: 'ส่งเฉพาะไฟล์',
+              onPress: () => uploadFileWithMessage(asset, asset.name || 'ไฟล์แนบ'),
+            },
+            {
+              text: 'เพิ่มข้อความ',
+              onPress: (text) => uploadFileWithMessage(asset, text || (asset.name || 'ไฟล์แนบ')),
+            },
+          ],
+          'plain-text',
+          '',
+          'default'
+        );
       }
     } catch (error) {
+      console.error('❌ Error selecting file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเลือกไฟล์ได้');
+    }
+  };
+
+  // ฟังก์ชันอัปโหลดไฟล์พร้อมข้อความ
+  const uploadFileWithMessage = async (asset, messageText) => {
+    try {
+      // Optimistic UI for file
+      const tempFileMessage = {
+        _id: `temp_file_${Date.now()}`,
+        content: messageText,
+        messageType: 'file',
+        sender: authUser,
+        timestamp: new Date().toISOString(),
+        fileName: asset.name,
+        fileSize: asset.size,
+        isTemporary: true,
+        isSending: true
+      };
+      
+      // เพิ่มข้อความ temp ที่ท้าย array (ข้อความใหม่อยู่ล่าง)
+      setMessages(prevMessages => [...prevMessages, tempFileMessage]);
+      setIsUploadingFile(true);
+      
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        type: asset.mimeType || 'application/octet-stream',
+        name: asset.name || `file_${Date.now()}`,
+      });
+      formData.append('groupId', groupId);
+      
+      // เพิ่มข้อความหากมี
+      if (messageText && messageText !== asset.name && messageText !== 'ไฟล์แนบ') {
+        formData.append('content', messageText);
+      }
+
+      console.log('📤 Uploading file to group with message:', groupId, messageText);
+      const response = await api.post(`/groups/${groupId}/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000, // 2 minutes timeout for file upload
+      });
+
+      console.log('✅ File uploaded to group:', response.data);
+      
+      // Remove temporary message since real one will come via socket
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg._id !== tempFileMessage._id)
+      );
+      
+      // เลื่อนไปข้อความล่าสุดหลังส่งไฟล์สำเร็จ
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error) {
       console.error('❌ Error sending file:', error);
+      // Remove temporary message on error
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg._id.startsWith('temp_file_'))
+      );
       
       let errorMessage = 'ไม่สามารถส่งไฟล์ได้';
       if (error.message.includes('Network Error')) {
@@ -350,7 +491,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันถ่ายรูป
+  // ฟังก์ชันถ่ายรูป (ปรับปรุงให้เหมือน PrivateChat)
   const takePhoto = async () => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -367,42 +508,228 @@ const GroupChatScreen = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setIsUploadingFile(true);
         setShowAttachmentMenu(false);
         
         const asset = result.assets[0];
-        const formData = new FormData();
         
-        formData.append('file', {
-          uri: asset.uri,
-          type: asset.mimeType || 'image/jpeg',
-          name: asset.fileName || `photo_${Date.now()}.jpg`,
-        });
-        formData.append('groupId', groupId);
-
-        console.log('📤 Uploading photo to group:', groupId);
-        const response = await api.post(`/groups/${groupId}/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 120000, // 2 minutes timeout for photo upload
-        });
-
-        console.log('✅ Photo uploaded to group:', response.data);
+        // ถาม user ว่าจะพิมพ์ข้อความด้วยหรือไม่
+        Alert.prompt(
+          'ส่งรูปถ่าย',
+          'คุณต้องการเพิ่มข้อความด้วยหรือไม่?',
+          [
+            {
+              text: 'ยกเลิก',
+              style: 'cancel',
+            },
+            {
+              text: 'ส่งเฉพาะรูป',
+              onPress: () => uploadImageWithMessage(asset, '📷 รูปถ่าย'),
+            },
+            {
+              text: 'เพิ่มข้อความ',
+              onPress: (text) => uploadImageWithMessage(asset, text || '📷 รูปถ่าย'),
+            },
+          ],
+          'plain-text',
+          '',
+          'default'
+        );
       }
     } catch (error) {
       console.error('❌ Error taking photo:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถถ่ายรูปได้');
+    }
+  };
+
+  // ฟังก์ชั่นสำหรับกดที่ไฟล์
+  const showFileOptions = (fileUrl, fileName) => {
+    if (!fileUrl) {
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเข้าถึงไฟล์ได้');
+      return;
+    }
+
+    Alert.alert(
+      fileName || 'ไฟล์',
+      'คุณต้องการทำอะไรกับไฟล์นี้?',
+      [
+        {
+          text: 'ยกเลิก',
+          style: 'cancel',
+        },
+        {
+          text: 'ดาวน์โหลด',
+          onPress: () => downloadFile(fileUrl, fileName),
+        },
+        {
+          text: 'เปิดดู',
+          onPress: () => previewFile(fileUrl, fileName),
+        },
+      ]
+    );
+  };
+
+  // ฟังก์ชั่นสำหรับดาวน์โหลดไฟล์
+  const downloadFile = async (fileUrl, fileName) => {
+    try {
+      console.log('Downloading file:', fileUrl);
       
-      let errorMessage = 'ไม่สามารถถ่ายรูปได้';
-      if (error.message.includes('Network Error')) {
-        errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'การอัปโหลดใช้เวลานานเกินไป กรุณาลองใหม่';
+      // แปลง URL ให้ถูกต้อง
+      let fullUrl = fileUrl;
+      if (!fileUrl.startsWith('http')) {
+        fullUrl = API_URL + (fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl);
       }
+
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('ข้อผิดพลาด', 'กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+
+      // สร้างไดเรกทอรีการดาวน์โหลด
+      const downloadDir = `${FileSystem.documentDirectory}downloads/`;
+      await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
       
-      Alert.alert('ข้อผิดพลาด', errorMessage);
-    } finally {
-      setIsUploadingFile(false);
+      // สร้างชื่อไฟล์ที่ไม่ซ้ำ
+      const timestamp = new Date().getTime();
+      const finalFileName = fileName || `file_${timestamp}`;
+      const localUri = `${downloadDir}${finalFileName}`;
+
+      // ดาวน์โหลดไฟล์
+      const downloadResult = await FileSystem.downloadAsync(
+        fullUrl,
+        localUri,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (downloadResult.status === 200) {
+        Alert.alert(
+          'ดาวน์โหลดสำเร็จ',
+          `ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`,
+          [
+            {
+              text: 'ตกลง',
+            },
+            {
+              text: 'แชร์',
+              onPress: () => {
+                Sharing.shareAsync(downloadResult.uri);
+              },
+            },
+          ]
+        );
+      } else {
+        throw new Error(`HTTP ${downloadResult.status}`);
+      }
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
+    }
+  };
+
+  // ฟังก์ชั่นสำหรับดูไฟล์
+  const previewFile = async (fileUrl, fileName) => {
+    try {
+      console.log('Previewing file:', fileUrl);
+      
+      // แปลง URL ให้ถูกต้อง
+      let fullUrl = fileUrl;
+      if (!fileUrl.startsWith('http')) {
+        fullUrl = API_URL + (fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl);
+      }
+
+      // ตรวจสอบประเภทไฟล์
+      const fileExtension = fileName ? fileName.split('.').pop().toLowerCase() : '';
+      
+      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExtension)) {
+        // ถ้าเป็นรูปภาพ ให้เปิด modal
+        setSelectedModalImage(fullUrl);
+        setImageModalVisible(true);
+      } else if (fileExtension === 'pdf') {
+        // ถ้าเป็น PDF ให้เปิดใน browser
+        const supported = await Linking.canOpenURL(fullUrl);
+        if (supported) {
+          await Linking.openURL(fullUrl);
+        } else {
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเปิดไฟล์ PDF ได้');
+        }
+      } else {
+        // ไฟล์ประเภทอื่นๆ ให้ถามว่าจะดาวน์โหลดหรือไม่
+        Alert.alert(
+          'เปิดไฟล์',
+          'ไฟล์นี้ไม่สามารถดูตัวอย่างได้ คุณต้องการดาวน์โหลดหรือไม่?',
+          [
+            { text: 'ยกเลิก', style: 'cancel' },
+            { text: 'ดาวน์โหลด', onPress: () => downloadFile(fileUrl, fileName) }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error previewing file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเปิดไฟล์ได้');
+    }
+  };
+
+  // ฟังก์ชั่นสำหรับดาวน์โหลดรูปภาพจาก modal
+  const downloadImageFromModal = async (imageUrl) => {
+    try {
+      console.log('Downloading image from modal:', imageUrl);
+      
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('ข้อผิดพลาด', 'กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+
+      // สร้างไดเรกทอรีการดาวน์โหลด
+      const downloadDir = `${FileSystem.documentDirectory}downloads/`;
+      await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
+      
+      // สร้างชื่อไฟล์ที่ไม่ซ้ำ
+      const timestamp = new Date().getTime();
+      const fileName = `image_${timestamp}.jpg`;
+      const localUri = `${downloadDir}${fileName}`;
+
+      // ดาวน์โหลดรูปภาพ
+      const downloadResult = await FileSystem.downloadAsync(
+        imageUrl,
+        localUri,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'User-Agent': 'ChatApp/1.0',
+          },
+        }
+      );
+
+      if (downloadResult.status === 200) {
+        Alert.alert(
+          'ดาวน์โหลดสำเร็จ',
+          `รูปภาพถูกบันทึกที่: ${downloadResult.uri}`,
+          [
+            {
+              text: 'ตกลง',
+            },
+            {
+              text: 'แชร์',
+              onPress: () => {
+                Sharing.shareAsync(downloadResult.uri);
+              },
+            },
+          ]
+        );
+        
+        // ปิด modal
+        setImageModalVisible(false);
+      } else {
+        throw new Error(`HTTP ${downloadResult.status}`);
+      }
+    } catch (error) {
+      console.error('Error downloading image from modal:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดรูปภาพได้');
     }
   };
 
@@ -454,116 +781,6 @@ const GroupChatScreen = ({ route, navigation }) => {
       console.error('❌ Error deleting message:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบข้อความได้');
     }
-  };
-
-  // ฟังก์ชันดาวน์โหลดไฟล์
-  const downloadFile = async (fileUrl, fileName) => {
-    try {
-      if (Platform.OS === 'ios') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      
-      const fullUrl = fileUrl.startsWith('http') 
-        ? fileUrl 
-        : `${API_URL}/${fileUrl.replace(/\\/g, '/').replace(/^\/+/, '')}`;
-      
-      console.log('📥 Downloading file:', fullUrl);
-      
-      Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
-      
-      // ดาวน์โหลดไฟล์ไปยัง temporary directory
-      const downloadResult = await FileSystem.downloadAsync(
-        fullUrl,
-        FileSystem.documentDirectory + (fileName || 'downloaded_file')
-      );
-      
-      console.log('✅ Download completed:', downloadResult.uri);
-      
-      // ตรวจสอบว่าสามารถแชร์ไฟล์ได้หรือไม่
-      const isAvailable = await Sharing.isAvailableAsync();
-      
-      if (isAvailable) {
-        // ใช้ Sharing API เพื่อเปิดไฟล์หรือแชร์
-        await Sharing.shareAsync(downloadResult.uri, {
-          dialogTitle: `เปิดไฟล์: ${fileName || 'ไฟล์ดาวน์โหลด'}`
-        });
-      } else {
-        // ถ้าไม่สามารถแชร์ได้ ให้แสดงข้อมูลไฟล์
-        Alert.alert(
-          'ไฟล์ดาวน์โหลดเรียบร้อย',
-          `ชื่อไฟล์: ${fileName || 'ไฟล์ดาวน์โหลด'}\nที่เก็บ: ${downloadResult.uri}`,
-          [
-            { text: 'ตกลง', style: 'default' }
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('❌ Error downloading file:', error);
-      
-      // ถ้าดาวน์โหลดไม่ได้ ลองเปิด URL ใน browser
-      try {
-        const canOpen = await Linking.canOpenURL(fullUrl);
-        
-        if (canOpen) {
-          Alert.alert(
-            'ไม่สามารถดาวน์โหลดได้',
-            'คุณต้องการเปิดไฟล์ในเบราว์เซอร์หรือไม่?',
-            [
-              { text: 'ยกเลิก', style: 'cancel' },
-              { 
-                text: 'เปิด', 
-                onPress: () => Linking.openURL(fullUrl)
-              }
-            ]
-          );
-        } else {
-          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
-        }
-      } catch (linkError) {
-        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเข้าถึงไฟล์ได้');
-      }
-    }
-  };
-
-  // ฟังก์ชันแสดงตัวอย่างไฟล์
-  const previewFile = async (fileUrl, fileName) => {
-    try {
-      if (Platform.OS === 'ios') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      
-      const fullUrl = fileUrl.startsWith('http') 
-        ? fileUrl 
-        : `${API_URL}/${fileUrl.replace(/\\/g, '/').replace(/^\/+/, '')}`;
-      
-      console.log('👁️ Previewing file:', fullUrl);
-      await Linking.openURL(fullUrl);
-    } catch (error) {
-      console.error('❌ Error previewing file:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดูตัวอย่างไฟล์ได้');
-    }
-  };
-
-  // ฟังก์ชันแสดงตัวเลือกสำหรับไฟล์
-  const showFileOptions = (fileUrl, fileName) => {
-    Alert.alert(
-      'ตัวเลือกไฟล์',
-      `จัดการไฟล์: ${fileName || 'ไฟล์'}`,
-      [
-        {
-          text: 'ดูตัวอย่าง',
-          onPress: () => previewFile(fileUrl, fileName)
-        },
-        {
-          text: 'ดาวน์โหลด',
-          onPress: () => downloadFile(fileUrl, fileName)
-        },
-        {
-          text: 'ยกเลิก',
-          style: 'cancel'
-        }
-      ]
-    );
   };
 
   const formatTime = (timestamp) => {
@@ -679,11 +896,29 @@ const GroupChatScreen = ({ route, navigation }) => {
               item.isTemporary && styles.temporaryMessage
             ]}>
               {/* รูปภาพ */}
-              {item.messageType === 'image' && item.fileUrl && (
+              {item.messageType === 'image' && (
                 <TouchableOpacity
                   onPress={() => {
-                    setSelectedImage(item.fileUrl);
-                    setShowImageViewer(true);
+                    // ตรวจสอบ fileUrl ก่อนเปิด modal
+                    if (!item.fileUrl) {
+                      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแสดงรูปภาพได้ เนื่องจากไฟล์อาจเสียหาย');
+                      return;
+                    }
+                    
+                    // สร้าง URL สำหรับรูปภาพ
+                    let imageUrl = item.fileUrl;
+                    
+                    // ถ้าเป็น local URI (เช่น file://) ให้ใช้ตรงๆ
+                    if (imageUrl.startsWith('file://') || imageUrl.startsWith('content://')) {
+                      setSelectedModalImage(imageUrl);
+                    } else {
+                      // ถ้าไม่ใช่ HTTP URL ให้เพิ่ม API_URL
+                      if (!imageUrl.startsWith('http')) {
+                        imageUrl = `${API_URL}${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
+                      }
+                      setSelectedModalImage(imageUrl);
+                    }
+                    setImageModalVisible(true);
                   }}
                   onLongPress={() => {
                     if (Platform.OS === 'ios') {
@@ -694,16 +929,49 @@ const GroupChatScreen = ({ route, navigation }) => {
                   }}
                   delayLongPress={500}
                 >
-                  <Image
-                    source={{ 
-                      uri: item.fileUrl.startsWith('http') 
-                        ? item.fileUrl 
-                        : `${API_URL}/${item.fileUrl.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                    }}
-                    style={styles.messageImage}
-                    resizeMode="cover"
-                  />
-                  {item.content !== '📷 รูปภาพ' && (
+                  {item.fileUrl ? (
+                    <Image
+                      source={{ 
+                        uri: (() => {
+                          const baseUrl = item.fileUrl;
+                          
+                          // ถ้าเป็น local URI (เช่น file://) ให้ใช้ตรงๆ
+                          if (baseUrl.startsWith('file://') || baseUrl.startsWith('content://')) {
+                            console.log('🔗 Using local URI:', baseUrl);
+                            return baseUrl;
+                          }
+                          
+                          // ถ้าเป็น HTTP URL แล้วให้ใช้ตรงๆ
+                          if (baseUrl.startsWith('http')) {
+                            console.log('🔗 Using HTTP URL:', baseUrl);
+                            return baseUrl;
+                          }
+                          
+                          // ถ้าไม่ใช่ให้เพิ่ม API_URL
+                          const finalUrl = `${API_URL}${baseUrl.startsWith('/') ? baseUrl : '/' + baseUrl}`;
+                          console.log('🔗 Constructed URL:', finalUrl);
+                          return finalUrl;
+                        })()
+                      }}
+                      style={styles.messageImage}
+                      resizeMode="cover"
+                      defaultSource={require('../../assets/default-avatar.png')}
+                      onError={(error) => {
+                        console.log('❌ Error loading image for message:', item._id);
+                        console.log('❌ Failed URL:', item.fileUrl);
+                        console.log('❌ Error details:', error.nativeEvent?.error);
+                      }}
+                      onLoad={() => {
+                        console.log('✅ Image loaded successfully for message:', item._id);
+                      }}
+                    />
+                  ) : (
+                    <View style={[styles.messageImage, styles.brokenImageContainer]}>
+                      <Text style={styles.brokenImageText}>📷</Text>
+                      <Text style={styles.brokenImageSubtext}>รูปภาพไม่พร้อมใช้งาน</Text>
+                    </View>
+                  )}
+                  {item.content !== '📷 รูปภาพ' && item.content !== '📷 รูปถ่าย' && (
                     <Text style={[
                       styles.messageText,
                       isMyMessage ? styles.myMessageText : styles.otherMessageText
@@ -715,10 +983,16 @@ const GroupChatScreen = ({ route, navigation }) => {
               )}
               
               {/* ไฟล์ */}
-              {item.messageType === 'file' && item.fileUrl && (
+              {item.messageType === 'file' && (
                 <TouchableOpacity
                   style={styles.fileContainer}
-                  onPress={() => showFileOptions(item.fileUrl, item.fileName || 'ไฟล์')}
+                  onPress={() => {
+                    if (!item.fileUrl) {
+                      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเข้าถึงไฟล์ได้ เนื่องจากไฟล์อาจเสียหาย');
+                      return;
+                    }
+                    showFileOptions(item.fileUrl, item.fileName || 'ไฟล์');
+                  }}
                 >
                   <View style={styles.fileIcon}>
                     <Text style={styles.fileIconText}>📎</Text>
@@ -728,11 +1002,17 @@ const GroupChatScreen = ({ route, navigation }) => {
                       styles.fileName,
                       isMyMessage ? styles.myMessageText : styles.otherMessageText
                     ]}>
-                      {item.fileName || 'ไฟล์'}
+                      {item.fileName || item.content || 'ไฟล์แนบ'}
+                      {!item.fileUrl && ' (ไม่พร้อมใช้งาน)'}
                     </Text>
                     {item.fileSize && (
                       <Text style={styles.fileSize}>
                         {(item.fileSize / 1024 / 1024).toFixed(2)} MB
+                      </Text>
+                    )}
+                    {!item.fileSize && (
+                      <Text style={styles.fileSize}>
+                        ขนาดไม่ทราบ
                       </Text>
                     )}
                   </View>
@@ -1148,6 +1428,48 @@ const GroupChatScreen = ({ route, navigation }) => {
               style={styles.fullScreenImage}
               resizeMode="contain"
             />
+          )}
+        </View>
+      </Modal>
+
+      {/* Image Modal for viewing and downloading */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity
+            style={styles.modalCloseArea}
+            onPress={() => setImageModalVisible(false)}
+          >
+            <Text style={styles.modalClose}>✕</Text>
+          </TouchableOpacity>
+          
+          {selectedModalImage && (
+            <View style={styles.modalImageContainer}>
+              <Image
+                source={{ 
+                  uri: selectedModalImage,
+                  headers: {
+                    'User-Agent': 'ChatApp/1.0',
+                  }
+                }}
+                style={styles.modalImage}
+                resizeMode="contain"
+                onError={(error) => {
+                  console.error('Error loading modal image:', error);
+                }}
+              />
+              
+              <TouchableOpacity
+                style={styles.downloadButton}
+                onPress={() => downloadImageFromModal(selectedModalImage)}
+              >
+                <Text style={styles.downloadButtonText}>💾 ดาวน์โหลด</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </Modal>
@@ -1671,6 +1993,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 5,
   },
+  brokenImageContainer: {
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#ddd',
+    borderWidth: 1,
+  },
+  brokenImageText: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  brokenImageSubtext: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
   fileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1724,6 +2062,49 @@ const styles = StyleSheet.create({
   fullScreenImage: {
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height,
+  },
+  
+  // Modal styles for image viewing and download
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseArea: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    padding: 10,
+  },
+  modalClose: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  modalImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  modalImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
+  },
+  downloadButton: {
+    position: 'absolute',
+    bottom: 100,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+  },
+  downloadButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   
   // Message Actions Modal Styles

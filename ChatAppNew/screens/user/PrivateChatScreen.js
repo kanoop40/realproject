@@ -11,7 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Linking
+  Linking,
+  Modal,
+  Dimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -34,6 +36,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [selectedModalImage, setSelectedModalImage] = useState(null);
   const flatListRef = React.useRef(null); // เพิ่ม ref สำหรับ FlatList
 
   // ข้อมูลแชทจาก route params
@@ -232,8 +236,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
         setHasScrolledToEnd(false); // Reset flag
         // บังคับ scroll ไปข้อความล่าสุดทันทีหลังโหลด
         setTimeout(() => {
-          console.log('🎯 Force scrolling to end after loading');
-          flatListRef.current?.scrollToEnd({ animated: false });
+          console.log('🎯 Force scrolling to end after loading, messages:', loadedMessages.length);
+          if (loadedMessages.length > 0) {
+            // ลอง scrollToIndex ไปข้อความสุดท้าย
+            try {
+              flatListRef.current?.scrollToIndex({ 
+                index: loadedMessages.length - 1, 
+                animated: false,
+                viewPosition: 1 // scroll ให้ item อยู่ด้านล่างสุด
+              });
+            } catch (error) {
+              // ถ้า scrollToIndex ไม่ได้ ให้ใช้ scrollToEnd
+              console.log('ScrollToIndex failed, using scrollToEnd');
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }
+          }
           // ให้เวลา layout เสร็จก่อน
           setTimeout(() => {
             setIsScrollingToEnd(false);
@@ -465,6 +482,51 @@ const PrivateChatScreen = ({ route, navigation }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // ฟังก์ชันเปิดรูปภาพในโหมดเต็มจอ
+  const openImageModal = (imageUri) => {
+    setSelectedModalImage(imageUri);
+    setImageModalVisible(true);
+  };
+
+  // ฟังก์ชันดาวน์โหลดรูปภาพจาก modal
+  const downloadImageFromModal = async () => {
+    if (!selectedModalImage) return;
+    
+    try {
+      Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+      
+      const fileName = `image_${Date.now()}.jpg`;
+      
+      console.log('📥 Starting image download:', selectedModalImage);
+      
+      const downloadResult = await FileSystem.downloadAsync(
+        selectedModalImage,
+        FileSystem.documentDirectory + fileName
+      );
+      
+      console.log('✅ Image download completed:', downloadResult.uri);
+      
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: `บันทึกรูปภาพ: ${fileName}`
+        });
+      } else {
+        Alert.alert(
+          'ดาวน์โหลดเรียบร้อย',
+          `รูปภาพถูกบันทึกที่: ${downloadResult.uri}`,
+          [{ text: 'ตกลง', style: 'default' }]
+        );
+      }
+      
+    } catch (error) {
+      console.error('❌ Error downloading image:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดรูปภาพได้');
+    }
+  };
+
   const downloadFile = async (file) => {
     try {
       // แสดง loading
@@ -563,8 +625,42 @@ const PrivateChatScreen = ({ route, navigation }) => {
         fileUrl = `${API_URL}${file.url || file.file_path}`; // สร้าง URL จาก API_URL
       }
       
-      console.log('👁️ Previewing file:', fileUrl);
-      await Linking.openURL(fileUrl);
+      // ตรวจสอบประเภทไฟล์
+      const fileName = file.file_name || '';
+      const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(fileName);
+      const isPDF = /\.pdf$/i.test(fileName);
+      
+      console.log('👁️ Previewing file:', fileUrl, 'Type:', { isImage, isPDF });
+      
+      if (isImage) {
+        // ถ้าเป็นรูป ให้เปิดใน modal แทน
+        openImageModal(fileUrl);
+      } else if (isPDF) {
+        // สำหรับ PDF ให้ลองเปิดใน browser
+        const canOpen = await Linking.canOpenURL(fileUrl);
+        if (canOpen) {
+          await Linking.openURL(fileUrl);
+        } else {
+          Alert.alert(
+            'ไม่สามารถเปิดไฟล์ได้',
+            'กรุณาดาวน์โหลดไฟล์เพื่อดูเนื้อหา',
+            [
+              { text: 'ยกเลิก', style: 'cancel' },
+              { text: 'ดาวน์โหลด', onPress: () => downloadFile(file) }
+            ]
+          );
+        }
+      } else {
+        // ไฟล์ประเภทอื่นๆ ให้ดาวน์โหลด
+        Alert.alert(
+          'ไฟล์ประเภทนี้',
+          'ไม่สามารถดูตัวอย่างได้ กรุณาดาวน์โหลดเพื่อเปิดไฟล์',
+          [
+            { text: 'ยกเลิก', style: 'cancel' },
+            { text: 'ดาวน์โหลด', onPress: () => downloadFile(file) }
+          ]
+        );
+      }
     } catch (error) {
       console.error('❌ Error previewing file:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดูตัวอย่างไฟล์ได้');
@@ -681,7 +777,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
               isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
               item.isOptimistic && styles.optimisticMessage
             ]}>
-              <TouchableOpacity style={styles.imageContainer}>
+              <TouchableOpacity 
+                style={styles.imageContainer}
+                onPress={() => {
+                  const imageUri = item.image?.file_path || 
+                                  item.image?.uri ||
+                                  (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                                    item.file.url : 
+                                    (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+                  openImageModal(imageUri);
+                }}
+              >
                 <Image
                   source={{ 
                     uri: item.image?.file_path || 
@@ -692,7 +798,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   }}
                   style={styles.messageImage}
                   resizeMode="cover"
-                  onError={(error) => console.log('❌ Error loading image:', item.file?.url || item.image?.file_path, error.nativeEvent.error)}
+                  onError={(error) => {
+                    console.log('❌ Error loading image:', item.file?.url || item.image?.file_path, error.nativeEvent.error);
+                    // ลองใช้ default image หรือซ่อนรูป
+                  }}
+                  defaultSource={require('../../assets/default-avatar.png')}
                 />
               </TouchableOpacity>
               <View style={styles.imageTimeContainer}>
@@ -773,13 +883,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
                     styles.fileName,
                     { color: isMyMessage ? "#fff" : "#333" }
                   ]} numberOfLines={2}>
-                    {item.file.file_name}
+                    {item.file.file_name || 'ไฟล์แนบ'}
                   </Text>
                   <Text style={[
                     styles.fileSize,
                     { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
                   ]}>
-                    {formatFileSize(item.file.size)}
+                    {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1022,6 +1132,45 @@ const PrivateChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Image Modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity 
+            style={styles.modalCloseArea}
+            onPress={() => setImageModalVisible(false)}
+          >
+            <View style={styles.modalContent}>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setImageModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+              
+              {selectedModalImage && (
+                <Image
+                  source={{ uri: selectedModalImage }}
+                  style={styles.modalImage}
+                  resizeMode="contain"
+                />
+              )}
+              
+              <TouchableOpacity 
+                style={styles.modalDownloadButton}
+                onPress={downloadImageFromModal}
+              >
+                <Text style={styles.modalDownloadText}>📥 ดาวน์โหลด</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -1515,6 +1664,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     marginTop: 4,
+    position: 'relative',
   },
   messageImage: {
     width: 200,
@@ -1554,6 +1704,61 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
     paddingHorizontal: 8,
+  },
+
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseArea: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    height: '80%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalCloseText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  modalDownloadButton: {
+    position: 'absolute',
+    bottom: 30,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  modalDownloadText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

@@ -38,6 +38,23 @@ const messagesSchema = new mongoose.Schema({
         ref: 'File',
         default: null
     },
+    // เพิ่ม fields สำหรับเก็บข้อมูลไฟล์โดยตรง (Cloudinary)
+    fileUrl: {
+        type: String,
+        default: null
+    },
+    fileName: {
+        type: String,
+        default: null
+    },
+    fileSize: {
+        type: Number,
+        default: null
+    },
+    mimeType: {
+        type: String,
+        default: null
+    },
     readBy: [{
         user: {
             type: mongoose.Schema.Types.ObjectId,

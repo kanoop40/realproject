@@ -533,12 +533,27 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     if (hasFile) {
         const isImage = req.file.mimetype && req.file.mimetype.startsWith('image/');
         
+        console.log('📎 File upload info:', {
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+            cloudinaryPath: req.file.path,
+            isImage: isImage
+        });
+        
         messageData.content = hasContent ? content.trim() : (isImage ? '📷 รูปภาพ' : '📎 ไฟล์');
         messageData.messageType = isImage ? 'image' : 'file';
         messageData.fileUrl = req.file.path; // Cloudinary URL
         messageData.fileName = req.file.originalname;
         messageData.fileSize = req.file.size;
         messageData.mimeType = req.file.mimetype;
+        
+        console.log('💾 Message data with file:', {
+            messageType: messageData.messageType,
+            fileUrl: messageData.fileUrl,
+            fileName: messageData.fileName,
+            fileSize: messageData.fileSize
+        });
     } else {
         // ข้อความธรรมดา
         messageData.content = content.trim();
@@ -549,10 +564,14 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     const message = await Messages.create(messageData);
     await message.populate('user_id', 'firstName lastName username role avatar');
 
-    console.log('📝 Created message with sender info:', {
+    console.log('📝 Created message with file info:', {
         messageId: message._id,
         content: message.content,
         messageType: message.messageType,
+        fileUrl: message.fileUrl,
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        mimeType: message.mimeType,
         sender: {
             _id: message.user_id._id,
             firstName: message.user_id.firstName,
