@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Fixed API URL
-const API_URL = 'http://172.22.103.179:5000';
+const API_URL = 'https://realproject-mg25.onrender.com';
 
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
