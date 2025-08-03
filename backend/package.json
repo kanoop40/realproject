@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "npm ci --only=production",
+    "build": "npm install --production --verbose",
+    "prebuild": "rm -rf node_modules package-lock.json || true",
+    "postinstall": "npm list --depth=0 || true",
     "clean": "rm -rf node_modules package-lock.json && npm install",
     "test": "echo 'No tests specified'",
     "create-admin": "node scripts/createAdmin.js",
@@ -26,6 +28,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "debug": "^4.3.4",
     "dotenv": "^16.4.5",
     "expo-server-sdk": "^3.15.0",
     "express": "^4.19.2",
@@ -43,7 +46,7 @@
     "nodemon": "^3.0.1"
   },
   "engines": {
-    "node": ">=18.0.0 <=22.x",
-    "npm": ">=8.0.0"
+    "node": "20.x",
+    "npm": "10.x"
   }
 }
