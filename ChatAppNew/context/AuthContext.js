@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from '../service/notificationService';
+import { wakeUpServer } from '../service/healthCheck';
 
 const AuthContext = createContext({});
 
@@ -14,6 +15,10 @@ export const AuthProvider = ({ children }) => {
 
   const loadUser = async () => {
     try {
+      // Wake up server ก่อนโหลดข้อมูล user
+      console.log('🏥 Starting health check...');
+      wakeUpServer(); // ไม่รอผลลัพธ์ ให้ทำงานพื้นหลัง
+      
       const userDataStr = await AsyncStorage.getItem('userData');
       if (userDataStr) {
         const userData = JSON.parse(userDataStr);

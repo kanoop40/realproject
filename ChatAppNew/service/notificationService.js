@@ -62,6 +62,13 @@ class NotificationService {
       }
       
       try {
+        // ใน Expo Go จะไม่สามารถใช้ push notification ได้
+        // ต้องใช้ development build หรือ standalone app
+        if (__DEV__) {
+          console.log('⚠️ Push notifications not available in Expo Go development mode');
+          return null;
+        }
+        
         token = (await Notifications.getExpoPushTokenAsync({
           projectId: 'your-project-id', // เปลี่ยนเป็น project ID ของคุณ
         })).data;
@@ -72,7 +79,9 @@ class NotificationService {
         this.expoPushToken = token;
         
       } catch (error) {
-        console.log('❌ Error getting push token:', error);
+        console.log('❌ Error getting push token (expected in Expo Go):', error.message);
+        // ไม่ return error ให้ app ทำงานต่อได้
+        return null;
       }
     } else {
       console.log('⚠️ Must use physical device for Push Notifications');

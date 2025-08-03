@@ -15,7 +15,7 @@ console.log('🎯 API will connect to:', API_URL);
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 15000,
+  timeout: 30000, // เพิ่มเป็น 30 วินาที
   headers: {
     'Content-Type': 'application/json'
   }
@@ -44,13 +44,15 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor สำหรับ debug
+// Response interceptor สำหรับ debug และ retry
 api.interceptors.response.use(
   (response) => {
     console.log(`✅ Response from ${response.config.url}:`, response.status);
     return response;
   },
   async (error) => {
+    const originalRequest = error.config;
+    
     console.log('❌ API Error:', {
       url: error.config?.url,
       method: error.config?.method,
@@ -58,6 +60,18 @@ api.interceptors.response.use(
       status: error.response?.status,
       data: error.response?.data
     });
+
+    // Retry สำหรับ timeout หรือ network error (สำหรับ cold start)
+    if ((error.code === 'ECONNABORTED' || error.message.includes('timeout')) && 
+        !originalRequest._retry && 
+        originalRequest.url !== '/auth/login') {
+      originalRequest._retry = true;
+      console.log('🔄 Retrying request due to timeout (cold start)...');
+      
+      // รอ 3 วินาที แล้ว retry
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      return api(originalRequest);
+    }
     
     if (error.response?.status === 401) {
       try {

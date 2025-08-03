@@ -81,11 +81,11 @@ export const SocketProvider = ({ children }) => {
             userId: user._id
           },
           transports: ['websocket', 'polling'],
-          timeout: 20000,
+          timeout: 30000, // เพิ่มเป็น 30 วินาที
           forceNew: true,
           reconnection: true,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000
+          reconnectionAttempts: 8, // เพิ่มจำนวนครั้งการ reconnect
+          reconnectionDelay: 2000 // เพิ่มช่วงเวลารอ
         });
 
         socketInstance.on('connect', () => {

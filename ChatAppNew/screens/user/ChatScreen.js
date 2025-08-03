@@ -662,8 +662,14 @@ const ChatScreen = ({ route, navigation }) => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={{marginTop: 10}}>
+        <Text style={{marginTop: 10, textAlign: 'center', fontSize: 16}}>
           {authLoading ? 'กำลังโหลดข้อมูลผู้ใช้...' : 'กำลังโหลด...'}
+        </Text>
+        <Text style={{marginTop: 5, textAlign: 'center', fontSize: 12, color: '#666'}}>
+          เซิร์ฟเวอร์อาจต้องใช้เวลาสักครู่ในการเริ่มทำงาน
+        </Text>
+        <Text style={{marginTop: 5, textAlign: 'center', fontSize: 12, color: '#666'}}>
+          กรุณารอสักครู่...
         </Text>
       </View>
     );
