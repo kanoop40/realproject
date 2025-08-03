@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from '../service/notificationService';
 import { wakeUpServer } from '../service/healthCheck';
+import keepAliveService from '../service/keepAliveService';
 
 const AuthContext = createContext({});
 
@@ -18,6 +19,9 @@ export const AuthProvider = ({ children }) => {
       // Wake up server ก่อนโหลดข้อมูล user
       console.log('🏥 Starting health check...');
       wakeUpServer(); // ไม่รอผลลัพธ์ ให้ทำงานพื้นหลัง
+      
+      // เริ่ม keep-alive service เพื่อป้องกัน cold start
+      keepAliveService.start();
       
       const userDataStr = await AsyncStorage.getItem('userData');
       if (userDataStr) {
@@ -59,6 +63,9 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // หยุด keep-alive service เมื่อ logout
+      keepAliveService.stop();
+      
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
       await AsyncStorage.removeItem('currentUser');

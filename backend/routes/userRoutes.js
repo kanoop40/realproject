@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const { avatarStorage } = require('../config/cloudinary');
 const { 
     authUser,
     registerUser,
@@ -26,17 +27,7 @@ const {
 } = require('../controllers/userController');
 const { protect, admin } = require('../Middleware/authMiddleware');
 
-// Multer configuration for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/avatars/');
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
+// Multer configuration for avatar uploads using Cloudinary
 const fileFilter = (req, file, cb) => {
     // Check if file is an image
     if (file.mimetype.startsWith('image/')) {
@@ -47,7 +38,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ 
-    storage: storage,
+    storage: avatarStorage,
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB
     },

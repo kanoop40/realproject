@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const { groupAvatarStorage } = require('../config/cloudinary');
 const {
     createGroup,
     getUserGroups,
@@ -17,19 +18,9 @@ const {
 } = require('../controllers/groupChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
-// Multer configuration for group avatar uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/avatars/');
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'group-avatar-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
+// Multer configuration for group avatar uploads using Cloudinary
 const upload = multer({ 
-    storage: storage,
+    storage: groupAvatarStorage,
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB limit
     },

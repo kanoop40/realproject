@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import api, { API_URL } from '../../service/api';
+import AvatarUnavailableNotice from '../../components/AvatarUnavailableNotice';
 
 const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -269,7 +270,7 @@ const ProfileScreen = ({ navigation }) => {
                 source={{ 
                   uri: currentUser.avatar.startsWith('http') 
                     ? currentUser.avatar 
-                    : `${API_URL}/${currentUser.avatar.replace(/\\/g, '/')}`
+                    : `${API_URL}/${currentUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
                 }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
@@ -277,7 +278,7 @@ const ProfileScreen = ({ navigation }) => {
                 onError={(error) => {
                   console.error('❌ Avatar image load error:', error);
                   console.log('❌ Avatar path:', currentUser.avatar);
-                  console.log('❌ Full URL:', `${API_URL}/${currentUser.avatar.replace(/\\/g, '/')}`);
+                  console.log('❌ Full URL:', `${API_URL}/${currentUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
                 }}
                 onLoadStart={() => console.log('🔄 Avatar image loading started')}
               />
@@ -307,8 +308,8 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.roleText}>{translateRole(currentUser?.role)}</Text>
           </View>
           
-          
-       
+          {/* Avatar Notice */}
+          <AvatarUnavailableNotice />
 
         {/* Details Section */}
         <View style={styles.detailsSection}>

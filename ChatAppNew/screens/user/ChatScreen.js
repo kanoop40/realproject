@@ -595,12 +595,12 @@ const ChatScreen = ({ route, navigation }) => {
           <View style={styles.avatarContainer}>
             {otherParticipant?.avatar ? (
               <Image
-                source={{ uri: `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}` }}
+                source={{ uri: `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
                 onError={(error) => {
                   console.log('❌ Avatar load error:', error.nativeEvent);
-                  console.log('❌ Avatar URL:', `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/')}`);
+                  console.log('❌ Avatar URL:', `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
                 }}
                 onLoad={() => {
                   console.log('✅ Avatar loaded successfully:', otherParticipant.avatar);
@@ -666,10 +666,13 @@ const ChatScreen = ({ route, navigation }) => {
           {authLoading ? 'กำลังโหลดข้อมูลผู้ใช้...' : 'กำลังโหลด...'}
         </Text>
         <Text style={{marginTop: 5, textAlign: 'center', fontSize: 12, color: '#666'}}>
-          เซิร์ฟเวอร์อาจต้องใช้เวลาสักครู่ในการเริ่มทำงาน
+          ระบบใช้ Render.com Free Tier ซึ่งอาจต้องใช้เวลา
         </Text>
         <Text style={{marginTop: 5, textAlign: 'center', fontSize: 12, color: '#666'}}>
-          กรุณารอสักครู่...
+          30-60 วินาทีในการเริ่มทำงาน กรุณารอสักครู่...
+        </Text>
+        <Text style={{marginTop: 10, textAlign: 'center', fontSize: 11, color: '#999'}}>
+          💡 เคล็ดลับ: หากใช้งานต่อเนื่อง ระบบจะตอบสนองเร็วขึ้น
         </Text>
       </View>
     );

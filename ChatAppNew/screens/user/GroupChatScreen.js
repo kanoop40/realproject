@@ -190,7 +190,7 @@ const GroupChatScreen = ({ route, navigation }) => {
               <Image
                 source={
                   item.sender.avatar
-                    ? { uri: `${API_URL}/${item.sender.avatar}` }
+                    ? { uri: `${API_URL}/${item.sender.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }
                     : require('../../assets/default-avatar.png')
                 }
                 style={styles.messageAvatar}

@@ -590,7 +590,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           <View style={styles.messageAvatarContainer}>
             {recipientAvatar ? (
               <Image
-                source={{ uri: `${API_URL}/${recipientAvatar}` }}
+                source={{ uri: `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
                 style={styles.messageAvatar}
                 defaultSource={require('../../assets/default-avatar.png')}
               />
@@ -762,7 +762,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         <View style={styles.headerInfo}>
           {recipientAvatar ? (
             <Image
-              source={{ uri: `${API_URL}/${recipientAvatar}` }}
+              source={{ uri: `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
               style={styles.headerAvatar}
               defaultSource={require('../../assets/default-avatar.png')}
             />

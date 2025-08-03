@@ -112,12 +112,12 @@ const AdminScreen = ({ navigation, route }) => {
       <View style={styles.avatarContainer}>
         {user.avatar ? (
           <Image 
-            source={{ uri: `${API_URL}/${user.avatar.replace(/\\/g, '/')}` }}
+            source={{ uri: `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
             style={styles.avatar}
             defaultSource={require('../../assets/default-avatar.png')}
             onError={(error) => {
               console.log('❌ Avatar load error in AdminScreen:', error.nativeEvent);
-              console.log('❌ Avatar URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/')}`);
+              console.log('❌ Avatar URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
             }}
             onLoad={() => {
               console.log('✅ Avatar loaded successfully in AdminScreen:', user.avatar);

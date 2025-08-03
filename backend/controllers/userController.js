@@ -3,6 +3,7 @@ const User = require('../models/UserModel');
 const generateToken = require('../utils/generateToken');
 const fs = require('fs').promises;
 const path = require('path');
+const { deleteOldAvatar } = require('../config/cloudinary');
 
 const searchUsers = asyncHandler(async (req, res) => {
     try {
@@ -740,37 +741,25 @@ const uploadAvatar = asyncHandler(async (req, res) => {
             throw new Error('ไม่พบข้อมูลผู้ใช้');
         }
 
-        // ลบรูป avatar เก่าถ้ามี
+        // ลบรูป avatar เก่าจาก Cloudinary ถ้ามี
         if (existingUser.avatar) {
-            const fs = require('fs');
-            const path = require('path');
-            
             try {
-                // แปลง avatar path ให้เป็น full path
-                const oldAvatarPath = path.join(__dirname, '..', existingUser.avatar);
-                console.log('🗑️ Attempting to delete old avatar:', oldAvatarPath);
-                
-                // ตรวจสอบว่าไฟล์มีอยู่จริงก่อนลบ
-                if (fs.existsSync(oldAvatarPath)) {
-                    fs.unlinkSync(oldAvatarPath);
-                    console.log('✅ Old avatar deleted successfully');
-                } else {
-                    console.log('⚠️ Old avatar file not found');
-                }
+                await deleteOldAvatar(existingUser.avatar);
+                console.log('✅ Old avatar deleted from Cloudinary');
             } catch (deleteError) {
-                console.error('❌ Error deleting old avatar:', deleteError);
+                console.error('❌ Error deleting old avatar from Cloudinary:', deleteError);
                 // ไม่ให้ error นี้หยุดการอัพโหลดใหม่
             }
         }
 
-        // แปลง path ให้เป็น forward slash สำหรับ URL
-        const avatarPath = req.file.path.replace(/\\/g, '/');
-        console.log('📸 New avatar path:', avatarPath);
+        // ใช้ URL จาก Cloudinary ที่ส่งมาจาก multer
+        const avatarUrl = req.file.path;
+        console.log('📸 New avatar URL from Cloudinary:', avatarUrl);
 
         // อัพเดตข้อมูล avatar ในฐานข้อมูล
         const updatedUser = await User.findByIdAndUpdate(
             userId,
-            { avatar: avatarPath },
+            { avatar: avatarUrl },
             { 
                 new: true,
                 select: '-password'
@@ -781,7 +770,7 @@ const uploadAvatar = asyncHandler(async (req, res) => {
 
         res.json({
             message: 'อัพโหลดรูปโปรไฟล์สำเร็จ',
-            avatar: avatarPath,
+            avatar: avatarUrl,
             user: {
                 _id: updatedUser._id,
                 firstName: updatedUser.firstName,

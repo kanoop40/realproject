@@ -3,6 +3,7 @@ const GroupChat = require('../models/GroupChatModel');
 const User = require('../models/UserModel');
 const Messages = require('../models/MessagesModel');
 const Notification = require('../models/NotificationModel');
+const { deleteOldAvatar } = require('../config/cloudinary');
 
 // @desc    สร้างกลุ่มใหม่
 // @route   POST /api/groups
@@ -35,7 +36,7 @@ const createGroup = asyncHandler(async (req, res) => {
     // จัดการรูปภาพกลุ่ม
     let groupAvatar = null;
     if (req.file) {
-        groupAvatar = req.file.path.replace(/\\/g, '/'); // แปลง path ให้ใช้ forward slash
+        groupAvatar = req.file.path; // ใช้ URL จาก Cloudinary โดยตรง
     }
 
     // ถ้ามี members ที่ส่งมา ให้ใช้แบบนั้น (สำหรับกลุ่มธรรมดา)

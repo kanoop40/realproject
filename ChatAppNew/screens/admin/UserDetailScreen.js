@@ -171,14 +171,14 @@ const UserDetailScreen = ({ navigation, route }) => {
                 source={{ 
                   uri: user.avatar.startsWith('http') 
                     ? user.avatar 
-                    : `${API_URL}/${user.avatar.replace(/\\/g, '/')}`
+                    : `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
                 }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
                 onError={(error) => {
                   console.log('❌ Avatar load error:', error.nativeEvent.error);
                   console.log('❌ Avatar path:', user.avatar);
-                  console.log('❌ Full URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/')}`);
+                  console.log('❌ Full URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
                 }}
                 onLoad={() => {
                   console.log('✅ Avatar loaded successfully:', user.avatar);
