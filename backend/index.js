@@ -34,12 +34,20 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ?
     [
         'http://localhost:19006', 
         'http://localhost:8081', 
+        'http://localhost:8082', // Expo alternative port
         'https://localhost:19006',
+        'https://localhost:8081',
+        'https://localhost:8082',
         'http://b1s-ely-anonymous-8081.exp.direct',
+        'http://b1s-ely-anonymous-8082.exp.direct',
         'https://b1s-ely-anonymous-8081.exp.direct',
+        'https://b1s-ely-anonymous-8082.exp.direct',
         'exp://192.168.1.34:8081',
+        'exp://192.168.1.34:8082', // Expo alternative port
         'http://192.168.1.34:8081',
+        'http://192.168.1.34:8082', // Expo alternative port
         'https://192.168.1.34:8081',
+        'https://192.168.1.34:8082', // Expo alternative port
         'http://192.168.1.34:19006',
         'https://192.168.1.34:19006'
     ];
