@@ -36,13 +36,47 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ?
         'http://localhost:8081', 
         'https://localhost:19006',
         'http://b1s-ely-anonymous-8081.exp.direct',
-        'https://b1s-ely-anonymous-8081.exp.direct'
+        'https://b1s-ely-anonymous-8081.exp.direct',
+        'exp://192.168.1.34:8081',
+        'http://192.168.1.34:8081',
+        'https://192.168.1.34:8081',
+        'http://192.168.1.34:19006',
+        'https://192.168.1.34:19006'
     ];
 
 // Socket.IO configuration with environment-based CORS
 const io = socketIo(server, {
     cors: {
-        origin: NODE_ENV === 'production' ? ALLOWED_ORIGINS : "*",
+        origin: function(origin, callback) {
+            console.log('🔌 Socket.IO CORS request from:', origin);
+            
+            // อนุญาตทุกคำขอใน development
+            if (NODE_ENV === 'development') {
+                return callback(null, true);
+            }
+            
+            // ใน production ตรวจสอบเหมือน HTTP CORS
+            if (!origin) {
+                return callback(null, true);
+            }
+            
+            const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
+                return origin === allowedOrigin || 
+                       origin.includes('exp://') || 
+                       origin.includes('.exp.direct') ||
+                       /^https?:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin) ||
+                       /^https?:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) ||
+                       /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/.test(origin);
+            });
+            
+            if (isAllowed) {
+                console.log('✅ Socket.IO origin allowed:', origin);
+                return callback(null, true);
+            }
+            
+            console.log('❌ Socket.IO origin not allowed:', origin);
+            return callback(null, false);
+        },
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -53,17 +87,39 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// CORS middleware - อนุญาตทุก origin ใน development
+// CORS middleware - รองรับ Expo development และ production
 app.use(cors({
     origin: function (origin, callback) {
+        console.log('🌐 CORS request from origin:', origin);
+        
         // อนุญาตทุกคำขอใน development
         if (NODE_ENV === 'development') {
+            console.log('✅ Development mode - allowing all origins');
             return callback(null, true);
         }
-        // ใน production ใช้ ALLOWED_ORIGINS
-        if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || !origin) {
+        
+        // ใน production ตรวจสอบ origin
+        if (!origin) {
+            console.log('✅ No origin (same-origin) - allowing');
             return callback(null, true);
         }
+        
+        // ตรวจสอบ allowed origins
+        const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
+            return origin === allowedOrigin || 
+                   origin.includes('exp://') || // Expo development
+                   origin.includes('.exp.direct') || // Expo tunnel
+                   /^https?:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin) || // Local IP
+                   /^https?:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) || // Local IP 10.x
+                   /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/.test(origin); // Local IP 172.x
+        });
+        
+        if (isAllowed) {
+            console.log('✅ Origin allowed:', origin);
+            return callback(null, true);
+        }
+        
+        console.log('❌ Origin not allowed:', origin);
         return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
@@ -86,15 +142,6 @@ const limiter = rateLimit({
     legacyHeaders: false,
 });
 app.use(limiter);
-
-// CORS configuration with environment-based origins
-app.use(cors({
-    origin: NODE_ENV === 'production' ? ALLOWED_ORIGINS : true,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    optionsSuccessStatus: 200
-}));
 
 // Body parsing middleware
 const maxFileSize = (parseInt(process.env.MAX_FILE_SIZE_MB) || 50) + 'mb';
@@ -357,4 +404,6 @@ server.listen(PORT, () => {
     console.log(`📡 Socket.IO server running`);
     console.log(`🌐 Environment: ${NODE_ENV}`);
     console.log(`🔗 CORS Origins: ${ALLOWED_ORIGINS.join(', ')}`);
+    console.log(`📱 Expo Development Support: ${NODE_ENV === 'development' ? 'Enabled' : 'Limited'}`);
+    console.log(`🌍 Server URL: ${NODE_ENV === 'production' ? 'https://realproject-mg25.onrender.com' : `http://localhost:${PORT}`}`);
 });
