@@ -969,6 +969,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                     <View style={[styles.messageImage, styles.brokenImageContainer]}>
                       <Text style={styles.brokenImageText}>📷</Text>
                       <Text style={styles.brokenImageSubtext}>รูปภาพไม่พร้อมใช้งาน</Text>
+                      <Text style={styles.brokenImageSubtext}>(ไฟล์เก่าอาจหายไป)</Text>
                     </View>
                   )}
                   {item.content !== '📷 รูปภาพ' && item.content !== '📷 รูปถ่าย' && (
@@ -1003,7 +1004,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                       isMyMessage ? styles.myMessageText : styles.otherMessageText
                     ]}>
                       {item.fileName || item.content || 'ไฟล์แนบ'}
-                      {!item.fileUrl && ' (ไม่พร้อมใช้งาน)'}
+                      {!item.fileUrl && ' (ไฟล์เก่าอาจหายไป)'}
                     </Text>
                     {item.fileSize && (
                       <Text style={styles.fileSize}>
