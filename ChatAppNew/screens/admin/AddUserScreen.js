@@ -57,7 +57,7 @@ const groupCodes = {
     { label: 'เลือกกลุ่มเรียน', value: '1' },
     { label: 'DT26721N', value: 'DT26721N' },
     { label: 'DT26722N', value: 'DT26722N' },
-    
+    { label: 'DT26723N', value: 'DT26723N' }
   ],
   '346 การบัญชี': [
     { label: 'เลือกกลุ่มเรียน', value: '1' },

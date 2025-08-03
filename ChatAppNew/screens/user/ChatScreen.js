@@ -811,7 +811,7 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: '#ffffffff' // เปลี่ยนเป็นสีเหลือง
   },
   loadingContainer: {
     flex: 1,
@@ -843,13 +843,13 @@ const styles = StyleSheet.create({
   // Chat List Styles
   chatsList: {
     flex: 1,
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: '#ffffffff' // เปลี่ยนเป็นสีเหลือง
   },
-  chatItem: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#E6B800' // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
-  },
+ chatItem: {
+  flexDirection: 'row',
+  padding: 16,
+  backgroundColor: 'rgba(252, 195, 55, 0.45)' // สีเหลือง FCC337 ที่ความจาง 45%
+},
   chatItemUnread: {
     backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
     borderLeftWidth: 4,

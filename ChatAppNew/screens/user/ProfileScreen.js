@@ -307,13 +307,7 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.roleText}>{translateRole(currentUser?.role)}</Text>
           </View>
           
-          {/* Online Status */}
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusDot, { backgroundColor: currentUser?.isOnline ? '#34C759' : '#8E8E93' }]} />
-            <Text style={[styles.statusText, { color: currentUser?.isOnline ? '#34C759' : '#8E8E93' }]}>
-              {currentUser?.isOnline ? 'ออนไลน์' : 'ออฟไลน์'}
-            </Text>
-          </View>
+          
        
 
         {/* Details Section */}
@@ -523,7 +517,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F5C842',
     alignItems: 'center',
     paddingVertical: 40,
     borderBottomWidth: 1,
@@ -576,7 +570,7 @@ const styles = StyleSheet.create({
   roleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f7ff',
+    backgroundColor: '#f8fff0ff',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -588,7 +582,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   detailsSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F5C842',
     marginTop: 10,
     paddingVertical: 10,
   },
@@ -597,8 +591,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  
+    
   },
   detailLabel: {
     flex: 1,
@@ -612,7 +606,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionsSection: {
-    backgroundColor: '#fff',
+    
     marginTop: 10,
     paddingVertical: 10,
   },
