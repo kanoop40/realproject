@@ -25,6 +25,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // Loading สำหรับการ scroll ไปข้อความล่าสุด
+  const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false); // Track ว่า scroll ไปข้อความล่าสุดแล้วหรือยัง
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -200,9 +202,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const loadMessages = useCallback(async () => {
     try {
       console.log('Loading messages for chatroom:', chatroomId);
-      const response = await api.get(`/chats/${chatroomId}/messages`);
+      // โหลดเฉพาะ 50 ข้อความล่าสุด
+      const response = await api.get(`/chats/${chatroomId}/messages?limit=50&page=1`);
       const loadedMessages = response.data.messages || [];
+      
+      // ไม่ต้อง reverse เพราะ backend ส่งมาเรียงจากเก่าไปใหม่แล้ว
       setMessages(loadedMessages);
+      
+      console.log('📨 Messages set, total:', loadedMessages.length);
       
       // มาร์คข้อความว่าอ่านแล้ว
       await api.put(`/chats/${chatroomId}/read`);
@@ -215,18 +222,25 @@ const PrivateChatScreen = ({ route, navigation }) => {
           userId: currentUser?._id
         });
       }
-      
-      // Scroll ไปข้อความล่าสุดเสมอ
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }, 100);
-      
     } catch (error) {
       console.error('Error loading messages:', error);
-      // ถ้า error ให้ fallback เป็น scrollToEnd
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }, 200);
+    } finally {
+      setIsLoading(false);
+      // เริ่มแสดง loading สำหรับการ scroll ไปข้อความล่าสุด
+      if (loadedMessages?.length > 0) {
+        setIsScrollingToEnd(true);
+        setHasScrolledToEnd(false); // Reset flag
+        // บังคับ scroll ไปข้อความล่าสุดทันทีหลังโหลด
+        setTimeout(() => {
+          console.log('🎯 Force scrolling to end after loading');
+          flatListRef.current?.scrollToEnd({ animated: false });
+          // ให้เวลา layout เสร็จก่อน
+          setTimeout(() => {
+            setIsScrollingToEnd(false);
+            setHasScrolledToEnd(true); // Mark as scrolled
+          }, 500); // เพิ่มเวลาให้มากขึ้น
+        }, 300); // เพิ่มเวลารอให้ messages โหลดเสร็จ
+      }
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -456,7 +470,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
       // แสดง loading
       Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
       
-      const fileUrl = `${API_URL}${file.url || file.file_path}`;
+      // ตรวจสอบ URL ให้ถูกต้อง
+      let fileUrl;
+      if (file.url && file.url.startsWith('http')) {
+        fileUrl = file.url; // ใช้ URL เต็มจาก Cloudinary
+      } else {
+        fileUrl = `${API_URL}${file.url || file.file_path}`; // สร้าง URL จาก API_URL
+      }
+      
       const fileName = file.file_name || 'downloaded_file';
       
       console.log('📥 Starting download:', fileUrl);
@@ -534,7 +555,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
   // ฟังก์ชันแสดงตัวอย่างไฟล์
   const previewFile = async (file) => {
     try {
-      const fileUrl = `${API_URL}${file.url || file.file_path}`;
+      // ตรวจสอบ URL ให้ถูกต้อง
+      let fileUrl;
+      if (file.url && file.url.startsWith('http')) {
+        fileUrl = file.url; // ใช้ URL เต็มจาก Cloudinary
+      } else {
+        fileUrl = `${API_URL}${file.url || file.file_path}`; // สร้าง URL จาก API_URL
+      }
+      
       console.log('👁️ Previewing file:', fileUrl);
       await Linking.openURL(fileUrl);
     } catch (error) {
@@ -658,11 +686,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   source={{ 
                     uri: item.image?.file_path || 
                          item.image?.uri ||
-                         (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : '') 
+                         (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                           item.file.url : 
+                           (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
                   }}
                   style={styles.messageImage}
                   resizeMode="cover"
-                  onError={() => console.log('❌ Error loading image:', item.file?.url || item.image?.file_path)}
+                  onError={(error) => console.log('❌ Error loading image:', item.file?.url || item.image?.file_path, error.nativeEvent.error)}
                 />
               </TouchableOpacity>
               <View style={styles.imageTimeContainer}>
@@ -779,6 +809,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>กำลังโหลดข้อความ...</Text>
       </View>
     );
   }
@@ -788,6 +819,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Loading overlay สำหรับการ scroll */}
+      {isScrollingToEnd && (
+        <View style={styles.scrollLoadingOverlay}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.scrollLoadingText}>กำลังไปที่ข้อความล่าสุด...</Text>
+        </View>
+      )}
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -857,14 +895,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
             minIndexForVisible: 0,
             autoscrollToTopThreshold: 10
           }}
-          onContentSizeChange={() => {
-            // Auto scroll เมื่อ content size เปลี่ยน (มีข้อความใหม่)
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }}
           onScroll={(event) => {
             const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
             const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
             setShowScrollToBottom(!isAtBottom);
+          }}
+          onContentSizeChange={(contentWidth, contentHeight) => {
+            // ไปที่ข้อความล่าสุดทันทีเมื่อโหลดข้อความ โดยไม่มี animation
+            // แต่ทำแค่ครั้งเดียวหลังโหลดข้อความ
+            if (messages.length > 0 && !hasScrolledToEnd && isScrollingToEnd) {
+              console.log('📏 Content size changed, scrolling to end. Messages:', messages.length);
+              // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า layout เสร็จแล้ว
+              requestAnimationFrame(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
+                setIsScrollingToEnd(false);
+                setHasScrolledToEnd(true);
+              });
+            }
           }}
           scrollEventThrottle={16}
         />
@@ -989,6 +1036,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5C842'
+  },
+  loadingText: {
+    color: '#333',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  scrollLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F5C842',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  scrollLoadingText: {
+    color: '#333',
+    fontSize: 16,
+    marginTop: 10,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

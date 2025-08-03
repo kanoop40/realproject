@@ -34,6 +34,8 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // Loading สำหรับการ scroll ไปข้อความล่าสุด
+  const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false); // Track ว่า scroll ไปข้อความล่าสุดแล้วหรือยัง
   const [isSending, setIsSending] = useState(false);
   const [groupInfo, setGroupInfo] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
@@ -71,9 +73,19 @@ const GroupChatScreen = ({ route, navigation }) => {
           senderName: data.message?.sender?.firstName + ' ' + data.message?.sender?.lastName,
           senderAvatar: data.message?.sender?.avatar
         });
+        console.log('📎 Message file info:', {
+          messageType: data.message?.messageType,
+          fileUrl: data.message?.fileUrl,
+          fileName: data.message?.fileName,
+          fileSize: data.message?.fileSize,
+          mimeType: data.message?.mimeType
+        });
+        
         if (data.chatroomId === groupId) {
+          // เพิ่มข้อความใหม่ที่ท้าย array (ข้อความล่าสุดอยู่ล่าง)
           setMessages(prevMessages => [...prevMessages, data.message]);
-          // Scroll to bottom when new message arrives
+          
+          // เลื่อนไปข้อความล่าสุดเมื่อมีข้อความใหม่
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }, 100);
@@ -116,20 +128,36 @@ const GroupChatScreen = ({ route, navigation }) => {
   const loadMessages = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get(`/groups/${groupId}/messages`);
+      // โหลดเฉพาะ 50 ข้อความล่าสุด
+      const response = await api.get(`/groups/${groupId}/messages?limit=50&page=1`);
       console.log('📨 Loaded messages:', response.data.data?.length || 0);
       console.log('📨 Sample message sender:', response.data.data?.[0]?.sender);
+      
+      // ไม่ต้อง reverse เพราะ backend ส่งมาเรียงจากเก่าไปใหม่แล้ว
       setMessages(response.data.data || []);
       
-      // Scroll to bottom after loading messages
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }, 100);
+      console.log('📨 Messages set, total:', response.data.data?.length || 0);
+      
     } catch (error) {
       console.error('Error loading messages:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อความได้');
     } finally {
       setIsLoading(false);
+      // เริ่มแสดง loading สำหรับการ scroll ไปข้อความล่าสุด
+      if (response?.data?.data?.length > 0) {
+        setIsScrollingToEnd(true);
+        setHasScrolledToEnd(false); // Reset flag
+        // บังคับ scroll ไปข้อความล่าสุดทันทีหลังโหลด
+        setTimeout(() => {
+          console.log('🎯 Force scrolling to end after loading');
+          flatListRef.current?.scrollToEnd({ animated: false });
+          // ให้เวลา layout เสร็จก่อน
+          setTimeout(() => {
+            setIsScrollingToEnd(false);
+            setHasScrolledToEnd(true); // Mark as scrolled
+          }, 500); // เพิ่มเวลาให้มากขึ้น
+        }, 300); // เพิ่มเวลารอให้ messages โหลดเสร็จ
+      }
     }
   };
 
@@ -151,12 +179,10 @@ const GroupChatScreen = ({ route, navigation }) => {
       isSending: true
     };
     
+    // เพิ่มข้อความ temp ที่ท้าย array (ข้อความใหม่อยู่ล่าง)
     setMessages(prevMessages => [...prevMessages, tempMessage]);
     
-    // Scroll to bottom immediately
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 50);
+    // ไม่ต้อง scroll เพราะข้อความใหม่จะแสดงที่ล่างอัตโนมัติ
 
     try {
       const messageData = {
@@ -172,6 +198,11 @@ const GroupChatScreen = ({ route, navigation }) => {
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== tempMessage._id)
       );
+      
+      // เลื่อนไปข้อความล่าสุดหลังส่งสำเร็จ
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (error) {
       console.error('❌ Error sending group message:', error);
       // Remove temporary message and restore input
@@ -219,12 +250,9 @@ const GroupChatScreen = ({ route, navigation }) => {
           isSending: true
         };
         
+        // เพิ่มข้อความ temp ที่ท้าย array (ข้อความใหม่อยู่ล่าง)
         setMessages(prevMessages => [...prevMessages, tempImageMessage]);
         setIsUploadingFile(true);
-        
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 50);
         
         const formData = new FormData();
         formData.append('file', {
@@ -239,6 +267,7 @@ const GroupChatScreen = ({ route, navigation }) => {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          timeout: 120000, // 2 minutes timeout for image upload
         });
 
         console.log('✅ Image uploaded to group:', response.data);
@@ -247,6 +276,11 @@ const GroupChatScreen = ({ route, navigation }) => {
         setMessages(prevMessages => 
           prevMessages.filter(msg => msg._id !== tempImageMessage._id)
         );
+        
+        // เลื่อนไปข้อความล่าสุดหลังส่งรูปสำเร็จ
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
       }
     } catch (error) {
       console.error('❌ Error sending image:', error);
@@ -254,7 +288,15 @@ const GroupChatScreen = ({ route, navigation }) => {
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id.startsWith('temp_img_'))
       );
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งรูปภาพได้');
+      
+      let errorMessage = 'ไม่สามารถส่งรูปภาพได้';
+      if (error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'การส่งไฟล์ใช้เวลานานเกินไป กรุณาลองใหม่';
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsUploadingFile(false);
     }
@@ -287,13 +329,22 @@ const GroupChatScreen = ({ route, navigation }) => {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          timeout: 120000, // 2 minutes timeout for file upload
         });
 
         console.log('✅ File uploaded to group:', response.data);
       }
     } catch (error) {
       console.error('❌ Error sending file:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งไฟล์ได้');
+      
+      let errorMessage = 'ไม่สามารถส่งไฟล์ได้';
+      if (error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'การส่งไฟล์ใช้เวลานานเกินไป กรุณาลองใหม่';
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsUploadingFile(false);
     }
@@ -334,13 +385,22 @@ const GroupChatScreen = ({ route, navigation }) => {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          timeout: 120000, // 2 minutes timeout for photo upload
         });
 
         console.log('✅ Photo uploaded to group:', response.data);
       }
     } catch (error) {
       console.error('❌ Error taking photo:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถถ่ายรูปได้');
+      
+      let errorMessage = 'ไม่สามารถถ่ายรูปได้';
+      if (error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'การอัปโหลดใช้เวลานานเกินไป กรุณาลองใหม่';
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsUploadingFile(false);
     }
@@ -784,6 +844,13 @@ const GroupChatScreen = ({ route, navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Loading overlay สำหรับการ scroll */}
+      {isScrollingToEnd && (
+        <View style={styles.scrollLoadingOverlay}>
+          <ActivityIndicator size="large" color="#FFA500" />
+          <Text style={styles.scrollLoadingText}>กำลังไปที่ข้อความล่าสุด...</Text>
+        </View>
+      )}
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -854,8 +921,18 @@ const GroupChatScreen = ({ route, navigation }) => {
             offset: 80 * index,
             index,
           })}
-          onContentSizeChange={() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
+          onContentSizeChange={(contentWidth, contentHeight) => {
+            // ไปที่ข้อความล่าสุดทันทีเมื่อโหลดข้อความ โดยไม่มี animation
+            // แต่ทำแค่ครั้งเดียวหลังโหลดข้อความ
+            if (messages.length > 0 && !hasScrolledToEnd && isScrollingToEnd) {
+              console.log('📏 Content size changed, scrolling to end. Messages:', messages.length);
+              // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า layout เสร็จแล้ว
+              requestAnimationFrame(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
+                setIsScrollingToEnd(false);
+                setHasScrolledToEnd(true);
+              });
+            }
           }}
           onScroll={(event) => {
             const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -1103,6 +1180,23 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     marginTop: 10,
+  },
+  scrollLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F5C842',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  scrollLoadingText: {
+    color: '#333',
+    fontSize: 16,
+    marginTop: 10,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

@@ -15,7 +15,7 @@ console.log('🎯 API will connect to:', API_URL);
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 30000, // เพิ่มเป็น 30 วินาที
+  timeout: 60000, // เพิ่มเป็น 60 วินาทีสำหรับ file upload
   headers: {
     'Content-Type': 'application/json'
   }
@@ -62,14 +62,19 @@ api.interceptors.response.use(
     });
 
     // Retry สำหรับ timeout หรือ network error (สำหรับ cold start)
-    if ((error.code === 'ECONNABORTED' || error.message.includes('timeout')) && 
+    if ((error.code === 'ECONNABORTED' || 
+         error.message.includes('timeout') || 
+         error.message.includes('Network Error')) && 
         !originalRequest._retry && 
         originalRequest.url !== '/auth/login') {
       originalRequest._retry = true;
-      console.log('🔄 Retrying request due to timeout (cold start)...');
+      console.log('🔄 Retrying request due to timeout/network error (cold start)...');
       
-      // รอ 3 วินาที แล้ว retry
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // รอ 5 วินาที แล้ว retry สำหรับ file upload
+      const isFileUpload = originalRequest.headers['Content-Type']?.includes('multipart/form-data');
+      const waitTime = isFileUpload ? 8000 : 3000;
+      
+      await new Promise(resolve => setTimeout(resolve, waitTime));
       return api(originalRequest);
     }
     
