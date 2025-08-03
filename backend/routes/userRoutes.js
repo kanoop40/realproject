@@ -18,6 +18,7 @@ const {
     getCurrentUser,
     updateProfile,
     uploadAvatar,
+    changePassword,
     updatePushToken,
     getUsersForGroupCreation,
     getMajors,
@@ -77,6 +78,9 @@ router.put('/update-profile', protect, updateProfile);
 
 // Upload avatar route (เปลี่ยนจาก upload-avatar เป็น avatar)
 router.post('/avatar', protect, upload.single('avatar'), uploadAvatar);
+
+// Change password route
+router.put('/change-password', protect, changePassword);
 
 // Push token route
 router.post('/push-token', protect, updatePushToken);

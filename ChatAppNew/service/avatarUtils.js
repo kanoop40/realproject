@@ -24,10 +24,12 @@ export const validateAvatarUrl = async (avatarPath) => {
 export const getAvatarUrl = (avatarPath) => {
   if (!avatarPath) return null;
   
+  // ถ้าเป็น URL แบบเต็มแล้ว (Cloudinary, HTTP/HTTPS) ให้ใช้เลย
   if (avatarPath.startsWith('http')) {
     return avatarPath;
   }
   
+  // ถ้าเป็น path แบบเก่า (local storage) ให้ต่อ API_URL
   return `${API_URL}/${avatarPath.replace(/\\/g, '/').replace(/^\/+/, '')}`;
 };
 

@@ -534,9 +534,29 @@ const ChatScreen = ({ route, navigation }) => {
           delayLongPress={500}
         >
           <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, styles.groupAvatar]}>
-              <Text style={styles.groupAvatarText}>👥</Text>
-            </View>
+            {item.groupImage ? (
+              <Image
+                source={{ 
+                  uri: item.groupImage.startsWith('http') 
+                    ? item.groupImage 
+                    : `${API_URL}/${item.groupImage.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                }}
+                style={styles.avatar}
+                defaultSource={require('../../assets/default-avatar.png')}
+                onError={(error) => {
+                  console.log('❌ Group image load error:', error.nativeEvent);
+                }}
+                onLoad={() => {
+                  console.log('✅ Group image loaded successfully:', item.groupImage);
+                }}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.groupAvatar]}>
+                <Text style={styles.groupAvatarText}>
+                  {item.roomName?.charAt(0)?.toUpperCase() || '👥'}
+                </Text>
+              </View>
+            )}
             {item.unreadCount > 0 && (
               <View style={styles.unreadBadge}>
                 <Text style={styles.unreadText}>
@@ -551,7 +571,7 @@ const ChatScreen = ({ route, navigation }) => {
               styles.chatName,
               item.unreadCount > 0 && styles.chatNameUnread
             ]}>
-              {item.roomName}
+              {item.roomName} ({item.participants?.length || 0})
             </Text>
             <Text style={styles.groupSubtitle}>
               {item.participants?.length || 0} สมาชิก
@@ -561,7 +581,10 @@ const ChatScreen = ({ route, navigation }) => {
                 styles.lastMessage,
                 item.unreadCount > 0 && styles.lastMessageUnread
               ]} numberOfLines={1}>
-                {item.lastMessage.content}
+                {item.lastMessage.sender?.firstName ? 
+                  `${item.lastMessage.sender.firstName}: ${item.lastMessage.content}` : 
+                  item.lastMessage.content
+                }
               </Text>
             )}
           </View>
@@ -595,12 +618,18 @@ const ChatScreen = ({ route, navigation }) => {
           <View style={styles.avatarContainer}>
             {otherParticipant?.avatar ? (
               <Image
-                source={{ uri: `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
+                source={{ 
+                  uri: otherParticipant.avatar.startsWith('http') 
+                    ? otherParticipant.avatar 
+                    : `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
                 onError={(error) => {
                   console.log('❌ Avatar load error:', error.nativeEvent);
-                  console.log('❌ Avatar URL:', `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
+                  console.log('❌ Avatar URL:', otherParticipant.avatar.startsWith('http') 
+                    ? otherParticipant.avatar 
+                    : `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
                 }}
                 onLoad={() => {
                   console.log('✅ Avatar loaded successfully:', otherParticipant.avatar);
@@ -889,7 +918,8 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   groupAvatarText: {
-    fontSize: 24,
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#fff'
   },
   groupSubtitle: {

@@ -79,4 +79,17 @@ router.delete('/messages/:id', deleteMessage);
 // @access  Private
 router.post('/messages/:id/read', markMessageAsRead);
 
+// @route   POST /api/chats/:id/upload  
+// @desc    Upload file in private chat
+// @access  Private
+const { fileStorage } = require('../config/cloudinary');
+const multer = require('multer');
+const uploadFile = multer({ 
+  storage: fileStorage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB
+  }
+});
+router.post('/:id/upload', uploadFile.single('file'), sendMessage);
+
 module.exports = router;

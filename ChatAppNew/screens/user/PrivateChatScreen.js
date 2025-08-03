@@ -531,6 +531,40 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันแสดงตัวอย่างไฟล์
+  const previewFile = async (file) => {
+    try {
+      const fileUrl = `${API_URL}${file.url || file.file_path}`;
+      console.log('👁️ Previewing file:', fileUrl);
+      await Linking.openURL(fileUrl);
+    } catch (error) {
+      console.error('❌ Error previewing file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดูตัวอย่างไฟล์ได้');
+    }
+  };
+
+  // ฟังก์ชันแสดงตัวเลือกสำหรับไฟล์
+  const showFileOptions = (file) => {
+    Alert.alert(
+      'ตัวเลือกไฟล์',
+      `จัดการไฟล์: ${file.file_name || 'ไฟล์'}`,
+      [
+        {
+          text: 'ดูตัวอย่าง',
+          onPress: () => previewFile(file)
+        },
+        {
+          text: 'ดาวน์โหลด',
+          onPress: () => downloadFile(file)
+        },
+        {
+          text: 'ยกเลิก',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
   const handleDeleteMessage = async (messageId) => {
     try {
       // Optimistic UI - ลบข้อความออกจาก state ทันที
@@ -590,7 +624,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
           <View style={styles.messageAvatarContainer}>
             {recipientAvatar ? (
               <Image
-                source={{ uri: `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
+                source={{ 
+                  uri: recipientAvatar.startsWith('http') 
+                    ? recipientAvatar 
+                    : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                }}
                 style={styles.messageAvatar}
                 defaultSource={require('../../assets/default-avatar.png')}
               />
@@ -695,7 +733,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   styles.fileAttachment,
                   isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
                 ]}
-                onPress={() => downloadFile(item.file)}
+                onPress={() => showFileOptions(item.file)}
               >
                 <View style={styles.fileIcon}>
                   <Text style={styles.attachIcon}>📎</Text>
@@ -762,7 +800,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
         <View style={styles.headerInfo}>
           {recipientAvatar ? (
             <Image
-              source={{ uri: `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
+              source={{ 
+                uri: recipientAvatar.startsWith('http') 
+                  ? recipientAvatar 
+                  : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+              }}
               style={styles.headerAvatar}
               defaultSource={require('../../assets/default-avatar.png')}
             />
@@ -1044,17 +1086,17 @@ const styles = StyleSheet.create({
   messageBubble: {
     maxWidth: '75%', // ลดความกว้างลงเพื่อไม่ให้ข้อความยาวเกินไป
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 12, // เปลี่ยนจาก 18 เป็น 12 เพื่อให้เป็นสี่เหลี่ยมมนๆ
     backgroundColor: '#fff', // กล่องข้อความเป็นสีขาว
     flexShrink: 1, // ให้กล่องข้อความปรับขนาดตามเนื้อหา
   },
   myMessageBubble: {
     backgroundColor: '#fff', // ข้อความของตัวเองก็เป็นสีขาว
-    borderBottomRightRadius: 4
+    borderBottomRightRadius: 12 // ปรับให้สม่ำเสมอ
   },
   otherMessageBubble: {
     backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 12, // ปรับให้สม่ำเสมอ
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,

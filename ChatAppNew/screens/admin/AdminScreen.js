@@ -8,7 +8,8 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
-  Image
+  Image,
+  Modal
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +19,8 @@ const AdminScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserActions, setShowUserActions] = useState(false);
 
  const fetchUsers = async () => {
   try {
@@ -107,17 +110,29 @@ const AdminScreen = ({ navigation, route }) => {
   };
 
  const renderUserInfo = (user) => (
-  <View style={styles.userInfo}>
+  <TouchableOpacity 
+    style={styles.userInfo}
+    onPress={() => {
+      setSelectedUser(user);
+      setShowUserActions(true);
+    }}
+  >
     <View style={styles.leftContent}>
       <View style={styles.avatarContainer}>
         {user.avatar ? (
           <Image 
-            source={{ uri: `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }}
+            source={{ 
+              uri: user.avatar.startsWith('http') 
+                ? user.avatar 
+                : `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+            }}
             style={styles.avatar}
             defaultSource={require('../../assets/default-avatar.png')}
             onError={(error) => {
               console.log('❌ Avatar load error in AdminScreen:', error.nativeEvent);
-              console.log('❌ Avatar URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
+              console.log('❌ Avatar URL:', user.avatar.startsWith('http') 
+                ? user.avatar 
+                : `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
             }}
             onLoad={() => {
               console.log('✅ Avatar loaded successfully in AdminScreen:', user.avatar);
@@ -132,7 +147,8 @@ const AdminScreen = ({ navigation, route }) => {
         )}
       </View>
       <View style={styles.userTextContainer}>
-        <Text style={styles.userName}>{user.firstName}</Text>
+        <Text style={styles.userName}>{user.firstName} {user.lastName}</Text>
+        <Text style={styles.usernameText}>@{user.username}</Text>
         <Text style={styles.roleText}>
           {user.role === 'student' ? 'นักศึกษา' : 
            user.role === 'admin' ? 'ผู้ดูแลระบบ' : 
@@ -141,21 +157,10 @@ const AdminScreen = ({ navigation, route }) => {
         </Text>
       </View>
     </View>
-    <View style={styles.actionButtons}>
-      <TouchableOpacity 
-        style={[styles.actionButton, styles.editButton]}
-        onPress={() => navigation.navigate('UserDetail', { userId: user._id })}
-      >
-        <Text style={styles.actionIcon}>✏️</Text>
-      </TouchableOpacity>
-      <TouchableOpacity 
-        style={[styles.actionButton, styles.deleteButton]}
-        onPress={() => handleDeleteUser(user._id, user.username)}
-      >
-        <Text style={styles.actionIcon}>🗑️</Text>
-      </TouchableOpacity>
+    <View style={styles.chevronContainer}>
+      <Text style={styles.chevronIcon}>▶</Text>
     </View>
-  </View>
+  </TouchableOpacity>
 );
 
   return (
@@ -225,6 +230,76 @@ const AdminScreen = ({ navigation, route }) => {
     >
       <Text style={styles.fabIcon}>+</Text>
     </TouchableOpacity>
+
+    {/* User Actions Modal */}
+    <Modal
+      visible={showUserActions}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowUserActions(false)}
+    >
+      <TouchableOpacity
+        style={styles.userActionsOverlay}
+        activeOpacity={1}
+        onPress={() => setShowUserActions(false)}
+      >
+        <View style={styles.userActionsContainer}>
+          <Text style={styles.userActionsTitle}>จัดการผู้ใช้</Text>
+          
+          {selectedUser && (
+            <View style={styles.selectedUserInfo}>
+              <Image
+                source={
+                  selectedUser.avatar
+                    ? { 
+                        uri: selectedUser.avatar.startsWith('http') 
+                          ? selectedUser.avatar 
+                          : `${API_URL}/${selectedUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                      }
+                    : require('../../assets/default-avatar.png')
+                }
+                style={styles.modalAvatar}
+                defaultSource={require('../../assets/default-avatar.png')}
+              />
+              <Text style={styles.modalUserName}>
+                {selectedUser.firstName} {selectedUser.lastName}
+              </Text>
+              <Text style={styles.modalUsername}>@{selectedUser.username}</Text>
+            </View>
+          )}
+          
+          <TouchableOpacity
+            style={styles.userActionItem}
+            onPress={() => {
+              setShowUserActions(false);
+              navigation.navigate('UserDetail', { userId: selectedUser._id });
+            }}
+          >
+            <Text style={styles.userActionIcon}>✏️</Text>
+            <Text style={styles.userActionText}>แก้ไขข้อมูล</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.userActionItem, styles.deleteUserAction]}
+            onPress={() => {
+              setShowUserActions(false);
+              handleDeleteUser(selectedUser._id, selectedUser.username);
+            }}
+          >
+            <Text style={styles.userActionIcon}>🗑️</Text>
+            <Text style={[styles.userActionText, styles.deleteUserActionText]}>ลบผู้ใช้</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.userActionItem, styles.cancelUserAction]}
+            onPress={() => setShowUserActions(false)}
+          >
+            <Text style={styles.userActionIcon}>✕</Text>
+            <Text style={styles.userActionText}>ยกเลิก</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
   </SafeAreaView>
 );
 };
@@ -334,29 +409,27 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     color: '#000',
+    marginBottom: 2,
+    fontWeight: '600'
+  },
+  usernameText: {
+    fontSize: 14,
+    color: '#666',
     marginBottom: 2
   },
   roleText: {
     fontSize: 14,
     color: '#666'
   },
-  actionButtons: {
-    flexDirection: 'row',
-    marginLeft: 10
-  },
-  actionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  chevronContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8
+    width: 30
   },
-  editButton: {
-    backgroundColor: '#34C759'
-  },
-  deleteButton: {
-    backgroundColor: '#ff3b30'
+  chevronIcon: {
+    fontSize: 12,
+    color: '#999',
+    transform: [{ rotate: '0deg' }]
   },
   fab: {
     position: 'absolute',
@@ -423,7 +496,81 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#fff',
     fontWeight: 'bold'
-  }
+  },
+  
+  // User Actions Modal Styles
+  userActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userActionsContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    minWidth: 300,
+    maxWidth: 350,
+  },
+  userActionsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  selectedUserInfo: {
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 10,
+  },
+  modalUserName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  modalUsername: {
+    fontSize: 14,
+    color: '#666',
+  },
+  userActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  userActionIcon: {
+    fontSize: 18,
+    marginRight: 15,
+    width: 25,
+    textAlign: 'center',
+  },
+  userActionText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  deleteUserAction: {
+    backgroundColor: '#ffebee',
+  },
+  deleteUserActionText: {
+    color: '#d32f2f',
+  },
+  cancelUserAction: {
+    backgroundColor: '#f5f5f5',
+    marginTop: 8,
+  },
 });
 
 export default AdminScreen;

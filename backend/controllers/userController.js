@@ -1082,6 +1082,57 @@ const getUsersForGroupCreation_OLD = asyncHandler(async (req, res) => {
     }
 });
 
+// เปลี่ยนรหัสผ่าน
+const changePassword = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            res.status(400);
+            throw new Error('กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่');
+        }
+
+        if (newPassword.length < 6) {
+            res.status(400);
+            throw new Error('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+        }
+
+        // ค้นหาผู้ใช้และรวม password field
+        const user = await User.findById(userId).select('+password');
+        if (!user) {
+            res.status(404);
+            throw new Error('ไม่พบข้อมูลผู้ใช้');
+        }
+
+        // ตรวจสอบรหัสผ่านปัจจุบัน
+        const bcrypt = require('bcryptjs');
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+            res.status(400);
+            throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+        }
+
+        // เข้ารหัสรหัสผ่านใหม่
+        const saltRounds = 10;
+        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        // อัปเดตรหัสผ่าน
+        await User.findByIdAndUpdate(userId, { 
+            password: hashedNewPassword 
+        });
+
+        console.log('✅ Password changed successfully for user:', userId);
+
+        res.json({
+            message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว'
+        });
+    } catch (error) {
+        console.error('Error changing password:', error);
+        throw error;
+    }
+});
+
 module.exports = {
     authUser,
     registerUser,
@@ -1097,6 +1148,7 @@ module.exports = {
     updateUser,
     updateProfile,
     uploadAvatar,
+    changePassword,
     updatePushToken,
     getUsersForGroupCreation,
     getMajors,

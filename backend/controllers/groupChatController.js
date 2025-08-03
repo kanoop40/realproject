@@ -485,9 +485,25 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     const { content } = req.body;
     const userId = req.user._id;
 
-    if (!content || content.trim() === '') {
+    console.log('📨 Group message request received:', {
+        groupId,
+        content: content ? content.substring(0, 50) : 'No content',
+        hasFile: !!req.file,
+        fileInfo: req.file ? {
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+            path: req.file.path
+        } : null
+    });
+
+    // ตรวจสอบว่ามีไฟล์อัพโหลดหรือไม่
+    const hasFile = req.file;
+    const hasContent = content && content.trim() !== '';
+
+    if (!hasContent && !hasFile) {
         res.status(400);
-        throw new Error('กรุณาใส่ข้อความ');
+        throw new Error('กรุณาใส่ข้อความหรือไฟล์');
     }
 
     const group = await GroupChat.findById(groupId);
@@ -506,21 +522,37 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         throw new Error('ไม่มีสิทธิ์ส่งข้อความในกลุ่มนี้');
     }
 
-    // สร้างข้อความใหม่
-    const message = await Messages.create({
-        content: content.trim(),
+    let messageData = {
         user_id: userId,
         chat_id: groupId,
         group_id: groupId,
-        messageType: 'text',
         time: new Date()
-    });
+    };
 
+    // ถ้ามีไฟล์
+    if (hasFile) {
+        const isImage = req.file.mimetype && req.file.mimetype.startsWith('image/');
+        
+        messageData.content = hasContent ? content.trim() : (isImage ? '📷 รูปภาพ' : '📎 ไฟล์');
+        messageData.messageType = isImage ? 'image' : 'file';
+        messageData.fileUrl = req.file.path; // Cloudinary URL
+        messageData.fileName = req.file.originalname;
+        messageData.fileSize = req.file.size;
+        messageData.mimeType = req.file.mimetype;
+    } else {
+        // ข้อความธรรมดา
+        messageData.content = content.trim();
+        messageData.messageType = 'text';
+    }
+
+    // สร้างข้อความใหม่
+    const message = await Messages.create(messageData);
     await message.populate('user_id', 'firstName lastName username role avatar');
 
     console.log('📝 Created message with sender info:', {
         messageId: message._id,
         content: message.content,
+        messageType: message.messageType,
         sender: {
             _id: message.user_id._id,
             firstName: message.user_id.firstName,
@@ -536,14 +568,21 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     // ส่ง real-time message ไปยังสมาชิกทุกคน
     const io = req.app.get('io');
     if (io) {
+        const socketMessage = {
+            _id: message._id,
+            content: message.content,
+            sender: message.user_id, // ใช้ populated user_id เป็น sender
+            timestamp: message.time,
+            messageType: message.messageType,
+            fileUrl: message.fileUrl,
+            fileName: message.fileName,
+            fileSize: message.fileSize,
+            mimeType: message.mimeType
+        };
+
         io.to(groupId).emit('newMessage', {
             chatroomId: groupId,
-            message: {
-                _id: message._id,
-                content: message.content,
-                sender: message.user_id, // ใช้ populated user_id เป็น sender
-                timestamp: message.time
-            }
+            message: socketMessage
         });
         console.log('📤 Group message emitted to room:', groupId);
     }
@@ -554,7 +593,11 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         content: message.content,
         sender: message.user_id, // ใช้ populated user_id เป็น sender
         timestamp: message.time,
-        messageType: message.messageType
+        messageType: message.messageType,
+        fileUrl: message.fileUrl,
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        mimeType: message.mimeType
     };
 
     res.status(201).json({
@@ -601,6 +644,10 @@ const getGroupMessages = asyncHandler(async (req, res) => {
         sender: message.user_id, // แปลง user_id เป็น sender
         timestamp: message.time, // แปลง time เป็น timestamp
         messageType: message.messageType,
+        fileUrl: message.fileUrl,
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        mimeType: message.mimeType,
         readBy: message.readBy
     }));
 
@@ -608,6 +655,64 @@ const getGroupMessages = asyncHandler(async (req, res) => {
         success: true,
         data: transformedMessages,
         count: transformedMessages.length
+    });
+});
+
+// @desc    ลบข้อความในกลุ่ม
+// @route   DELETE /api/groups/:id/messages/:messageId
+// @access  Private
+const deleteGroupMessage = asyncHandler(async (req, res) => {
+    const { id: groupId, messageId } = req.params;
+    const userId = req.user._id;
+
+    // ตรวจสอบว่ากลุ่มมีอยู่
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็นสมาชิกหรือไม่
+    const isMember = group.members.some(member => 
+        member.user.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์เข้าถึงกลุ่มนี้');
+    }
+
+    // หาข้อความ
+    const message = await Messages.findById(messageId);
+    if (!message) {
+        res.status(404);
+        throw new Error('ไม่พบข้อความ');
+    }
+
+    // ตรวจสอบสิทธิ์ในการลบ (เฉพาะเจ้าของข้อความหรือแอดมินกลุ่ม)
+    const isOwner = message.user_id.toString() === userId.toString();
+    const isGroupAdmin = group.isAdmin(userId);
+
+    if (!isOwner && !isGroupAdmin) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์ลบข้อความนี้');
+    }
+
+    // ลบข้อความ
+    await Messages.findByIdAndDelete(messageId);
+
+    // ส่ง real-time update
+    const io = req.app.get('io');
+    if (io) {
+        io.to(groupId).emit('messageDeleted', {
+            messageId: messageId,
+            chatroomId: groupId
+        });
+    }
+
+    res.json({
+        success: true,
+        message: 'ลบข้อความสำเร็จ'
     });
 });
 
@@ -622,5 +727,6 @@ module.exports = {
     updateAutoInviteSettings,
     searchGroups,
     sendGroupMessage,
-    getGroupMessages
+    getGroupMessages,
+    deleteGroupMessage
 };

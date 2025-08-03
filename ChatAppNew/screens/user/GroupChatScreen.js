@@ -11,8 +11,16 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  Modal
+  Modal,
+  ScrollView,
+  Dimensions,
+  Linking,
+  Haptics
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import api, { API_URL } from '../../service/api';
@@ -31,6 +39,11 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showMessageActions, setShowMessageActions] = useState(false);
   
   const flatListRef = useRef(null);
 
@@ -67,10 +80,20 @@ const GroupChatScreen = ({ route, navigation }) => {
         }
       };
 
+      const handleMessageDeleted = (data) => {
+        console.log('🗑️ Message deleted via socket:', data);
+        
+        if (data.chatroomId === groupId) {
+          setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+        }
+      };
+
       socket.on('newMessage', handleNewMessage);
+      socket.on('message_deleted', handleMessageDeleted);
 
       return () => {
         socket.off('newMessage', handleNewMessage);
+        socket.off('message_deleted', handleMessageDeleted);
       };
     }
   }, [socket, groupId]);
@@ -117,6 +140,24 @@ const GroupChatScreen = ({ route, navigation }) => {
     setInputText('');
     setIsSending(true);
 
+    // Optimistic UI: Add message immediately
+    const tempMessage = {
+      _id: `temp_${Date.now()}`,
+      content: messageText,
+      messageType: 'text',
+      sender: authUser,
+      timestamp: new Date().toISOString(),
+      isTemporary: true,
+      isSending: true
+    };
+    
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
+    
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
     try {
       const messageData = {
         content: messageText,
@@ -127,15 +168,342 @@ const GroupChatScreen = ({ route, navigation }) => {
       const response = await api.post(`/groups/${groupId}/messages`, messageData);
       console.log('✅ Group message sent:', response.data);
 
-      // Message will be added via socket listener
+      // Remove temporary message since real one will come via socket
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg._id !== tempMessage._id)
+      );
     } catch (error) {
       console.error('❌ Error sending group message:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งข้อความได้');
-      // Restore the message if failed
+      // Remove temporary message and restore input
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg._id !== tempMessage._id)
+      );
       setInputText(messageText);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งข้อความได้');
     } finally {
       setIsSending(false);
     }
+  };
+
+  // ฟังก์ชันส่งรูปภาพ
+  const sendImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('ต้องการสิทธิ์', 'แอปต้องการสิทธิ์ในการเข้าถึงแกลเลอรี่');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.7, // ลดขนาดเพื่อความเร็ว
+        allowsMultipleSelection: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setShowAttachmentMenu(false);
+        
+        const asset = result.assets[0];
+        
+        // Optimistic UI for image
+        const tempImageMessage = {
+          _id: `temp_img_${Date.now()}`,
+          content: '📷 รูปภาพ',
+          messageType: 'image',
+          sender: authUser,
+          timestamp: new Date().toISOString(),
+          fileUrl: asset.uri, // Use local URI for immediate display
+          isTemporary: true,
+          isSending: true
+        };
+        
+        setMessages(prevMessages => [...prevMessages, tempImageMessage]);
+        setIsUploadingFile(true);
+        
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 50);
+        
+        const formData = new FormData();
+        formData.append('file', {
+          uri: asset.uri,
+          type: asset.mimeType || 'image/jpeg',
+          name: asset.fileName || `image_${Date.now()}.jpg`,
+        });
+        formData.append('groupId', groupId);
+
+        console.log('📤 Uploading image to group:', groupId);
+        const response = await api.post(`/groups/${groupId}/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        console.log('✅ Image uploaded to group:', response.data);
+        
+        // Remove temporary message since real one will come via socket
+        setMessages(prevMessages => 
+          prevMessages.filter(msg => msg._id !== tempImageMessage._id)
+        );
+      }
+    } catch (error) {
+      console.error('❌ Error sending image:', error);
+      // Remove temporary message on error
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg._id.startsWith('temp_img_'))
+      );
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งรูปภาพได้');
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  // ฟังก์ชันส่งไฟล์
+  const sendFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsUploadingFile(true);
+        setShowAttachmentMenu(false);
+        
+        const asset = result.assets[0];
+        const formData = new FormData();
+        
+        formData.append('file', {
+          uri: asset.uri,
+          type: asset.mimeType || 'application/octet-stream',
+          name: asset.name || `file_${Date.now()}`,
+        });
+        formData.append('groupId', groupId);
+
+        console.log('📤 Uploading file to group:', groupId);
+        const response = await api.post(`/groups/${groupId}/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        console.log('✅ File uploaded to group:', response.data);
+      }
+    } catch (error) {
+      console.error('❌ Error sending file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งไฟล์ได้');
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  // ฟังก์ชันถ่ายรูป
+  const takePhoto = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('ต้องการสิทธิ์', 'แอปต้องการสิทธิ์ในการเข้าถึงกล้อง');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsUploadingFile(true);
+        setShowAttachmentMenu(false);
+        
+        const asset = result.assets[0];
+        const formData = new FormData();
+        
+        formData.append('file', {
+          uri: asset.uri,
+          type: asset.mimeType || 'image/jpeg',
+          name: asset.fileName || `photo_${Date.now()}.jpg`,
+        });
+        formData.append('groupId', groupId);
+
+        console.log('📤 Uploading photo to group:', groupId);
+        const response = await api.post(`/groups/${groupId}/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        console.log('✅ Photo uploaded to group:', response.data);
+      }
+    } catch (error) {
+      console.error('❌ Error taking photo:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถถ่ายรูปได้');
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  // ฟังก์ชันลบข้อความ
+  const deleteMessage = async (messageId) => {
+    try {
+      Alert.alert(
+        'ลบข้อความ',
+        'คุณต้องการลบข้อความนี้หรือไม่?',
+        [
+          { text: 'ยกเลิก', style: 'cancel' },
+          {
+            text: 'ลบ',
+            style: 'destructive',
+            onPress: async () => {
+              console.log('🗑️ Deleting message:', messageId);
+              
+              // Optimistic UI - ลบข้อความออกจาก state ทันที
+              setMessages(prevMessages => 
+                prevMessages.filter(msg => msg._id !== messageId)
+              );
+              
+              try {
+                const response = await api.delete(`/groups/${groupId}/messages/${messageId}`);
+                console.log('✅ Message deleted:', response.data);
+                
+                // ส่ง socket event เพื่อแจ้งผู้อื่นว่าข้อความถูกลบ
+                if (socket) {
+                  socket.emit('message_deleted', {
+                    chatroomId: groupId,
+                    messageId,
+                    deletedBy: authUser._id
+                  });
+                }
+              } catch (error) {
+                console.error('❌ Error deleting message:', error);
+                // หาก error ให้โหลดข้อความใหม่เพื่อ restore state
+                loadMessages();
+                Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบข้อความได้');
+              }
+              
+              setShowMessageActions(false);
+              setSelectedMessage(null);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('❌ Error deleting message:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบข้อความได้');
+    }
+  };
+
+  // ฟังก์ชันดาวน์โหลดไฟล์
+  const downloadFile = async (fileUrl, fileName) => {
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      
+      const fullUrl = fileUrl.startsWith('http') 
+        ? fileUrl 
+        : `${API_URL}/${fileUrl.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+      
+      console.log('📥 Downloading file:', fullUrl);
+      
+      Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+      
+      // ดาวน์โหลดไฟล์ไปยัง temporary directory
+      const downloadResult = await FileSystem.downloadAsync(
+        fullUrl,
+        FileSystem.documentDirectory + (fileName || 'downloaded_file')
+      );
+      
+      console.log('✅ Download completed:', downloadResult.uri);
+      
+      // ตรวจสอบว่าสามารถแชร์ไฟล์ได้หรือไม่
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        // ใช้ Sharing API เพื่อเปิดไฟล์หรือแชร์
+        await Sharing.shareAsync(downloadResult.uri, {
+          dialogTitle: `เปิดไฟล์: ${fileName || 'ไฟล์ดาวน์โหลด'}`
+        });
+      } else {
+        // ถ้าไม่สามารถแชร์ได้ ให้แสดงข้อมูลไฟล์
+        Alert.alert(
+          'ไฟล์ดาวน์โหลดเรียบร้อย',
+          `ชื่อไฟล์: ${fileName || 'ไฟล์ดาวน์โหลด'}\nที่เก็บ: ${downloadResult.uri}`,
+          [
+            { text: 'ตกลง', style: 'default' }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('❌ Error downloading file:', error);
+      
+      // ถ้าดาวน์โหลดไม่ได้ ลองเปิด URL ใน browser
+      try {
+        const canOpen = await Linking.canOpenURL(fullUrl);
+        
+        if (canOpen) {
+          Alert.alert(
+            'ไม่สามารถดาวน์โหลดได้',
+            'คุณต้องการเปิดไฟล์ในเบราว์เซอร์หรือไม่?',
+            [
+              { text: 'ยกเลิก', style: 'cancel' },
+              { 
+                text: 'เปิด', 
+                onPress: () => Linking.openURL(fullUrl)
+              }
+            ]
+          );
+        } else {
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
+        }
+      } catch (linkError) {
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเข้าถึงไฟล์ได้');
+      }
+    }
+  };
+
+  // ฟังก์ชันแสดงตัวอย่างไฟล์
+  const previewFile = async (fileUrl, fileName) => {
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      
+      const fullUrl = fileUrl.startsWith('http') 
+        ? fileUrl 
+        : `${API_URL}/${fileUrl.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+      
+      console.log('👁️ Previewing file:', fullUrl);
+      await Linking.openURL(fullUrl);
+    } catch (error) {
+      console.error('❌ Error previewing file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดูตัวอย่างไฟล์ได้');
+    }
+  };
+
+  // ฟังก์ชันแสดงตัวเลือกสำหรับไฟล์
+  const showFileOptions = (fileUrl, fileName) => {
+    Alert.alert(
+      'ตัวเลือกไฟล์',
+      `จัดการไฟล์: ${fileName || 'ไฟล์'}`,
+      [
+        {
+          text: 'ดูตัวอย่าง',
+          onPress: () => previewFile(fileUrl, fileName)
+        },
+        {
+          text: 'ดาวน์โหลด',
+          onPress: () => downloadFile(fileUrl, fileName)
+        },
+        {
+          text: 'ยกเลิก',
+          style: 'cancel'
+        }
+      ]
+    );
   };
 
   const formatTime = (timestamp) => {
@@ -190,7 +558,11 @@ const GroupChatScreen = ({ route, navigation }) => {
               <Image
                 source={
                   item.sender.avatar
-                    ? { uri: `${API_URL}/${item.sender.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }
+                    ? { 
+                        uri: item.sender.avatar.startsWith('http') 
+                          ? item.sender.avatar 
+                          : `${API_URL}/${item.sender.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                      }
                     : require('../../assets/default-avatar.png')
                 }
                 style={styles.messageAvatar}
@@ -199,10 +571,20 @@ const GroupChatScreen = ({ route, navigation }) => {
             </View>
           )}
           
-          <View style={[
-            styles.messageContentContainer,
-            isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
-          ]}>
+          <TouchableOpacity
+            style={[
+              styles.messageContentContainer,
+              isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
+            ]}
+            onLongPress={() => {
+              if (Platform.OS === 'ios') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }
+              setSelectedMessage(item);
+              setShowMessageActions(true);
+            }}
+            delayLongPress={500}
+          >
             {/* แสดงชื่อผู้ส่งสำหรับข้อความจากคนอื่น */}
             {!isMyMessage && (
               <Text style={styles.senderName}>
@@ -219,22 +601,105 @@ const GroupChatScreen = ({ route, navigation }) => {
                 styles.messageTimeExternal,
                 isMyMessage ? styles.myMessageTimeExternal : styles.otherMessageTimeExternal
               ]}>
-                {formatDateTime(item.timestamp)}
+                {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
               </Text>
+              {isMyMessage && !item.isTemporary && (
+                <Text style={[
+                  styles.readStatusExternal,
+                  isMyMessage ? styles.myReadStatusExternal : styles.otherReadStatusExternal
+                ]}>
+                  ส่งแล้ว
+                </Text>
+              )}
             </View>
             
             <View style={[
               styles.messageBubble,
-              isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble
+              isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
+              item.isTemporary && styles.temporaryMessage
             ]}>
-              <Text style={[
-                styles.messageText,
-                isMyMessage ? styles.myMessageText : styles.otherMessageText
-              ]}>
-                {item.content}
-              </Text>
+              {/* รูปภาพ */}
+              {item.messageType === 'image' && item.fileUrl && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedImage(item.fileUrl);
+                    setShowImageViewer(true);
+                  }}
+                  onLongPress={() => {
+                    if (Platform.OS === 'ios') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }
+                    setSelectedMessage(item);
+                    setShowMessageActions(true);
+                  }}
+                  delayLongPress={500}
+                >
+                  <Image
+                    source={{ 
+                      uri: item.fileUrl.startsWith('http') 
+                        ? item.fileUrl 
+                        : `${API_URL}/${item.fileUrl.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                    }}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                  {item.content !== '📷 รูปภาพ' && (
+                    <Text style={[
+                      styles.messageText,
+                      isMyMessage ? styles.myMessageText : styles.otherMessageText
+                    ]}>
+                      {item.content}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              
+              {/* ไฟล์ */}
+              {item.messageType === 'file' && item.fileUrl && (
+                <TouchableOpacity
+                  style={styles.fileContainer}
+                  onPress={() => showFileOptions(item.fileUrl, item.fileName || 'ไฟล์')}
+                >
+                  <View style={styles.fileIcon}>
+                    <Text style={styles.fileIconText}>📎</Text>
+                  </View>
+                  <View style={styles.fileInfo}>
+                    <Text style={[
+                      styles.fileName,
+                      isMyMessage ? styles.myMessageText : styles.otherMessageText
+                    ]}>
+                      {item.fileName || 'ไฟล์'}
+                    </Text>
+                    {item.fileSize && (
+                      <Text style={styles.fileSize}>
+                        {(item.fileSize / 1024 / 1024).toFixed(2)} MB
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              )}
+              
+              {/* ข้อความธรรมดา */}
+              {item.messageType === 'text' && (
+                <View style={styles.textMessageContainer}>
+                  <Text style={[
+                    styles.messageText,
+                    isMyMessage ? styles.myMessageText : styles.otherMessageText,
+                    item.isTemporary && styles.temporaryText
+                  ]}>
+                    {item.content}
+                  </Text>
+                  {item.isSending && (
+                    <ActivityIndicator 
+                      size="small" 
+                      color={isMyMessage ? "#FFA500" : "#666"} 
+                      style={styles.sendingIndicator}
+                    />
+                  )}
+                </View>
+              )}
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -381,9 +846,14 @@ const GroupChatScreen = ({ route, navigation }) => {
           contentContainerStyle={styles.messagesContainer}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={true}
-          maxToRenderPerBatch={15}
-          windowSize={10}
-          initialNumToRender={12}
+          maxToRenderPerBatch={20}
+          windowSize={15}
+          initialNumToRender={15}
+          getItemLayout={(data, index) => ({
+            length: 80, // ประมาณความสูงเฉลี่ยของข้อความ
+            offset: 80 * index,
+            index,
+          })}
           onContentSizeChange={() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }}
@@ -393,6 +863,7 @@ const GroupChatScreen = ({ route, navigation }) => {
             setShowScrollToBottom(!isAtBottom);
           }}
           scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
         />
       </TouchableOpacity>
 
@@ -416,10 +887,8 @@ const GroupChatScreen = ({ route, navigation }) => {
           <View style={styles.attachmentMenu}>
             <TouchableOpacity
               style={styles.attachmentMenuItem}
-              onPress={() => {
-                setShowAttachmentMenu(false);
-                Alert.alert('รูปภาพ', 'ฟีเจอร์นี้จะเพิ่มในอนาคต');
-              }}
+              onPress={sendImage}
+              disabled={isUploadingFile}
             >
               <Text style={styles.attachmentMenuIcon}>🖼️</Text>
               <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
@@ -427,10 +896,17 @@ const GroupChatScreen = ({ route, navigation }) => {
             
             <TouchableOpacity
               style={styles.attachmentMenuItem}
-              onPress={() => {
-                setShowAttachmentMenu(false);
-                Alert.alert('ไฟล์', 'ฟีเจอร์นี้จะเพิ่มในอนาคต');
-              }}
+              onPress={takePhoto}
+              disabled={isUploadingFile}
+            >
+              <Text style={styles.attachmentMenuIcon}>📷</Text>
+              <Text style={styles.attachmentMenuText}>ถ่ายรูป</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.attachmentMenuItem}
+              onPress={sendFile}
+              disabled={isUploadingFile}
             >
               <Text style={styles.attachmentMenuIcon}>📎</Text>
               <Text style={styles.attachmentMenuText}>ไฟล์</Text>
@@ -441,7 +917,12 @@ const GroupChatScreen = ({ route, navigation }) => {
         <View style={styles.messageInputRow}>
           <TouchableOpacity
             style={styles.plusButton}
-            onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
+              setShowAttachmentMenu(!showAttachmentMenu);
+            }}
           >
             <Text style={styles.plusIcon}>+</Text>
           </TouchableOpacity>
@@ -455,15 +936,22 @@ const GroupChatScreen = ({ route, navigation }) => {
             multiline
             maxLength={1000}
             keyboardType="default"
-            returnKeyType="default"
+            returnKeyType="send"
             autoCorrect={true}
             spellCheck={true}
             autoCapitalize="sentences"
+            onSubmitEditing={sendMessage}
+            blurOnSubmit={false}
           />
           
           <TouchableOpacity
             style={styles.sendTextButton}
-            onPress={sendMessage}
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
+              sendMessage();
+            }}
             disabled={!inputText.trim() || isSending}
           >
             <Text style={styles.sendTextLabel}>ส่ง</Text>
@@ -472,6 +960,130 @@ const GroupChatScreen = ({ route, navigation }) => {
       </View>
 
       {renderGroupInfoModal()}
+
+      {/* Message Actions Modal */}
+      <Modal
+        visible={showMessageActions}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMessageActions(false)}
+      >
+        <TouchableOpacity
+          style={styles.messageActionsOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMessageActions(false)}
+        >
+          <View style={styles.messageActionsContainer}>
+            <Text style={styles.messageActionsTitle}>จัดการข้อความ</Text>
+            
+            {selectedMessage && (
+              <>
+                {/* ตัวเลือกสำหรับรูปภาพ */}
+                {selectedMessage.messageType === 'image' && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.messageActionItem}
+                      onPress={() => {
+                        setSelectedImage(selectedMessage.fileUrl);
+                        setShowImageViewer(true);
+                        setShowMessageActions(false);
+                      }}
+                    >
+                      <Text style={styles.messageActionIcon}>👁️</Text>
+                      <Text style={styles.messageActionText}>ดูรูปภาพ</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={styles.messageActionItem}
+                      onPress={() => {
+                        downloadFile(selectedMessage.fileUrl, selectedMessage.fileName || 'image.jpg');
+                        setShowMessageActions(false);
+                      }}
+                    >
+                      <Text style={styles.messageActionIcon}>💾</Text>
+                      <Text style={styles.messageActionText}>บันทึกรูปภาพ</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                
+                {/* ตัวเลือกสำหรับไฟล์ */}
+                {selectedMessage.messageType === 'file' && (
+                  <TouchableOpacity
+                    style={styles.messageActionItem}
+                    onPress={() => {
+                      downloadFile(selectedMessage.fileUrl, selectedMessage.fileName);
+                      setShowMessageActions(false);
+                    }}
+                  >
+                    <Text style={styles.messageActionIcon}>📥</Text>
+                    <Text style={styles.messageActionText}>ดาวน์โหลดไฟล์</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* ตัวเลือกลบสำหรับข้อความของตัวเอง */}
+                {selectedMessage.sender._id === authUser._id && !selectedMessage.isTemporary && (
+                  <TouchableOpacity
+                    style={[styles.messageActionItem, styles.deleteAction]}
+                    onPress={() => {
+                      deleteMessage(selectedMessage._id);
+                    }}
+                  >
+                    <Text style={styles.messageActionIcon}>🗑️</Text>
+                    <Text style={[styles.messageActionText, styles.deleteActionText]}>ลบข้อความ</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+            
+            <TouchableOpacity
+              style={[styles.messageActionItem, styles.cancelAction]}
+              onPress={() => setShowMessageActions(false)}
+            >
+              <Text style={styles.messageActionIcon}>✕</Text>
+              <Text style={styles.messageActionText}>ยกเลิก</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={showImageViewer}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageViewer(false)}
+      >
+        <View style={styles.imageViewerOverlay}>
+          <TouchableOpacity
+            style={styles.imageViewerCloseArea}
+            onPress={() => setShowImageViewer(false)}
+          >
+            <Text style={styles.imageViewerClose}>✕</Text>
+          </TouchableOpacity>
+          
+          {selectedImage && (
+            <Image
+              source={{ 
+                uri: selectedImage.startsWith('http') 
+                  ? selectedImage 
+                  : `${API_URL}/${selectedImage.replace(/\\/g, '/').replace(/^\/+/, '')}`
+              }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* File Upload Loading Overlay */}
+      {isUploadingFile && (
+        <View style={styles.uploadOverlay}>
+          <View style={styles.uploadContainer}>
+            <ActivityIndicator size="large" color="#FFA500" />
+            <Text style={styles.uploadText}>กำลังอัปโหลดไฟล์...</Text>
+          </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -616,17 +1228,17 @@ const styles = StyleSheet.create({
   messageBubble: {
     maxWidth: '75%',
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 12, // เปลี่ยนจาก 18 เป็น 12 เพื่อให้เป็นสี่เหลี่ยมมนๆ
     backgroundColor: '#fff',
     flexShrink: 1,
   },
   myMessageBubble: {
     backgroundColor: '#fff',
-    borderBottomRightRadius: 4
+    borderBottomRightRadius: 12 // ปรับให้สม่ำเสมอ
   },
   otherMessageBubble: {
     backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 12, // ปรับให้สม่ำเสมอ
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -644,6 +1256,21 @@ const styles = StyleSheet.create({
   },
   otherMessageText: {
     color: '#333'
+  },
+  
+  // Temporary message styles
+  temporaryMessage: {
+    opacity: 0.7,
+  },
+  temporaryText: {
+    opacity: 0.8,
+  },
+  textMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sendingIndicator: {
+    marginLeft: 8,
   },
   
   // Message Info Container (ข้างหน้ากล่องข้อความ)
@@ -672,6 +1299,20 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   otherMessageTimeExternal: {
+    color: '#666',
+    textAlign: 'left',
+  },
+  
+  // Read Status External (ข้างนอกกล่อง)
+  readStatusExternal: {
+    fontSize: 10,
+    fontStyle: 'italic',
+  },
+  myReadStatusExternal: {
+    color: '#666',
+    textAlign: 'right',
+  },
+  otherReadStatusExternal: {
     color: '#666',
     textAlign: 'left',
   },
@@ -872,6 +1513,174 @@ const styles = StyleSheet.create({
   memberRole: {
     fontSize: 14,
     color: '#666',
+  },
+  // Upload Overlay Styles
+  uploadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  uploadContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  uploadText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#333',
+  },
+  // Attachment Menu Styles
+  attachmentMenu: {
+    position: 'absolute',
+    bottom: 70,
+    left: 15,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 999,
+  },
+  attachmentMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    minWidth: 120,
+  },
+  attachmentMenuIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  attachmentMenuText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  // Message Image and File Styles
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 5,
+  },
+  fileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+  },
+  fileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  fileIconText: {
+    fontSize: 18,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  fileSize: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  // Image Viewer Styles
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseArea: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    padding: 10,
+  },
+  imageViewerClose: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  fullScreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
+  
+  // Message Actions Modal Styles
+  messageActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageActionsContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    minWidth: 280,
+    maxWidth: 320,
+  },
+  messageActionsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  messageActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  messageActionIcon: {
+    fontSize: 18,
+    marginRight: 12,
+    width: 25,
+    textAlign: 'center',
+  },
+  messageActionText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  deleteAction: {
+    backgroundColor: '#ffebee',
+  },
+  deleteActionText: {
+    color: '#d32f2f',
+  },
+  cancelAction: {
+    backgroundColor: '#f5f5f5',
+    marginTop: 8,
   },
 });
 

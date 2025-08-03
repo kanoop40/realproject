@@ -22,6 +22,12 @@ const ProfileScreen = ({ navigation }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
@@ -229,6 +235,47 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const handleChangePassword = async () => {
+    try {
+      // Validate input
+      if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+        Alert.alert('ข้อผิดพลาด', 'กรุณากรอกข้อมูลให้ครบถ้วน');
+        return;
+      }
+
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        Alert.alert('ข้อผิดพลาด', 'รหัสผ่านใหม่ไม่ตรงกัน');
+        return;
+      }
+
+      if (passwordForm.newPassword.length < 6) {
+        Alert.alert('ข้อผิดพลาด', 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+        return;
+      }
+
+      setIsUpdating(true);
+
+      const response = await api.put('/users/change-password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+
+      Alert.alert('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว');
+      setShowPasswordModal(false);
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      const errorMessage = error.response?.data?.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้';
+      Alert.alert('ข้อผิดพลาด', errorMessage);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -249,12 +296,7 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>โปรไฟล์</Text>
-        <TouchableOpacity 
-          onPress={handleEditProfile}
-          style={styles.editButton}
-        >
-          <Text style={styles.editIcon}>✏️</Text>
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
       </View>
 
       <ScrollView style={styles.content}>
@@ -278,7 +320,9 @@ const ProfileScreen = ({ navigation }) => {
                 onError={(error) => {
                   console.error('❌ Avatar image load error:', error);
                   console.log('❌ Avatar path:', currentUser.avatar);
-                  console.log('❌ Full URL:', `${API_URL}/${currentUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
+                  console.log('❌ Avatar URL:', currentUser.avatar.startsWith('http') 
+                    ? currentUser.avatar 
+                    : `${API_URL}/${currentUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
                 }}
                 onLoadStart={() => console.log('🔄 Avatar image loading started')}
               />
@@ -346,9 +390,28 @@ const ProfileScreen = ({ navigation }) => {
  </View>
         {/* Actions Section */}
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutIcon}></Text>
-            <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={handleEditProfile}
+          >
+            <Text style={styles.actionIcon}>✏️</Text>
+            <Text style={styles.actionButtonText}>แก้ไขข้อมูล</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={() => setShowPasswordModal(true)}
+          >
+            <Text style={styles.actionIcon}>🔒</Text>
+            <Text style={styles.actionButtonText}>เปลี่ยนรหัสผ่าน</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.logoutActionButton]} 
+            onPress={handleLogout}
+          >
+            <Text style={styles.actionIcon}>🚪</Text>
+            <Text style={[styles.actionButtonText, styles.logoutActionText]}>ออกจากระบบ</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -471,6 +534,81 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Password Change Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.passwordModalOverlay}>
+          <View style={styles.passwordModalContainer}>
+            <Text style={styles.passwordModalTitle}>เปลี่ยนรหัสผ่าน</Text>
+            
+            <View style={styles.passwordInputGroup}>
+              <Text style={styles.passwordInputLabel}>รหัสผ่านปัจจุบัน</Text>
+              <TextInput
+                style={styles.passwordInput}
+                value={passwordForm.currentPassword}
+                onChangeText={(text) => setPasswordForm(prev => ({ ...prev, currentPassword: text }))}
+                placeholder="กรุณากรอกรหัสผ่านปัจจุบัน"
+                secureTextEntry={true}
+              />
+            </View>
+
+            <View style={styles.passwordInputGroup}>
+              <Text style={styles.passwordInputLabel}>รหัสผ่านใหม่</Text>
+              <TextInput
+                style={styles.passwordInput}
+                value={passwordForm.newPassword}
+                onChangeText={(text) => setPasswordForm(prev => ({ ...prev, newPassword: text }))}
+                placeholder="กรุณากรอกรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
+                secureTextEntry={true}
+              />
+            </View>
+
+            <View style={styles.passwordInputGroup}>
+              <Text style={styles.passwordInputLabel}>ยืนยันรหัสผ่านใหม่</Text>
+              <TextInput
+                style={styles.passwordInput}
+                value={passwordForm.confirmPassword}
+                onChangeText={(text) => setPasswordForm(prev => ({ ...prev, confirmPassword: text }))}
+                placeholder="กรุณากรอกรหัสผ่านใหม่อีกครั้ง"
+                secureTextEntry={true}
+              />
+            </View>
+
+            <View style={styles.passwordModalActions}>
+              <TouchableOpacity 
+                style={styles.passwordCancelButton}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPasswordForm({
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: '',
+                  });
+                }}
+              >
+                <Text style={styles.passwordCancelButtonText}>ยกเลิก</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.passwordSaveButton, isUpdating && styles.passwordSaveButtonDisabled]}
+                onPress={handleChangePassword}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.passwordSaveButtonText}>เปลี่ยนรหัสผ่าน</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -504,15 +642,15 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
+  headerPlaceholder: {
+    width: 40, // เท่ากับ backButton เพื่อให้ title อยู่ตรงกลาง
+  },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
     fontSize: 20,
     fontWeight: '600',
     color: '#333',
-  },
-  editButton: {
-    padding: 8,
   },
   content: {
     flex: 1,
@@ -607,21 +745,40 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionsSection: {
-    
-    marginTop: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 40,
+    paddingVertical: 20,
+    alignItems: 'center',
   },
-  logoutButton: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 12,
+    borderRadius: 20,
+    marginBottom: 12,
+    width: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  logoutButtonText: {
-    marginLeft: 15,
+  logoutActionButton: {
+    backgroundColor: '#ffebee',
+  },
+  actionIcon: {
     fontSize: 16,
-    color: '#ff3b30',
+    marginRight: 8,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    color: '#333',
     fontWeight: '500',
+  },
+  logoutActionText: {
+    color: '#d32f2f',
   },
   
   // Modal Styles
@@ -871,7 +1028,82 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 14,
     fontWeight: '500'
-  }
+  },
+  
+  // Action Buttons Styles (เก่า - ลบออก)
+  
+  // Password Modal Styles
+  passwordModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passwordModalContainer: {
+    width: '90%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+  },
+  passwordModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  passwordInputGroup: {
+    marginBottom: 15,
+  },
+  passwordInputLabel: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 5,
+    fontWeight: '500',
+  },
+  passwordInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  passwordModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  passwordCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginRight: 10,
+  },
+  passwordCancelButtonText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 16,
+  },
+  passwordSaveButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  passwordSaveButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  passwordSaveButtonText: {
+    textAlign: 'center',
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 export default ProfileScreen;

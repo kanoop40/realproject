@@ -14,7 +14,8 @@ const {
     updateAutoInviteSettings,
     searchGroups,
     sendGroupMessage,
-    getGroupMessages
+    getGroupMessages,
+    deleteGroupMessage
 } = require('../controllers/groupChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
@@ -78,10 +79,25 @@ router.put('/:id/auto-invite', updateAutoInviteSettings);
 
 // @route   POST /api/groups/:id/messages
 // @desc    ส่งข้อความในกลุ่ม
-router.post('/:id/messages', sendGroupMessage);
+const { fileStorage } = require('../config/cloudinary');
+const multerFileUpload = require('multer')({ 
+  storage: fileStorage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB
+  }
+});
+router.post('/:id/messages', multerFileUpload.single('file'), sendGroupMessage);
 
 // @route   GET /api/groups/:id/messages
 // @desc    ดึงข้อความในกลุ่ม
 router.get('/:id/messages', getGroupMessages);
+
+// @route   DELETE /api/groups/:id/messages/:messageId
+// @desc    ลบข้อความในกลุ่ม
+router.delete('/:id/messages/:messageId', deleteGroupMessage);
+
+// @route   POST /api/groups/:id/upload
+// @desc    อัพโหลดไฟล์ในกลุ่ม (alias สำหรับ messages endpoint)
+router.post('/:id/upload', multerFileUpload.single('file'), sendGroupMessage);
 
 module.exports = router;

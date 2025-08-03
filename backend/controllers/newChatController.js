@@ -9,42 +9,13 @@ const Notification = require('../models/NotificationModel');
 const NotificationService = require('../utils/notificationService');
 const multer = require('multer');
 const path = require('path');
+const { fileStorage } = require('../config/cloudinary');
 
-// Multer configuration for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, './uploads/files/');
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
+// Multer configuration for file uploads with Cloudinary
 const upload = multer({ 
-    storage: storage,
+    storage: fileStorage,
     limits: {
         fileSize: 50 * 1024 * 1024 // 50MB limit
-    },
-    fileFilter: function (req, file, cb) {
-        // Allow PDF, Word, Images and common file types
-        const allowedTypes = [
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'image/jpeg',
-            'image/png',
-            'image/gif',
-            'text/plain',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ];
-        
-        if (allowedTypes.includes(file.mimetype)) {
-            cb(null, true);
-        } else {
-            cb(new Error('รองรับเฉพาะไฟล์ PDF, Word, รูปภาพ และไฟล์เอกสารเท่านั้น'), false);
-        }
     }
 });
 
@@ -292,6 +263,11 @@ const getMessages = asyncHandler(async (req, res) => {
                     content: msg.content,
                     sender: msg.user_id,
                     timestamp: msg.time,
+                    messageType: msg.messageType,
+                    fileUrl: msg.fileUrl,
+                    fileName: msg.fileName,
+                    fileSize: msg.fileSize,
+                    mimeType: msg.mimeType,
                     file: msg.file_id || null,
                     isRead: isRead
                 };
@@ -354,9 +330,11 @@ const sendMessage = asyncHandler(async (req, res) => {
 
         // If file is uploaded, save file info to database and link to message
         if (file) {
+            const isImage = file.mimetype && file.mimetype.startsWith('image/');
+            
             fileDoc = new File({
                 file_name: file.originalname,
-                url: `/uploads/files/${file.filename}`,
+                url: file.path, // Use Cloudinary URL
                 user_id: userId,
                 chat_id: id,
                 size: file.size.toString(),
@@ -365,8 +343,13 @@ const sendMessage = asyncHandler(async (req, res) => {
             });
             await fileDoc.save();
 
-            // อัปเดต message ให้มี file_id
+            // อัปเดต message ให้มี file_id และข้อมูลไฟล์
             message.file_id = fileDoc._id;
+            message.messageType = isImage ? 'image' : 'file';
+            message.fileUrl = file.path;
+            message.fileName = file.originalname;
+            message.fileSize = file.size;
+            message.mimeType = file.mimetype;
             await message.save();
         }
 
@@ -447,6 +430,11 @@ const sendMessage = asyncHandler(async (req, res) => {
                         content: populatedMessage.content,
                         sender: populatedMessage.user_id,
                         timestamp: populatedMessage.time,
+                        messageType: populatedMessage.messageType,
+                        fileUrl: populatedMessage.fileUrl,
+                        fileName: populatedMessage.fileName,
+                        fileSize: populatedMessage.fileSize,
+                        mimeType: populatedMessage.mimeType,
                         file: populatedMessage.file_id || null,
                         user_id: populatedMessage.user_id // เพิ่มเพื่อ backward compatibility
                     },
@@ -466,6 +454,11 @@ const sendMessage = asyncHandler(async (req, res) => {
             content: message.content,
             sender: message.user_id,
             timestamp: message.time,
+            messageType: message.messageType,
+            fileUrl: message.fileUrl,
+            fileName: message.fileName,
+            fileSize: message.fileSize,
+            mimeType: message.mimeType,
             file: message.file_id || null
         });
     } catch (error) {

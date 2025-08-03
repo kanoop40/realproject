@@ -50,12 +50,11 @@ const fileStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'chat-app-files',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'webp', 'pdf', 'doc', 'docx'],
     resource_type: 'auto', // Automatically detect file type
     public_id: (req, file) => {
       const timestamp = Date.now();
-      const originalName = file.originalname.split('.')[0];
-      return `file-${timestamp}-${originalName}`;
+      const randomNum = Math.round(Math.random() * 1E9);
+      return `file-${timestamp}-${randomNum}`;
     }
   }
 });

@@ -186,7 +186,11 @@ const SearchUserScreen = ({ navigation }) => {
         <View style={styles.avatarContainer}>
           {item.avatar ? (
             <Image 
-              source={{ uri: `${API_URL}/${item.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }} 
+              source={{ 
+                uri: item.avatar.startsWith('http') 
+                  ? item.avatar 
+                  : `${API_URL}/${item.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+              }} 
               style={styles.avatar} 
               defaultSource={require('../../assets/default-avatar.png')}
               onError={(error) => console.log('Avatar load error:', error)}
@@ -306,7 +310,11 @@ const SearchUserScreen = ({ navigation }) => {
                 <View style={styles.profileAvatarContainer}>
                   {selectedUser.avatar ? (
                     <Image 
-                      source={{ uri: `${API_URL}/${selectedUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}` }} 
+                      source={{ 
+                        uri: selectedUser.avatar.startsWith('http') 
+                          ? selectedUser.avatar 
+                          : `${API_URL}/${selectedUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                      }} 
                       style={styles.profileAvatar} 
                       defaultSource={require('../../assets/default-avatar.png')}
                       onError={(error) => console.log('Profile avatar load error:', error)}
