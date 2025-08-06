@@ -124,13 +124,25 @@ export const createChatroom = (participants) => {
 export const createPrivateChat = async (participants) => {
   try {
     console.log('💬 Creating private chat with participants:', participants);
-    const response = await api.post('/chats/private', {
+    
+    // ลด timeout เหลือ 8 วินาที
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout - การสร้างแชทใช้เวลานานเกินไป')), 8000)
+    );
+
+    const apiPromise = api.post('/chats/private', {
       participants
     });
+
+    const response = await Promise.race([apiPromise, timeoutPromise]);
     
+    console.log('💬 Private chat API response:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error creating private chat:', error);
+    console.error('💬 Error creating private chat:', error.message);
+    if (error.response) {
+      console.error('💬 Response error details:', error.response.data);
+    }
     throw error;
   }
 };

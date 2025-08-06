@@ -48,26 +48,38 @@ const createPrivateChat = asyncHandler(async (req, res) => {
             });
         }
 
-        // ตรวจสอบว่าแชทระหว่าง 2 คนนี้มีอยู่แล้วหรือไม่ (ใช้ participants field)
+        // ตรวจสอบว่าแชทระหว่าง 2 คนนี้มีอยู่แล้วหรือไม่ (ปรับปรุง query ให้เร็วขึ้น)
         console.log('🔍 Searching for existing private chat with participants:', [userId1, userId2]);
         const existingChat = await Chatrooms.findOne({
             participants: { $all: [userId1, userId2], $size: 2 }
-        }).populate('participants', 'firstName lastName username avatar');
+        })
+        .select('_id roomName participants')
+        .lean(); // ใช้ lean() เพื่อเพิ่มความเร็ว
 
         if (existingChat) {
             console.log('✅ Found existing private chat:', existingChat._id);
+            
+            // ดึงข้อมูลผู้ใช้แค่ที่จำเป็น
+            const [user1, user2] = await Promise.all([
+                User.findById(userId1).select('firstName lastName username avatar').lean(),
+                User.findById(userId2).select('firstName lastName username avatar').lean()
+            ]);
+
             return res.json({
                 message: 'แชทนี้มีอยู่แล้ว',
                 chatroomId: existingChat._id,
                 roomName: existingChat.roomName,
-                existing: true
+                existing: true,
+                participants: [user1, user2]
             });
         }
 
-        // ดึงข้อมูลผู้ใช้
+        // ดึงข้อมูลผู้ใช้พร้อมกัน (parallel)
         console.log('👥 Fetching user data...');
-        const user1 = await User.findById(userId1);
-        const user2 = await User.findById(userId2);
+        const [user1, user2] = await Promise.all([
+            User.findById(userId1).select('firstName lastName username avatar').lean(),
+            User.findById(userId2).select('firstName lastName username avatar').lean()
+        ]);
 
         if (!user1 || !user2) {
             console.error('❌ User not found:', { user1: !!user1, user2: !!user2 });
@@ -91,9 +103,6 @@ const createPrivateChat = asyncHandler(async (req, res) => {
 
         const savedChatroom = await newChatroom.save();
         console.log('✅ Created new private chat:', savedChatroom._id);
-
-        // Populate participants สำหรับ response
-        await savedChatroom.populate('participants', 'firstName lastName username avatar');
 
         res.status(201).json({
             message: 'สร้างแชทส่วนตัวสำเร็จ',
@@ -216,8 +225,9 @@ const getMessages = asyncHandler(async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user._id;
+        const { limit = 30, page = 1 } = req.query; // ลด default limit เหลือ 30
 
-        console.log('📨 getMessages called for chat:', id, 'by user:', userId);
+        console.log('📨 getMessages called for chat:', id, 'by user:', userId, `limit: ${limit}, page: ${page}`);
 
         // Check if user is participant in this chatroom (รองรับทั้ง user_id และ participants)
         const chatroom = await Chatrooms.findOne({
@@ -226,7 +236,7 @@ const getMessages = asyncHandler(async (req, res) => {
                 { user_id: { $in: [userId] } }, // For group chats
                 { participants: { $in: [userId] } } // For private chats
             ]
-        });
+        }).select('_id').lean(); // ใช้ lean() และ select เฉพาะ field ที่จำเป็น
 
         if (!chatroom) {
             console.log('❌ User not authorized to access this chat');
@@ -237,14 +247,47 @@ const getMessages = asyncHandler(async (req, res) => {
 
         console.log('✅ User authorized, fetching messages...');
 
-        const messages = await Messages.find({
-            chat_id: id
-        })
-        .populate('user_id', 'firstName lastName username avatar')
-        .populate('file_id')
-        .sort({ time: 1 });
+        // ปรับปรุง query เพื่อเพิ่มความเร็ว - ใช้ aggregation pipeline
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const aggregationPipeline = [
+            { $match: { chat_id: new mongoose.Types.ObjectId(id) } },
+            { $sort: { time: -1 } },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user_id',
+                    foreignField: '_id',
+                    as: 'user_id',
+                    pipeline: [
+                        { $project: { firstName: 1, lastName: 1, username: 1, avatar: 1 } }
+                    ]
+                }
+            },
+            { $unwind: '$user_id' },
+            {
+                $lookup: {
+                    from: 'files',
+                    localField: 'file_id',
+                    foreignField: '_id',
+                    as: 'file_id'
+                }
+            },
+            {
+                $addFields: {
+                    file_id: { $arrayElemAt: ['$file_id', 0] }
+                }
+            }
+        ];
 
-        console.log(`📨 Found ${messages.length} messages`);
+        const messages = await Messages.aggregate(aggregationPipeline);
+
+        // Reverse เพื่อให้เรียงจากเก่าไปใหม่
+        messages.reverse();
+
+        console.log(`📨 Found ${messages.length} messages (limit: ${limit}, page: ${page})`);
 
         res.json({
             messages: messages.map(msg => {

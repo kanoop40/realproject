@@ -327,54 +327,98 @@ const PrivateChatScreen = ({ route, navigation }) => {
     let loadedMessages = [];
     try {
       console.log('Loading messages for chatroom:', chatroomId);
-      // โหลดเฉพาะ 50 ข้อความล่าสุด
-      const response = await api.get(`/chats/${chatroomId}/messages?limit=50&page=1`);
+      
+      // เพิ่ม timeout สำหรับการโหลดข้อความ
+      const loadingTimeout = setTimeout(() => {
+        console.warn('⚠️ Message loading timeout - taking too long');
+        Alert.alert('การโหลดล่าช้า', 'การโหลดข้อความใช้เวลานานกว่าปกติ');
+      }, 8000);
+      
+      // โหลดเฉพาะ 30 ข้อความล่าสุด (ลดจาก 50)
+      const response = await Promise.race([
+        api.get(`/chats/${chatroomId}/messages?limit=30&page=1`),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Message loading timeout')), 10000)
+        )
+      ]);
+      
+      clearTimeout(loadingTimeout);
       loadedMessages = response.data.messages || [];
       
       // Debug: ตรวจสอบ isRead status ของข้อความที่โหลดมา
       console.log('📨 Messages loaded with read status:');
-      loadedMessages.forEach((msg, index) => {
-        const isMyMessage = msg.sender._id === currentUser?._id;
-        console.log(`Message ${index + 1}:`, {
-          id: msg._id?.substring(msg._id.length - 4),
-          content: msg.content.substring(0, 20) + '...',
-          sender: msg.sender.firstName,
-          isMyMessage: isMyMessage,
-          isRead: msg.isRead,
-          senderId: msg.sender._id,
-          currentUserId: currentUser?._id
+      
+      if (loadedMessages.length === 0) {
+        console.log('📨 No messages found - this is a new chat');
+        setMessages([]); // ตั้งค่าเป็น array ว่าง
+      } else {
+        loadedMessages.forEach((msg, index) => {
+          const isMyMessage = msg.sender._id === currentUser?._id;
+          console.log(`Message ${index + 1}:`, {
+            id: msg._id?.substring(msg._id.length - 4),
+            content: msg.content.substring(0, 20) + '...',
+            sender: msg.sender.firstName,
+            isMyMessage: isMyMessage,
+            isRead: msg.isRead,
+            senderId: msg.sender._id,
+            currentUserId: currentUser?._id
+          });
+          
+          // แจ้งเตือนถ้าข้อความของเราไม่มี isRead status ที่ถูกต้อง
+          if (isMyMessage && msg.isRead === undefined) {
+            console.warn('⚠️ Message of current user missing isRead status:', msg._id);
+          }
         });
         
-        // แจ้งเตือนถ้าข้อความของเราไม่มี isRead status ที่ถูกต้อง
-        if (isMyMessage && msg.isRead === undefined) {
-          console.warn('⚠️ Message of current user missing isRead status:', msg._id);
-        }
-      });
-      
-      // ไม่ต้อง reverse เพราะ backend ส่งมาเรียงจากเก่าไปใหม่แล้ว
-      setMessages(loadedMessages.map(msg => ({
-        ...msg,
-        // ถ้าเป็นข้อความของเราและยังไม่มี isRead status ให้ตั้งเป็น false
-        isRead: msg.isRead !== undefined ? msg.isRead : false
-      })));
+        // ไม่ต้อง reverse เพราะ backend ส่งมาเรียงจากเก่าไปใหม่แล้ว
+        setMessages(loadedMessages.map(msg => ({
+          ...msg,
+          // ถ้าเป็นข้อความของเราและยังไม่มี isRead status ให้ตั้งเป็น false
+          isRead: msg.isRead !== undefined ? msg.isRead : false
+        })));
+      }
       
       console.log('📨 Messages set, total:', loadedMessages.length);
       
-      // มาร์คข้อความว่าอ่านแล้ว
-      await api.put(`/chats/${chatroomId}/read`);
-      
-      // ส่ง socket event เพื่อแจ้งว่าได้อ่านข้อความแล้ว
-      if (socket && chatroomId) {
-        console.log('📖 Emitting messageRead event for chatroom:', chatroomId);
-        socket.emit('messageRead', {
-          chatroomId: chatroomId,
-          userId: currentUser?._id
-        });
+      // มาร์คข้อความว่าอ่านแล้ว (ใช้ timeout) - ทำเฉพาะเมื่อมีข้อความ
+      if (loadedMessages.length > 0) {
+        try {
+          await Promise.race([
+            api.put(`/chats/${chatroomId}/read`),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Read status timeout')), 5000)
+            )
+          ]);
+          
+          // ส่ง socket event เพื่อแจ้งว่าได้อ่านข้อความแล้ว
+          if (socket && chatroomId) {
+            console.log('📖 Emitting messageRead event for chatroom:', chatroomId);
+            socket.emit('messageRead', {
+              chatroomId: chatroomId,
+              userId: currentUser?._id
+            });
+          }
+        } catch (readError) {
+          console.warn('⚠️ Failed to mark messages as read:', readError.message);
+        }
+      } else {
+        console.log('📨 No messages to mark as read - this is a new chat');
       }
+      
     } catch (error) {
       console.error('Error loading messages:', error);
+      if (error.message === 'Message loading timeout') {
+        Alert.alert('การโหลดล้มเหลว', 'ไม่สามารถโหลดข้อความได้ กรุณาลองใหม่', [
+          { text: 'ลองใหม่', onPress: () => loadMessages() },
+          { text: 'ยกเลิก', style: 'cancel' }
+        ]);
+      } else {
+        // สำหรับ error อื่นๆ ให้ตั้งค่า messages เป็น array ว่างเพื่อให้แสดงหน้าแชท
+        console.log('📨 Setting empty messages due to error - allowing chat to display');
+        setMessages([]);
+      }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // ต้องตั้งเป็น false เสมอ ไม่ว่าจะมีข้อความหรือไม่
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -1255,6 +1299,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>กำลังโหลดข้อความ...</Text>
+        <Text style={styles.loadingSubText}>กรุณารอสักครู่</Text>
       </View>
     );
   }
@@ -1330,9 +1375,22 @@ const PrivateChatScreen = ({ route, navigation }) => {
           }}
           renderItem={renderMessage}
           style={styles.messagesList}
-          contentContainerStyle={styles.messagesContainer}
+          contentContainerStyle={[
+            styles.messagesContainer,
+            messages.length === 0 && styles.emptyMessagesContainer // เพิ่ม style เมื่อไม่มีข้อความ
+          ]}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyMessageContainer}>
+              <Text style={styles.emptyMessageText}>
+                ยังไม่มีข้อความในแชทนี้
+              </Text>
+              <Text style={styles.emptyMessageSubText}>
+                เริ่มต้นการสนทนาได้เลย!
+              </Text>
+            </View>
+          )}
           maxToRenderPerBatch={20}
           windowSize={10}
           initialNumToRender={20}
@@ -1598,6 +1656,12 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     marginTop: 10,
+    fontWeight: '600',
+  },
+  loadingSubText: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 5,
   },
   scrollLoadingOverlay: {
     position: 'absolute',
@@ -1678,7 +1742,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
   },
   messagesContainer: {
-    padding: 16
+    padding: 16,
+    flexGrow: 1 // เพิ่มเพื่อให้ empty component แสดงที่กลางจอ
+  },
+  emptyMessagesContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1
+  },
+  emptyMessageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50
+  },
+  emptyMessageText: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontWeight: '500'
+  },
+  emptyMessageSubText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center'
   },
   messageContainer: {
     flexDirection: 'row',

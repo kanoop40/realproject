@@ -17,6 +17,7 @@ import { searchUsers, createPrivateChat } from '../../service/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { API_URL } from '../../service/api'; // ใช้ API_URL เดียวกัน
 import { AuthContext } from '../../context/AuthContext';
+import LoadingModal from '../../components/LoadingModal';
 
 const SearchUserScreen = ({ navigation }) => {
   // Add safety check for context and navigation
@@ -34,6 +35,8 @@ const SearchUserScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [chatCreationLoading, setChatCreationLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   // Add safety check for navigation
   if (!navigation) {
@@ -121,31 +124,63 @@ const SearchUserScreen = ({ navigation }) => {
           { 
             text: 'ตกลง', 
             onPress: async () => {
+              let progressInterval;
               try {
                 closeModal();
+                setChatCreationLoading(true);
+                setLoadingProgress(0);
+                
+                // Simulate progress
+                progressInterval = setInterval(() => {
+                  setLoadingProgress(prev => {
+                    if (prev >= 90) return prev;
+                    return prev + 10;
+                  });
+                }, 800);
                 
                 // ดึงข้อมูลผู้ใช้ปัจจุบันจาก API เพื่อให้แน่ใจว่าถูกต้อง
                 console.log('Getting current user from API...');
-                const currentUserResponse = await api.get('/users/current');
+                setLoadingProgress(20);
+                const currentUserResponse = await Promise.race([
+                  api.get('/users/current'),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout getting current user')), 8000)
+                  )
+                ]);
                 const currentUser = currentUserResponse.data;
                 
                 console.log('Current user from API:', currentUser);
                 console.log('Creating private chat between:', currentUser._id, 'and', selectedUser._id);
+                setLoadingProgress(50);
                 
-                // สร้างหรือดึงแชทส่วนตัว
-                const response = await createPrivateChat([currentUser._id, selectedUser._id]);
+                // สร้างหรือดึงแชทส่วนตัวพร้อม timeout
+                const response = await Promise.race([
+                  createPrivateChat([currentUser._id, selectedUser._id]),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout creating chat')), 10000)
+                  )
+                ]);
+                
+                setLoadingProgress(100);
                 
                 console.log('Private chat response:', response);
                 
-                if (response.existing) {
-                  console.log('📱 Using existing chat:', response.chatroomId);
-                  Alert.alert('ห้องแชทมีอยู่แล้ว', 'เปิดห้องแชทที่มีอยู่แล้ว');
-                } else {
-                  console.log('🆕 Created new chat:', response.chatroomId);
-                  Alert.alert('สร้างห้องแชทสำเร็จ', 'เปิดห้องแชทใหม่');
+                // หยุด progress interval
+                if (progressInterval) {
+                  clearInterval(progressInterval);
                 }
                 
-                // นำทางไปยังหน้าแชทส่วนตัว
+                setChatCreationLoading(false);
+                
+                if (response.existing) {
+                  console.log('📱 Using existing chat:', response.chatroomId);
+                  Alert.alert('เปิดแชท', 'พบห้องแชทที่มีอยู่แล้ว');
+                } else {
+                  console.log('🆕 Created new chat:', response.chatroomId);
+                  Alert.alert('สร้างแชทสำเร็จ', 'เปิดห้องแชทใหม่');
+                }
+                
+                // นำทางไปยังหน้าแชทส่วนตัวทันที
                 navigation.navigate('PrivateChat', {
                   chatroomId: response.chatroomId,
                   roomName: response.roomName,
@@ -155,13 +190,33 @@ const SearchUserScreen = ({ navigation }) => {
                 });
                 
               } catch (error) {
+                // หยุด progress interval ถ้ามี error
+                if (progressInterval) {
+                  clearInterval(progressInterval);
+                }
+                setChatCreationLoading(false);
+                setLoadingProgress(0);
+                
                 console.error('Error creating chat:', error);
                 console.error('Error details:', {
                   message: error.message,
                   response: error.response?.data,
                   status: error.response?.status
                 });
-                Alert.alert('ข้อผิดพลาด', `ไม่สามารถสร้างแชทได้: ${error.message || 'กรุณาลองใหม่'}`);
+                
+                let errorMessage = 'ไม่สามารถสร้างแชทได้';
+                if (error.message === 'Timeout creating chat') {
+                  errorMessage = 'การสร้างแชทใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
+                } else if (error.message === 'Timeout getting current user') {
+                  errorMessage = 'การเข้าถึงข้อมูลผู้ใช้ล่าช้า กรุณาตรวจสอบการเชื่อมต่อ';
+                } else if (error.response?.status === 500) {
+                  errorMessage = 'เซิร์ฟเวอร์ไม่สามารถตอบสนองได้ กรุณาลองใหม่';
+                }
+                
+                Alert.alert('ข้อผิดพลาด', errorMessage, [
+                  { text: 'ลองใหม่', onPress: () => createChatRoom(selectedUser) },
+                  { text: 'ยกเลิก', style: 'cancel' }
+                ]);
               }
             }
           }
@@ -373,6 +428,12 @@ const SearchUserScreen = ({ navigation }) => {
           )}
         </View>
       </Modal>
+
+      <LoadingModal
+        visible={chatCreationLoading}
+        message="กำลังสร้างแชท"
+        progress={loadingProgress}
+      />
     </View>
   );
 };

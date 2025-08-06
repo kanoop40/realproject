@@ -229,7 +229,13 @@ const GroupChatScreen = ({ route, navigation }) => {
       const loadedMessages = messagesRes.data.data || messagesRes.data.messages || [];
       const groupData = groupRes.data.data || groupRes.data;
       
-      setMessages(loadedMessages);
+      if (loadedMessages.length === 0) {
+        console.log('📨 No messages found - this is a new group chat');
+        setMessages([]); // ตั้งค่าเป็น array ว่าง
+      } else {
+        setMessages(loadedMessages);
+      }
+      console.log('📨 Messages set, total:', loadedMessages.length);
       setGroupInfo(groupData);
       
       // แปลงข้อมูลสมาชิกให้ถูกต้อง
@@ -1036,12 +1042,25 @@ const GroupChatScreen = ({ route, navigation }) => {
           keyExtractor={(item, index) => item._id?.toString() || `message_${index}_${item.timestamp}`}
           renderItem={renderMessage}
           style={styles.messagesList}
-          contentContainerStyle={styles.messagesContainer}
+          contentContainerStyle={[
+            styles.messagesContainer,
+            messages.length === 0 && styles.emptyMessagesContainer // เพิ่ม style เมื่อไม่มีข้อความ
+          ]}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
           maxToRenderPerBatch={20}
           windowSize={10}
           initialNumToRender={20}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyMessageContainer}>
+              <Text style={styles.emptyMessageText}>
+                ยังไม่มีข้อความในกลุ่มนี้
+              </Text>
+              <Text style={styles.emptyMessageSubText}>
+                เริ่มต้นการสนทนากลุ่มได้เลย!
+              </Text>
+            </View>
+          )}
           onContentSizeChange={(contentWidth, contentHeight) => {
             // Auto-scroll ไปข้อความล่าสุดเมื่อเข้าแชทใหม่
             if (messages.length > 0 && !hasScrolledToEnd) {
@@ -1342,7 +1361,33 @@ const styles = StyleSheet.create({
 
   messagesListContainer: { flex: 1 },
   messagesList: { flex: 1, backgroundColor: '#F5C842' },
-  messagesContainer: { padding: 16 },
+  messagesContainer: { 
+    padding: 16,
+    flexGrow: 1 // เพิ่มเพื่อให้ empty component แสดงที่กลางจอ
+  },
+  emptyMessagesContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1
+  },
+  emptyMessageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50
+  },
+  emptyMessageText: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontWeight: '500'
+  },
+  emptyMessageSubText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center'
+  },
   
   dateContainer: { alignItems: 'center', marginVertical: 16 },
   dateText: {
