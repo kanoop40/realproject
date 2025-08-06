@@ -287,13 +287,13 @@ io.on('connection', async (socket) => {
             console.log('📖 Broadcasting to chatroom:', data.chatroomId);
             console.log('📖 Read by user:', data.userId);
             
-            // อัพเดทฐานข้อมูลให้ข้อความถูกมาร์คว่าอ่านแล้ว
+            // อัพเดทฐานข้อมูลให้ข้อความของคนอื่นถูกมาร์คว่าผู้ใช้ปัจจุบันอ่านแล้ว
             const Messages = require('./models/MessagesModel');
-            await Messages.updateMany(
+            const updateResult = await Messages.updateMany(
                 { 
                     chat_id: data.chatroomId,
-                    user_id: { $ne: data.userId }, // ไม่ต้องมาร์คข้อความของตัวเองเป็นอ่านแล้ว
-                    'readBy.user': { $ne: data.userId } // ยังไม่ได้อ่าน
+                    user_id: { $ne: data.userId }, // ข้อความของคนอื่น
+                    'readBy.user': { $ne: data.userId } // ยังไม่ได้อ่านโดยผู้ใช้ปัจจุบัน
                 },
                 { 
                     $push: { 
@@ -305,9 +305,10 @@ io.on('connection', async (socket) => {
                 }
             );
             
-            console.log('✅ Messages marked as read in database');
+            console.log('✅ Messages marked as read in database, updated:', updateResult.modifiedCount);
             
             // ส่งการแจ้งเตือนการอ่านข้อความไปยังคนอื่นในห้องแชท
+            // เพื่อให้ข้อความของพวกเขาแสดงสถานะ "อ่านแล้ว"
             socket.to(data.chatroomId).emit('messageRead', {
                 chatroomId: data.chatroomId,
                 readBy: data.userId,

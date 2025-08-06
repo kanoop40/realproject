@@ -13,6 +13,7 @@ import {
   Alert,
   Linking,
   Modal,
+  Animated,
   Dimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,6 +39,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedModalImage, setSelectedModalImage] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showTimeForMessages, setShowTimeForMessages] = useState(new Set()); // เก็บ ID ของข้อความที่จะแสดงเวลา
+  const [timeAnimations, setTimeAnimations] = useState({}); // เก็บ Animated.Value สำหรับแต่ละข้อความ
   const flatListRef = React.useRef(null); // เพิ่ม ref สำหรับ FlatList
 
   // ข้อมูลแชทจาก route params
@@ -49,9 +55,109 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (currentUser && chatroomId) {
+      // Reset scroll flags เมื่อเข้าแชทใหม่
+      setHasScrolledToEnd(false);
+      setIsScrollingToEnd(true);
       loadMessages();
     }
   }, [currentUser, chatroomId]);
+
+  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่
+  useEffect(() => {
+    if (messages.length > 0 && !hasScrolledToEnd) {
+      // รอให้ FlatList render เสร็จแล้วค่อย scroll
+      console.log('📍 Auto-scrolling to end on messages change:', messages.length);
+      
+      // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า render เสร็จแล้ว
+      const timeoutId = setTimeout(() => {
+        const scrollToEnd = () => {
+          try {
+            if (messages.length > 0) {
+              flatListRef.current?.scrollToIndex({ 
+                index: messages.length - 1, 
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          } catch (error) {
+            console.log('ScrollToIndex failed, using scrollToEnd:', error);
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+          setHasScrolledToEnd(true);
+          setIsScrollingToEnd(false);
+        };
+        requestAnimationFrame(scrollToEnd);
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages.length, hasScrolledToEnd]);
+
+  // Force scroll เมื่อโหลดข้อความเสร็จและไม่ loading แล้ว
+  useEffect(() => {
+    if (!isLoading && messages.length > 0 && !hasScrolledToEnd) {
+      const forceScroll = () => {
+        console.log('🚀 Force scrolling to end after loading complete:', messages.length);
+        try {
+          if (messages.length > 0) {
+            flatListRef.current?.scrollToIndex({ 
+              index: messages.length - 1, 
+              animated: false,
+              viewPosition: 1
+            });
+          }
+        } catch (error) {
+          console.log('ScrollToIndex failed, using scrollToEnd:', error);
+          flatListRef.current?.scrollToEnd({ animated: false });
+        }
+        // ลอง scroll อีกครั้งหลังจาก 200ms
+        setTimeout(() => {
+          try {
+            if (messages.length > 0) {
+              flatListRef.current?.scrollToIndex({ 
+                index: messages.length - 1, 
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          } catch (error) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+          setHasScrolledToEnd(true);
+          setIsScrollingToEnd(false);
+        }, 200);
+      };
+      
+      const timeoutId = setTimeout(() => {
+        requestAnimationFrame(forceScroll);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isLoading, messages.length, hasScrolledToEnd]);
+
+  // เพิ่ม useEffect เพื่อ force scroll หลังจาก component mount และมีข้อความ
+  useEffect(() => {
+    if (messages.length > 0 && !isLoading) {
+      // รอ 1 วินาทีแล้วลอง scroll อีกครั้ง ในกรณีที่ useEffect อื่นไม่ทำงาน
+      const finalScrollTimeout = setTimeout(() => {
+        console.log('🎯 Final attempt to scroll to end:', messages.length);
+        try {
+          if (messages.length > 0) {
+            flatListRef.current?.scrollToIndex({ 
+              index: messages.length - 1, 
+              animated: false,
+              viewPosition: 1
+            });
+          }
+        } catch (error) {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        }
+      }, 1000);
+      
+      return () => clearTimeout(finalScrollTimeout);
+    }
+  }, [messages.length, isLoading]);
 
   // Socket.IO listeners
   useEffect(() => {
@@ -138,6 +244,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
         }
       };
 
+      const handleMessageEdited = (data) => {
+        console.log('✏️ Message edited:', data);
+        
+        if (data.chatroomId === chatroomId) {
+          setMessages(prev => prev.map(msg => 
+            msg._id === data.messageId 
+              ? { ...msg, content: data.content, editedAt: data.editedAt }
+              : msg
+          ));
+        }
+      };
+
       // ฟังการอัปเดตสถานะการอ่านข้อความ
       const handleMessageRead = (data) => {
         console.log('👁️ PrivateChatScreen - Message read update received:', data);
@@ -166,12 +284,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       socket.on('newMessage', handleNewMessage);
       socket.on('message_deleted', handleMessageDeleted);
+      socket.on('message_edited', handleMessageEdited);
       socket.on('messageRead', handleMessageRead); // เพิ่ม listener สำหรับ message read
 
       // Cleanup
       return () => {
         socket.off('newMessage', handleNewMessage);
         socket.off('message_deleted', handleMessageDeleted);
+        socket.off('message_edited', handleMessageEdited);
         socket.off('messageRead', handleMessageRead); // เพิ่ม cleanup สำหรับ messageRead
         if (chatroomId) {
           leaveChatroom(chatroomId);
@@ -204,14 +324,39 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const loadMessages = useCallback(async () => {
+    let loadedMessages = [];
     try {
       console.log('Loading messages for chatroom:', chatroomId);
       // โหลดเฉพาะ 50 ข้อความล่าสุด
       const response = await api.get(`/chats/${chatroomId}/messages?limit=50&page=1`);
-      const loadedMessages = response.data.messages || [];
+      loadedMessages = response.data.messages || [];
+      
+      // Debug: ตรวจสอบ isRead status ของข้อความที่โหลดมา
+      console.log('📨 Messages loaded with read status:');
+      loadedMessages.forEach((msg, index) => {
+        const isMyMessage = msg.sender._id === currentUser?._id;
+        console.log(`Message ${index + 1}:`, {
+          id: msg._id?.substring(msg._id.length - 4),
+          content: msg.content.substring(0, 20) + '...',
+          sender: msg.sender.firstName,
+          isMyMessage: isMyMessage,
+          isRead: msg.isRead,
+          senderId: msg.sender._id,
+          currentUserId: currentUser?._id
+        });
+        
+        // แจ้งเตือนถ้าข้อความของเราไม่มี isRead status ที่ถูกต้อง
+        if (isMyMessage && msg.isRead === undefined) {
+          console.warn('⚠️ Message of current user missing isRead status:', msg._id);
+        }
+      });
       
       // ไม่ต้อง reverse เพราะ backend ส่งมาเรียงจากเก่าไปใหม่แล้ว
-      setMessages(loadedMessages);
+      setMessages(loadedMessages.map(msg => ({
+        ...msg,
+        // ถ้าเป็นข้อความของเราและยังไม่มี isRead status ให้ตั้งเป็น false
+        isRead: msg.isRead !== undefined ? msg.isRead : false
+      })));
       
       console.log('📨 Messages set, total:', loadedMessages.length);
       
@@ -230,34 +375,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.error('Error loading messages:', error);
     } finally {
       setIsLoading(false);
-      // เริ่มแสดง loading สำหรับการ scroll ไปข้อความล่าสุด
-      if (loadedMessages?.length > 0) {
-        setIsScrollingToEnd(true);
-        setHasScrolledToEnd(false); // Reset flag
-        // บังคับ scroll ไปข้อความล่าสุดทันทีหลังโหลด
-        setTimeout(() => {
-          console.log('🎯 Force scrolling to end after loading, messages:', loadedMessages.length);
-          if (loadedMessages.length > 0) {
-            // ลอง scrollToIndex ไปข้อความสุดท้าย
-            try {
-              flatListRef.current?.scrollToIndex({ 
-                index: loadedMessages.length - 1, 
-                animated: false,
-                viewPosition: 1 // scroll ให้ item อยู่ด้านล่างสุด
-              });
-            } catch (error) {
-              // ถ้า scrollToIndex ไม่ได้ ให้ใช้ scrollToEnd
-              console.log('ScrollToIndex failed, using scrollToEnd');
-              flatListRef.current?.scrollToEnd({ animated: false });
-            }
-          }
-          // ให้เวลา layout เสร็จก่อน
-          setTimeout(() => {
-            setIsScrollingToEnd(false);
-            setHasScrolledToEnd(true); // Mark as scrolled
-          }, 500); // เพิ่มเวลาให้มากขึ้น
-        }, 300); // เพิ่มเวลารอให้ messages โหลดเสร็จ
-      }
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -717,8 +834,113 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const renderMessage = useCallback(({ item }) => {
+  const editMessage = (message) => {
+    setEditingMessage(message);
+    setEditText(message.content);
+    setShowEditModal(true);
+  };
+
+  const saveEditMessage = async () => {
+    if (!editText.trim() || !editingMessage) return;
+
+    try {
+      const response = await api.put(`/chats/messages/${editingMessage._id}`, {
+        content: editText.trim()
+      });
+
+      // อัปเดต message ใน state
+      setMessages(prev => prev.map(msg => 
+        msg._id === editingMessage._id 
+          ? { ...msg, content: editText.trim(), editedAt: new Date().toISOString() }
+          : msg
+      ));
+
+      setShowEditModal(false);
+      setEditingMessage(null);
+      setEditText('');
+      
+      console.log('✅ Message edited successfully');
+    } catch (error) {
+      console.error('❌ Error editing message:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแก้ไขข้อความได้');
+    }
+  };
+
+  const cancelEditMessage = () => {
+    setShowEditModal(false);
+    setEditingMessage(null);
+    setEditText('');
+  };
+
+  const handleMessageDoublePress = (message) => {
+    const isMyMessage = message.sender?._id === currentUser._id;
+    if (isMyMessage && message.content && message.content !== 'รูปภาพ' && message.content !== 'ไฟล์แนบ') {
+      editMessage(message);
+    }
+  };
+
+  // ฟังก์ชันสำหรับแสดง/ซ่อนเวลาของข้อความ
+  const toggleShowTime = (messageId) => {
+    setShowTimeForMessages(prev => {
+      const newSet = new Set(prev);
+      const isCurrentlyShown = newSet.has(messageId);
+      
+      // สร้าง animated value ถ้ายังไม่มี
+      if (!timeAnimations[messageId]) {
+        setTimeAnimations(prevAnims => ({
+          ...prevAnims,
+          [messageId]: new Animated.Value(isCurrentlyShown ? 1 : 0)
+        }));
+      }
+      
+      // Animation สำหรับแสดง/ซ่อน
+      const animValue = timeAnimations[messageId] || new Animated.Value(isCurrentlyShown ? 1 : 0);
+      
+      if (isCurrentlyShown) {
+        // ซ่อนด้วย animation
+        Animated.timing(animValue, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: false,
+        }).start(() => {
+          newSet.delete(messageId);
+          setShowTimeForMessages(new Set(newSet));
+        });
+      } else {
+        // แสดงด้วย animation
+        newSet.add(messageId);
+        setShowTimeForMessages(new Set(newSet));
+        
+        Animated.timing(animValue, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: false,
+        }).start();
+      }
+      
+      // อัปเดต animated value
+      setTimeAnimations(prevAnims => ({
+        ...prevAnims,
+        [messageId]: animValue
+      }));
+      
+      return newSet;
+    });
+  };
+
+  // ฟังก์ชันตรวจสอบว่าควรแสดงเวลาหรือไม่
+  const shouldShowTime = (item, index) => {
+    // แสดงเวลาสำหรับข้อความล่าสุดเสมอ
+    if (index === messages.length - 1) {
+      return true;
+    }
+    // แสดงเวลาสำหรับข้อความที่ถูกคลิก
+    return showTimeForMessages.has(item._id);
+  };
+
+  const renderMessage = useCallback(({ item, index }) => {
     const isMyMessage = item.sender._id === currentUser._id;
+    const showTime = shouldShowTime(item, index);
     
     const handleDeleteMessageConfirm = () => {
       Alert.alert(
@@ -735,6 +957,22 @@ const PrivateChatScreen = ({ route, navigation }) => {
       );
     };
     
+    const handleMessagePress = () => {
+      const now = Date.now();
+      const DOUBLE_PRESS_DELAY = 300;
+      
+      if (item.lastPress && (now - item.lastPress) < DOUBLE_PRESS_DELAY) {
+        // Double press detected - แก้ไขข้อความ
+        handleMessageDoublePress(item);
+      } else {
+        // Single press - แสดง/ซ่อนเวลา (เฉพาะข้อความที่ไม่ใช่ล่าสุด)
+        if (index !== messages.length - 1) {
+          toggleShowTime(item._id);
+        }
+        item.lastPress = now;
+      }
+    };
+    
     return (
       <TouchableOpacity
         style={[
@@ -742,6 +980,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           isMyMessage ? styles.myMessage : styles.otherMessage
         ]}
         onLongPress={isMyMessage ? handleDeleteMessageConfirm : null}
+        onPress={handleMessagePress}
         delayLongPress={500}
       >
         {!isMyMessage && (
@@ -772,78 +1011,96 @@ const PrivateChatScreen = ({ route, navigation }) => {
         ]}>
           {/* แสดงรูปภาพในกรอบแยก */}
           {(item.image || (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && (
-            <View style={[
-              styles.imageMessageBubble,
-              isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
-              item.isOptimistic && styles.optimisticMessage
-            ]}>
-              <TouchableOpacity 
-                style={styles.imageContainer}
-                onPress={() => {
-                  const imageUri = item.image?.file_path || 
-                                  item.image?.uri ||
-                                  (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                                    item.file.url : 
-                                    (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
-                  openImageModal(imageUri);
-                }}
-              >
-                <Image
-                  source={{ 
-                    uri: item.image?.file_path || 
-                         item.image?.uri ||
-                         (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                           item.file.url : 
-                           (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
+            <View>
+              <View style={[
+                styles.imageMessageBubble,
+                isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
+                item.isOptimistic && styles.optimisticMessage
+              ]}>
+                <TouchableOpacity 
+                  style={styles.imageContainer}
+                  onPress={() => {
+                    const imageUri = item.image?.file_path || 
+                                    item.image?.uri ||
+                                    (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                                      item.file.url : 
+                                      (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+                    openImageModal(imageUri);
                   }}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                  onError={(error) => {
-                    console.log('❌ Error loading image:', item.file?.url || item.image?.file_path, error.nativeEvent.error);
-                    // ลองใช้ default image หรือซ่อนรูป
-                  }}
-                  defaultSource={require('../../assets/default-avatar.png')}
-                />
-              </TouchableOpacity>
-              <View style={styles.imageTimeContainer}>
-                <Text style={[
-                  styles.imageMessageTime,
-                  isMyMessage ? styles.myMessageTime : styles.otherMessageTime
-                ]}>
-                  {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
-                </Text>
-                {isMyMessage && !item.isOptimistic && (
-                  <Text style={[styles.readStatus, styles.imageReadStatus]}>
-                    {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
-                  </Text>
-                )}
+                >
+                  <Image
+                    source={{ 
+                      uri: item.image?.file_path || 
+                           item.image?.uri ||
+                           (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                             item.file.url : 
+                             (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
+                    }}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                    onError={(error) => {
+                      console.log('❌ Error loading image:', item.file?.url || item.image?.file_path, error.nativeEvent.error);
+                      // ลองใช้ default image หรือซ่อนรูป
+                    }}
+                    defaultSource={require('../../assets/default-avatar.png')}
+                  />
+                </TouchableOpacity>
               </View>
+              
+              {/* วันเวลาอยู่ข้างล่างรูปภาพ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
+              {(showTime || showTimeForMessages.has(item._id)) && (
+                <Animated.View 
+                  style={[
+                    styles.messageTimeBottomContainer,
+                    isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
+                    {
+                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
+                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+                        (timeAnimations[item._id]).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 30]
+                        }) : 0)
+                    }
+                  ]}
+                >
+                  <View style={styles.timeAndStatusRow}>
+                    <Text style={[
+                      styles.messageTimeBottom,
+                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
+                    ]}>
+                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                    </Text>
+                    {isMyMessage && !item.isOptimistic && (
+                      <View style={styles.readStatusContainer}>
+                        <Text style={[
+                          styles.readStatusIcon,
+                          item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
+                        ]}>
+                          {item.isRead ? '✓✓' : '✓'}
+                        </Text>
+                        <Text style={[
+                          styles.readStatusBottom,
+                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
+                        ]}>
+                          {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
+                        </Text>
+                        {/* Debug: แสดงสถานะ isRead สำหรับรูปภาพ */}
+                        {__DEV__ && (
+                          <Text style={{fontSize: 8, color: 'gray', marginLeft: 5}}>
+                            [IMG:{String(item.isRead)}]
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+              )}
             </View>
           )}
 
           {/* แสดงข้อความในกรอบแยก (ถ้ามีข้อความและไม่ใช่ default) */}
           {item.content && item.content !== 'รูปภาพ' && item.content !== 'ไฟล์แนบ' && (
             <View>
-              {/* ข้อมูลข้อความอยู่ข้างหน้ากล่อง */}
-              <View style={[
-                styles.messageInfoContainer,
-                isMyMessage ? styles.myMessageInfo : styles.otherMessageInfo
-              ]}>
-                <Text style={[
-                  styles.messageTimeExternal,
-                  isMyMessage ? styles.myMessageTimeExternal : styles.otherMessageTimeExternal
-                ]}>
-                  {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
-                </Text>
-                {isMyMessage && !item.isOptimistic && (
-                  <Text style={[
-                    styles.readStatusExternal,
-                    isMyMessage ? styles.myReadStatusExternal : styles.otherReadStatusExternal
-                  ]}>
-                    {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
-                  </Text>
-                )}
-              </View>
               <View style={[
                 styles.messageBubble,
                 isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
@@ -857,63 +1114,141 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 ]}>
                   {item.content}
                 </Text>
+                {item.editedAt && (
+                  <Text style={[styles.editedText, isMyMessage ? styles.myEditedText : styles.otherEditedText]}>
+                    แก้ไขแล้ว
+                  </Text>
+                )}
               </View>
+              
+              {/* วันเวลาอยู่ข้างล่างข้อความ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
+              {(showTime || showTimeForMessages.has(item._id)) && (
+                <Animated.View 
+                  style={[
+                    styles.messageTimeBottomContainer,
+                    isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
+                    {
+                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
+                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+                        (timeAnimations[item._id]).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 30]
+                        }) : 0)
+                    }
+                  ]}
+                >
+                  <View style={styles.timeAndStatusRow}>
+                    <Text style={[
+                      styles.messageTimeBottom,
+                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
+                    ]}>
+                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                    </Text>
+                    {isMyMessage && !item.isOptimistic && (
+                      <View style={styles.readStatusContainer}>
+                        <Text style={[
+                          styles.readStatusIcon,
+                          item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
+                        ]}>
+                          {item.isRead ? '✓✓' : '✓'}
+                        </Text>
+                        <Text style={[
+                          styles.readStatusBottom,
+                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
+                        ]}>
+                          {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+              )}
             </View>
           )}
 
           {/* แสดงไฟล์ถ้ามี (ที่ไม่ใช่รูปภาพ) - แบบไม่มีกรอบ */}
           {item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) && (
-            <View style={[
-              styles.fileMessageBubble,
-              isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
-              item.isOptimistic && styles.optimisticMessage
-            ]}>
-              <TouchableOpacity 
-                style={[
-                  styles.fileAttachment,
-                  isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
-                ]}
-                onPress={() => showFileOptions(item.file)}
-              >
-                <View style={styles.fileIcon}>
-                  <Text style={styles.attachIcon}>📎</Text>
-                </View>
-                <View style={styles.fileDetails}>
-                  <Text style={[
-                    styles.fileName,
-                    { color: isMyMessage ? "#fff" : "#333" }
-                  ]} numberOfLines={2}>
-                    {item.file.file_name || 'ไฟล์แนบ'}
-                  </Text>
-                  <Text style={[
-                    styles.fileSize,
-                    { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
-                  ]}>
-                    {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.fileTimeContainer}>
-                <Text style={[
-                  styles.fileMessageTime,
-                  isMyMessage ? styles.myMessageTime : styles.otherMessageTime
-                ]}>
-                  {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
-                </Text>
-                {isMyMessage && !item.isOptimistic && (
-                  <Text style={[styles.readStatus, styles.fileReadStatus, 
-                    { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
-                  ]}>
-                    {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
-                  </Text>
-                )}
+            <View>
+              <View style={[
+                styles.fileMessageBubble,
+                isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
+                item.isOptimistic && styles.optimisticMessage
+              ]}>
+                <TouchableOpacity 
+                  style={[
+                    styles.fileAttachment,
+                    isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
+                  ]}
+                  onPress={() => showFileOptions(item.file)}
+                >
+                  <View style={styles.fileIcon}>
+                    <Text style={styles.attachIcon}>📎</Text>
+                  </View>
+                  <View style={styles.fileDetails}>
+                    <Text style={[
+                      styles.fileName,
+                      { color: isMyMessage ? "#fff" : "#333" }
+                    ]} numberOfLines={2}>
+                      {item.file.file_name || 'ไฟล์แนบ'}
+                    </Text>
+                    <Text style={[
+                      styles.fileSize,
+                      { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
+                    ]}>
+                      {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
+              
+              {/* วันเวลาอยู่ข้างล่างไฟล์ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
+              {(showTime || showTimeForMessages.has(item._id)) && (
+                <Animated.View 
+                  style={[
+                    styles.messageTimeBottomContainer,
+                    isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
+                    {
+                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
+                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+                        (timeAnimations[item._id]).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 30]
+                        }) : 0)
+                    }
+                  ]}
+                >
+                  <View style={styles.timeAndStatusRow}>
+                    <Text style={[
+                      styles.messageTimeBottom,
+                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
+                    ]}>
+                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                    </Text>
+                    {isMyMessage && !item.isOptimistic && (
+                      <View style={styles.readStatusContainer}>
+                        <Text style={[
+                          styles.readStatusIcon,
+                          item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
+                        ]}>
+                          {item.isRead ? '✓✓' : '✓'}
+                        </Text>
+                        <Text style={[
+                          styles.readStatusBottom,
+                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
+                        ]}>
+                          {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+              )}
             </View>
           )}
         </View>
       </TouchableOpacity>
     );
-  }, [currentUser, recipientAvatar, recipientName]);
+  }, [currentUser, recipientAvatar, recipientName, messages, showTimeForMessages, timeAnimations]);
 
   if (isLoading) {
     return (
@@ -997,30 +1332,58 @@ const PrivateChatScreen = ({ route, navigation }) => {
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContainer}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={15}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={20}
           windowSize={10}
-          initialNumToRender={12}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 10
-          }}
+          initialNumToRender={20}
           onScroll={(event) => {
             const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
             const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
             setShowScrollToBottom(!isAtBottom);
           }}
           onContentSizeChange={(contentWidth, contentHeight) => {
-            // ไปที่ข้อความล่าสุดทันทีเมื่อโหลดข้อความ โดยไม่มี animation
-            // แต่ทำแค่ครั้งเดียวหลังโหลดข้อความ
-            if (messages.length > 0 && !hasScrolledToEnd && isScrollingToEnd) {
-              console.log('📏 Content size changed, scrolling to end. Messages:', messages.length);
-              // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า layout เสร็จแล้ว
-              requestAnimationFrame(() => {
-                flatListRef.current?.scrollToEnd({ animated: false });
-                setIsScrollingToEnd(false);
+            // Auto-scroll ไปข้อความล่าสุดเมื่อเข้าแชทใหม่
+            if (messages.length > 0 && !hasScrolledToEnd) {
+              console.log('📏 Content size changed, auto-scrolling to end. Messages:', messages.length);
+              // ใช้ scrollToIndex เพื่อไปที่ข้อความสุดท้าย
+              const scrollToLastMessage = () => {
+                try {
+                  if (messages.length > 0) {
+                    flatListRef.current?.scrollToIndex({ 
+                      index: messages.length - 1, 
+                      animated: false,
+                      viewPosition: 1 // 1 = ข้อความอยู่ด้านล่างสุด
+                    });
+                  }
+                } catch (error) {
+                  // ถ้า scrollToIndex ไม่ได้ ใช้ scrollToEnd
+                  console.log('ScrollToIndex failed, using scrollToEnd:', error);
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }
                 setHasScrolledToEnd(true);
-              });
+                setIsScrollingToEnd(false);
+              };
+              
+              setTimeout(() => {
+                requestAnimationFrame(scrollToLastMessage);
+              }, 400);
+            }
+          }}
+          onLayout={() => {
+            // เมื่อ FlatList layout เสร็จ
+            if (messages.length > 0 && !hasScrolledToEnd) {
+              setTimeout(() => {
+                console.log('📐 FlatList layout complete, scrolling to end');
+                try {
+                  flatListRef.current?.scrollToIndex({ 
+                    index: messages.length - 1, 
+                    animated: false,
+                    viewPosition: 1
+                  });
+                } catch (error) {
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }
+              }, 100);
             }
           }}
           scrollEventThrottle={16}
@@ -1171,6 +1534,51 @@ const PrivateChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* Modal แก้ไขข้อความ */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showEditModal}
+        onRequestClose={cancelEditMessage}
+      >
+        <View style={styles.editModalOverlay}>
+          <View style={styles.editModalContainer}>
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>แก้ไขข้อความ</Text>
+              <TouchableOpacity onPress={cancelEditMessage} style={styles.editModalCloseButton}>
+                <Text style={styles.editModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput
+              style={styles.editTextInput}
+              value={editText}
+              onChangeText={setEditText}
+              multiline={true}
+              placeholder="พิมพ์ข้อความ..."
+              autoFocus={true}
+            />
+            
+            <View style={styles.editModalButtons}>
+              <TouchableOpacity 
+                style={styles.editCancelButton} 
+                onPress={cancelEditMessage}
+              >
+                <Text style={styles.editCancelButtonText}>ยกเลิก</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.editSaveButton, !editText.trim() && styles.editSaveButtonDisabled]} 
+                onPress={saveEditMessage}
+                disabled={!editText.trim()}
+              >
+                <Text style={styles.editSaveButtonText}>บันทึก</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -1302,15 +1710,18 @@ const styles = StyleSheet.create({
     color: '#666'
   },
   messageBubble: {
-    maxWidth: '75%', // ลดความกว้างลงเพื่อไม่ให้ข้อความยาวเกินไป
+    maxWidth: '85%', // เพิ่มความกว้างสำหรับข้อความยาว
+    minWidth: 'auto', // ให้กล่องปรับขนาดตามเนื้อหา
     padding: 12,
     borderRadius: 12, // เปลี่ยนจาก 18 เป็น 12 เพื่อให้เป็นสี่เหลี่ยมมนๆ
     backgroundColor: '#fff', // กล่องข้อความเป็นสีขาว
-    flexShrink: 1, // ให้กล่องข้อความปรับขนาดตามเนื้อหา
+    flexShrink: 1, // ให้กล่องสามารถหดได้ตามเนื้อหา
+    alignSelf: 'flex-start', // ให้กล่องปรับขนาดตามเนื้อหา
   },
   myMessageBubble: {
     backgroundColor: '#fff', // ข้อความของตัวเองก็เป็นสีขาว
-    borderBottomRightRadius: 12 // ปรับให้สม่ำเสมอ
+    borderBottomRightRadius: 12, // ปรับให้สม่ำเสมอ
+    alignSelf: 'flex-end', // ให้ข้อความของตัวเองชิดขวา
   },
   otherMessageBubble: {
     backgroundColor: '#fff',
@@ -1325,7 +1736,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     textAlign: 'left',
-    width: '100%',
+    flexWrap: 'wrap', // ให้ข้อความขึ้นบรรทัดใหม่เมื่อยาวเกินไป
+    flexShrink: 1, // ให้ข้อความปรับขนาดได้
   },
   myMessageText: {
     color: '#333' // เปลี่ยนเป็นสีเทาเข้ม เพราะพื้นหลังเป็นสีขาว
@@ -1359,6 +1771,65 @@ const styles = StyleSheet.create({
   otherMessageInfo: {
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
+  },
+  
+  // Container สำหรับวางเวลาข้างล่าง
+  messageWithTimeContainer: {
+    flexDirection: 'column',
+    marginBottom: 8,
+  },
+  messageTimeBottomContainer: {
+    alignItems: 'flex-start', // เปลี่ยนจาก center เป็น flex-start เพื่อให้ไปทางซ้าย
+    marginTop: 4,
+    paddingHorizontal: 5,
+  },
+  timeAndStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  // Read Status Container สำหรับจัดกลุ่มไอคอนกับข้อความ
+  readStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  
+  // Read Status Icon Styles
+  readStatusIcon: {
+    fontSize: 12,
+    marginRight: 4,
+    fontWeight: 'bold',
+  },
+  readStatusIconSent: {
+    color: '#999', // สีเทาสำหรับ "ส่งแล้ว" (✓)
+  },
+  readStatusIconRead: {
+    color: '#007AFF', // สีน้ำเงินสำหรับ "อ่านแล้ว" (✓✓)
+  },
+  messageTimeBottom: {
+    fontSize: 10,
+    color: '#666',
+    lineHeight: 12,
+    textAlign: 'left', // เปลี่ยนจาก center เป็น left
+    marginRight: 8, // เพิ่มระยะห่างระหว่างเวลาและ status
+  },
+  myMessageTimeBottom: {
+    color: '#666',
+  },
+  otherMessageTimeBottom: {
+    color: '#666',
+  },
+  readStatusBottom: {
+    fontSize: 9,
+    lineHeight: 10,
+    textAlign: 'left', // เปลี่ยนจาก center เป็น left
+  },
+  myReadStatusBottom: {
+    color: '#666',
+  },
+  otherReadStatusBottom: {
+    color: '#666',
   },
   
   // External Time and Status (ข้างนอกกล่อง)
@@ -1675,8 +2146,8 @@ const styles = StyleSheet.create({
   
   // Separate Message Containers
   messageContentContainer: {
-    maxWidth: '80%', // ลดความกว้างลง
-    alignItems: 'flex-end', // Default for sender
+    flex: 1, // ให้ใช้พื้นที่เต็มที่
+    maxWidth: '85%', // กำหนดความกว้างสูงสุด
   },
   
   // Image Message Bubble
@@ -1759,6 +2230,97 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  editedText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  myEditedText: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  otherEditedText: {
+    color: '#999',
+  },
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  editModalCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalCloseText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  editTextInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 100,
+    maxHeight: 200,
+    fontSize: 16,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  editModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  editCancelButton: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  editCancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  editSaveButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    marginLeft: 10,
+    alignItems: 'center',
+  },
+  editSaveButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  editSaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

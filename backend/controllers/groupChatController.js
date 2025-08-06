@@ -133,8 +133,52 @@ const getGroupDetails = asyncHandler(async (req, res) => {
 
     res.json({
         success: true,
-        data: group
+        data: {
+            ...group.toObject(),
+            admin: group.creator // เพิ่ม admin field เป็น alias สำหรับ creator
+        }
     });
+});
+
+// @desc    ดึงสมาชิกกลุ่ม
+// @route   GET /api/groups/:id/members
+// @access  Private
+const getGroupMembers = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user._id;
+
+    const group = await GroupChat.findById(groupId)
+        .populate('members.user', 'firstName lastName username role avatar email');
+
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็นสมาชิกหรือไม่
+    const isMember = group.members.some(member => 
+        member.user._id.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์เข้าถึงกลุ่มนี้');
+    }
+
+    // ส่งเฉพาะข้อมูลสมาชิก
+    const members = group.members.map(member => ({
+        _id: member.user._id,
+        firstName: member.user.firstName,
+        lastName: member.user.lastName,
+        username: member.user.username,
+        role: member.user.role,
+        avatar: member.user.avatar,
+        email: member.user.email,
+        memberRole: member.role,
+        joinedAt: member.joinedAt
+    }));
+
+    res.json(members);
 });
 
 // @desc    เชิญสมาชิกเข้ากลุ่ม
@@ -735,10 +779,262 @@ const deleteGroupMessage = asyncHandler(async (req, res) => {
     });
 });
 
+// @desc    อัพเดทข้อมูลกลุ่ม (ชื่อ)
+// @route   PUT /api/groups/:id
+// @access  Private
+const updateGroup = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const { name } = req.body;
+    const userId = req.user._id;
+
+    if (!name || name.trim() === '') {
+        res.status(400);
+        throw new Error('กรุณาใส่ชื่อกลุ่ม');
+    }
+
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็น admin ของกลุ่ม
+    if (group.admin.toString() !== userId.toString()) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์แก้ไขกลุ่มนี้');
+    }
+
+    group.name = name.trim();
+    await group.save();
+
+    res.json({
+        success: true,
+        message: 'อัพเดทชื่อกลุ่มสำเร็จ',
+        data: group
+    });
+});
+
+// @desc    อัพเดทรูปกลุ่ม
+// @route   PUT /api/groups/:id/avatar
+// @access  Private
+const updateGroupAvatar = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user._id;
+
+    if (!req.file) {
+        res.status(400);
+        throw new Error('กรุณาเลือกรูปภาพ');
+    }
+
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็น admin ของกลุ่ม
+    if (group.admin.toString() !== userId.toString()) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์แก้ไขกลุ่มนี้');
+    }
+
+    // ลบรูปเก่า (ถ้ามี)
+    if (group.groupAvatar) {
+        try {
+            await deleteOldAvatar(group.groupAvatar);
+        } catch (error) {
+            console.error('Error deleting old avatar:', error);
+        }
+    }
+
+    group.groupAvatar = req.file.path;
+    await group.save();
+
+    res.json({
+        success: true,
+        message: 'อัพเดทรูปกลุ่มสำเร็จ',
+        data: group,
+        groupAvatar: group.groupAvatar
+    });
+});
+
+// @desc    เพิ่มสมาชิกในกลุ่ม
+// @route   POST /api/groups/:id/members
+// @access  Private
+const addMembers = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const { userIds } = req.body;
+    const userId = req.user._id;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        res.status(400);
+        throw new Error('กรุณาเลือกสมาชิกที่ต้องการเพิ่ม');
+    }
+
+    const group = await GroupChat.findById(groupId).populate('members.user', 'firstName lastName name email');
+    if (!group) {
+        res.status(404);
+        throw new Error('ไม่พบกลุ่ม');
+    }
+
+    // ตรวจสอบว่าเป็น admin ของกลุ่ม
+    if (group.admin.toString() !== userId.toString()) {
+        res.status(403);
+        throw new Error('ไม่มีสิทธิ์เพิ่มสมาชิกในกลุ่มนี้');
+    }
+
+    // ตรวจสอบว่าผู้ใช้มีอยู่จริง
+    const usersToAdd = await User.find({ _id: { $in: userIds } });
+    if (usersToAdd.length !== userIds.length) {
+        res.status(400);
+        throw new Error('ไม่พบผู้ใช้บางคน');
+    }
+
+    // เพิ่มสมาชิกใหม่ (ตรวจสอบไม่ให้ซ้ำ)
+    const existingMemberIds = group.members.map(member => member.user.toString());
+    const newMembers = userIds.filter(id => !existingMemberIds.includes(id));
+
+    if (newMembers.length === 0) {
+        res.status(400);
+        throw new Error('ผู้ใช้ทั้งหมดอยู่ในกลุ่มแล้ว');
+    }
+
+    const membersToAdd = newMembers.map(userId => ({
+        user: userId,
+        role: 'member'
+    }));
+
+    group.members.push(...membersToAdd);
+    await group.save();
+
+    // Populate ข้อมูลสมาชิกใหม่
+    await group.populate('members.user', 'firstName lastName name email avatar');
+
+    res.json({
+        success: true,
+        message: `เพิ่มสมาชิก ${newMembers.length} คนสำเร็จ`,
+        data: group
+    });
+});
+
+// @desc    แก้ไขข้อความในกลุ่ม
+// @route   PUT /api/groups/:id/messages/:messageId
+// @access  Private
+const editGroupMessage = asyncHandler(async (req, res) => {
+    try {
+        const { id: groupId, messageId } = req.params;
+        const { content } = req.body;
+        const currentUserId = req.user._id;
+
+        console.log('✏️ Edit group message request:', { groupId, messageId, content, currentUserId });
+
+        // ตรวจสอบว่าข้อความใหม่ไม่ว่าง
+        if (!content || content.trim() === '') {
+            return res.status(400).json({
+                message: 'กรุณาใส่เนื้อหาข้อความ'
+            });
+        }
+
+        // ตรวจสอบว่าผู้ใช้เป็นสมาชิกของกลุ่มหรือไม่
+        const group = await GroupChat.findById(groupId);
+        if (!group) {
+            return res.status(404).json({
+                message: 'ไม่พบกลุ่มที่ระบุ'
+            });
+        }
+
+        const isMember = group.members.some(
+            member => member.user.toString() === currentUserId.toString()
+        );
+
+        if (!isMember) {
+            return res.status(403).json({
+                message: 'คุณไม่ได้เป็นสมาชิกของกลุ่มนี้'
+            });
+        }
+
+        // หาข้อความที่ต้องการแก้ไข
+        const message = await Messages.findById(messageId)
+            .populate('user_id', 'firstName lastName avatar');
+
+        if (!message) {
+            return res.status(404).json({
+                message: 'ไม่พบข้อความที่ต้องการแก้ไข'
+            });
+        }
+
+        // ตรวจสอบว่าข้อความนี้อยู่ในกลุ่มที่ถูกต้องหรือไม่
+        if (message.group_id.toString() !== groupId) {
+            return res.status(400).json({
+                message: 'ข้อความนี้ไม่ได้อยู่ในกลุ่มที่ระบุ'
+            });
+        }
+
+        // ตรวจสอบว่าเป็นเจ้าของข้อความหรือไม่
+        if (message.user_id._id.toString() !== currentUserId.toString()) {
+            return res.status(403).json({
+                message: 'คุณไม่สามารถแก้ไขข้อความของผู้อื่นได้'
+            });
+        }
+
+        // ตรวจสอบว่าเป็นข้อความแบบ text เท่านั้น
+        if (message.messageType !== 'text') {
+            return res.status(400).json({
+                message: 'สามารถแก้ไขได้เฉพาะข้อความข้อความเท่านั้น'
+            });
+        }
+
+        // อัปเดตข้อความ
+        message.content = content.trim();
+        message.editedAt = new Date();
+        await message.save();
+
+        console.log('✅ Group message edited successfully:', messageId);
+
+        // ส่งข้อมูลข้อความที่แก้ไขแล้วกลับไป
+        const editedMessage = await Messages.findById(messageId)
+            .populate('user_id', 'firstName lastName avatar');
+
+        // ส่ง socket event เพื่อแจ้งสมาชิกอื่นในกลุ่มว่าข้อความถูกแก้ไข
+        if (req.app.locals.io) {
+            const socketData = {
+                messageId: editedMessage._id,
+                content: editedMessage.content,
+                editedAt: editedMessage.editedAt,
+                groupId: groupId
+            };
+
+            req.app.locals.io.to(groupId).emit('message_edited', socketData);
+        }
+
+        res.json({
+            success: true,
+            message: 'แก้ไขข้อความสำเร็จ',
+            data: {
+                _id: editedMessage._id,
+                content: editedMessage.content,
+                editedAt: editedMessage.editedAt,
+                sender: editedMessage.user_id
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error editing group message:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการแก้ไขข้อความ',
+            error: error.message
+        });
+    }
+});
+
 module.exports = {
     createGroup,
     getUserGroups,
     getGroupDetails,
+    getGroupMembers,
+    updateGroup,
+    updateGroupAvatar,
+    addMembers,
     inviteMembers,
     removeMember,
     leaveGroup,
@@ -747,5 +1043,6 @@ module.exports = {
     searchGroups,
     sendGroupMessage,
     getGroupMessages,
-    deleteGroupMessage
+    deleteGroupMessage,
+    editGroupMessage
 };

@@ -7,6 +7,10 @@ const {
     createGroup,
     getUserGroups,
     getGroupDetails,
+    getGroupMembers,
+    updateGroup,
+    updateGroupAvatar,
+    addMembers,
     inviteMembers,
     removeMember,
     leaveGroup,
@@ -15,7 +19,8 @@ const {
     searchGroups,
     sendGroupMessage,
     getGroupMessages,
-    deleteGroupMessage
+    deleteGroupMessage,
+    editGroupMessage
 } = require('../controllers/groupChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
@@ -57,6 +62,22 @@ router.post('/', upload.single('groupAvatar'), createGroup);
 // @desc    ดึงข้อมูลกลุ่มเฉพาะ
 router.get('/:id', getGroupDetails);
 
+// @route   GET /api/groups/:id/members
+// @desc    ดึงสมาชิกกลุ่ม
+router.get('/:id/members', getGroupMembers);
+
+// @route   PUT /api/groups/:id
+// @desc    อัพเดทข้อมูลกลุ่ม (ชื่อ)
+router.put('/:id', updateGroup);
+
+// @route   PUT /api/groups/:id/avatar
+// @desc    อัพเดทรูปกลุ่ม
+router.put('/:id/avatar', upload.single('groupAvatar'), updateGroupAvatar);
+
+// @route   POST /api/groups/:id/members
+// @desc    เพิ่มสมาชิกในกลุ่ม
+router.post('/:id/members', addMembers);
+
 // @route   DELETE /api/groups/:id
 // @desc    ลบกลุ่ม
 router.delete('/:id', deleteGroup);
@@ -95,6 +116,10 @@ router.get('/:id/messages', getGroupMessages);
 // @route   DELETE /api/groups/:id/messages/:messageId
 // @desc    ลบข้อความในกลุ่ม
 router.delete('/:id/messages/:messageId', deleteGroupMessage);
+
+// @route   PUT /api/groups/:id/messages/:messageId
+// @desc    แก้ไขข้อความในกลุ่ม
+router.put('/:id/messages/:messageId', require('../controllers/groupChatController').editGroupMessage);
 
 // @route   POST /api/groups/:id/upload
 // @desc    อัพโหลดไฟล์ในกลุ่ม (alias สำหรับ messages endpoint)

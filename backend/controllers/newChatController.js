@@ -251,11 +251,23 @@ const getMessages = asyncHandler(async (req, res) => {
                 // สำหรับข้อความที่ส่งโดยผู้ใช้ปัจจุบัน: isRead หมายถึงมีคนอื่นอ่านแล้วหรือไม่
                 // สำหรับข้อความของคนอื่น: isRead จะเป็น false เสมอ (เพราะเราไม่ต้องการแสดงสถานะนี้)
                 let isRead = false;
-                if (msg.user_id.toString() === userId.toString()) {
+                const isMyMessage = msg.user_id._id.toString() === userId.toString();
+                
+                if (isMyMessage) {
                     // ข้อความของเราเอง: ตรวจสอบว่ามีคนอื่นอ่านหรือไม่
                     isRead = msg.readBy && msg.readBy.some(read => 
                         read.user && read.user.toString() !== userId.toString()
                     );
+                    
+                    // Debug log สำหรับข้อความของเราเอง
+                    console.log(`📖 Message ${msg._id.toString().slice(-4)}: isMyMessage=${isMyMessage}, isRead=${isRead}, readBy count=${msg.readBy?.length || 0}`);
+                    if (msg.readBy && msg.readBy.length > 0) {
+                        console.log(`📖 ReadBy details:`, msg.readBy.map(r => ({ 
+                            userId: r.user.toString(), 
+                            readAt: r.readAt, 
+                            isNotMe: r.user.toString() !== userId.toString() 
+                        })));
+                    }
                 }
                 
                 return {
@@ -531,12 +543,12 @@ const markAsRead = asyncHandler(async (req, res) => {
             });
         }
 
-        // อัพเดทข้อความทั้งหมดในแชทนี้ให้ถูกมาร์คว่าอ่านแล้วสำหรับผู้ใช้นี้
-        await Messages.updateMany(
+        // อัพเดทข้อความของคนอื่นให้ถูกมาร์คว่าผู้ใช้ปัจจุบันอ่านแล้ว
+        const updateResult = await Messages.updateMany(
             { 
                 chat_id: id,
-                user_id: { $ne: userId }, // ไม่ต้องมาร์คข้อความของตัวเองเป็นอ่านแล้ว
-                'readBy.user': { $ne: userId } // ยังไม่ได้อ่าน
+                user_id: { $ne: userId }, // ข้อความของคนอื่น
+                'readBy.user': { $ne: userId } // ยังไม่ได้อ่านโดยผู้ใช้ปัจจุบัน
             },
             { 
                 $push: { 
@@ -547,6 +559,8 @@ const markAsRead = asyncHandler(async (req, res) => {
                 }
             }
         );
+
+        console.log('📖 Messages marked as read by current user:', updateResult.modifiedCount);
 
         console.log('✅ Messages marked as read successfully');
         res.json({ message: 'อ่านข้อความแล้ว' });
@@ -827,6 +841,96 @@ const getChatParticipants = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Edit a message
+// @route   PUT /api/chats/messages/:id
+// @access  Private
+const editMessage = asyncHandler(async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const { content } = req.body;
+        const currentUserId = req.user._id;
+
+        console.log('✏️ Edit message request:', { messageId, content, currentUserId });
+
+        // ตรวจสอบว่าข้อความใหม่ไม่ว่าง
+        if (!content || content.trim() === '') {
+            return res.status(400).json({
+                message: 'กรุณาใส่เนื้อหาข้อความ'
+            });
+        }
+
+        // หาข้อความที่ต้องการแก้ไข
+        const message = await Messages.findById(messageId)
+            .populate('user_id', 'firstName lastName avatar');
+
+        if (!message) {
+            return res.status(404).json({
+                message: 'ไม่พบข้อความที่ต้องการแก้ไข'
+            });
+        }
+
+        // ตรวจสอบว่าเป็นเจ้าของข้อความหรือไม่
+        if (message.user_id._id.toString() !== currentUserId.toString()) {
+            return res.status(403).json({
+                message: 'คุณไม่สามารถแก้ไขข้อความของผู้อื่นได้'
+            });
+        }
+
+        // ตรวจสอบว่าเป็นข้อความแบบ text เท่านั้น
+        if (message.messageType !== 'text') {
+            return res.status(400).json({
+                message: 'สามารถแก้ไขได้เฉพาะข้อความข้อความเท่านั้น'
+            });
+        }
+
+        // อัปเดตข้อความ
+        message.content = content.trim();
+        message.editedAt = new Date();
+        await message.save();
+
+        console.log('✅ Message edited successfully:', messageId);
+
+        // ส่งข้อมูลข้อความที่แก้ไขแล้วกลับไป
+        const editedMessage = await Messages.findById(messageId)
+            .populate('user_id', 'firstName lastName avatar');
+
+        // ส่ง socket event เพื่อแจ้งผู้อื่นว่าข้อความถูกแก้ไข
+        if (req.app.locals.io) {
+            const socketData = {
+                messageId: editedMessage._id,
+                content: editedMessage.content,
+                editedAt: editedMessage.editedAt,
+                chatroomId: message.chat_id,
+                groupId: message.group_id
+            };
+
+            if (message.group_id) {
+                req.app.locals.io.to(message.group_id.toString()).emit('message_edited', socketData);
+            } else {
+                req.app.locals.io.to(message.chat_id.toString()).emit('message_edited', socketData);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'แก้ไขข้อความสำเร็จ',
+            data: {
+                _id: editedMessage._id,
+                content: editedMessage.content,
+                editedAt: editedMessage.editedAt,
+                sender: editedMessage.user_id
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error editing message:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการแก้ไขข้อความ',
+            error: error.message
+        });
+    }
+});
+
 module.exports = {
     getChats,
     getMessages,
@@ -836,6 +940,7 @@ module.exports = {
     markAsRead,
     deleteChatroom,
     deleteMessage,
+    editMessage,
     markMessageAsRead,
     getUnreadCount,
     markAllAsRead,

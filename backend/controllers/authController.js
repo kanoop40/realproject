@@ -100,8 +100,31 @@ const checkAuthStatus = async (req, res) => {
   }
 };
 
+// @desc    Get all users
+// @route   GET /api/auth/users
+// @access  Private
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({})
+      .select('firstName lastName name email avatar role')
+      .sort({ firstName: 1 });
+
+    res.json({
+      success: true,
+      data: users
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+};
+
 module.exports = {
   loginUser,
   logoutUser,
-  checkAuthStatus
+  checkAuthStatus,
+  getAllUsers
 };

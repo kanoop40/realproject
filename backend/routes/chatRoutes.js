@@ -9,6 +9,7 @@ const {
     markAsRead,
     deleteChatroom,
     deleteMessage,
+    editMessage,
     markMessageAsRead,
     getUnreadCount,
     markAllAsRead,
@@ -73,6 +74,11 @@ router.delete('/:id', deleteChatroom);
 // @desc    Delete a message
 // @access  Private
 router.delete('/messages/:id', deleteMessage);
+
+// @route   PUT /api/chats/messages/:id
+// @desc    Edit a message
+// @access  Private
+router.put('/messages/:id', require('../controllers/newChatController').editMessage);
 
 // @route   POST /api/chats/messages/:id/read
 // @desc    Mark message as read

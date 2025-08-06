@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Fixed API URL
+// Development API URL (local network IP)
 const API_URL = 'https://realproject-mg25.onrender.com';
 
 console.log('Environment:', { 

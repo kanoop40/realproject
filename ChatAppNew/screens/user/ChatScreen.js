@@ -534,26 +534,29 @@ const ChatScreen = ({ route, navigation }) => {
           delayLongPress={500}
         >
           <View style={styles.avatarContainer}>
-            {item.groupImage ? (
+            {item.groupAvatar ? (
               <Image
                 source={{ 
-                  uri: item.groupImage.startsWith('http') 
-                    ? item.groupImage 
-                    : `${API_URL}/${item.groupImage.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                  uri: item.groupAvatar.startsWith('http') 
+                    ? item.groupAvatar 
+                    : `${API_URL}/${item.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
                 }}
                 style={styles.avatar}
                 defaultSource={require('../../assets/default-avatar.png')}
                 onError={(error) => {
-                  console.log('❌ Group image load error:', error.nativeEvent);
+                  console.log('❌ Group avatar load error:', error.nativeEvent);
+                  console.log('❌ Group avatar URL:', item.groupAvatar.startsWith('http') 
+                    ? item.groupAvatar 
+                    : `${API_URL}/${item.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
                 }}
                 onLoad={() => {
-                  console.log('✅ Group image loaded successfully:', item.groupImage);
+                  console.log('✅ Group avatar loaded successfully:', item.groupAvatar);
                 }}
               />
             ) : (
               <View style={[styles.avatar, styles.groupAvatar]}>
                 <Text style={styles.groupAvatarText}>
-                  {item.roomName?.charAt(0)?.toUpperCase() || '👥'}
+                  👥
                 </Text>
               </View>
             )}
