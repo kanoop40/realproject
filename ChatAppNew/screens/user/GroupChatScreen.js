@@ -11,13 +11,15 @@ import * as Sharing from 'expo-sharing';
 import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
+import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import useProgressLoading from '../../hooks/useProgressLoading';
+import NotificationService from '../../service/notificationService';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
   const { socket, joinChatroom } = useSocket();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isScrollingToEnd, setIsScrollingToEnd] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -26,6 +28,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
+  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
   const [selectedModalImage, setSelectedModalImage] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -35,12 +38,29 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showTimeForMessages, setShowTimeForMessages] = useState(new Set()); // เก็บ ID ของข้อความที่จะแสดงเวลา
   const [timeAnimations, setTimeAnimations] = useState({}); // เก็บ Animated.Value สำหรับแต่ละข้อความ
+  const [messageReadCount, setMessageReadCount] = useState({}); // เก็บจำนวนคนที่อ่านข้อความแต่ละข้อความ
   const flatListRef = useRef(null);
 
   const { groupId, groupName, groupAvatar } = route.params || {};
 
   useEffect(() => {
     loadGroupData();
+    // อัปเดตข้อมูลผู้ใช้ใน NotificationService
+    if (authUser) {
+      console.log('🔔 Setting current user in NotificationService:', authUser._id);
+      NotificationService.setCurrentUser(authUser);
+    } else {
+      console.log('❌ No authUser found for NotificationService');
+    }
+  }, [authUser]);
+
+  // เพิ่ม useEffect เพื่อตรวจสอบ Socket status เมื่อเข้าหน้า
+  useEffect(() => {
+    console.log('🔍 Checking socket status on component mount...');
+    console.log('🔍 Socket exists:', !!socket);
+    console.log('🔍 Socket connected:', socket?.connected);
+    console.log('🔍 GroupId:', groupId);
+    console.log('🔍 AuthUser exists:', !!authUser);
   }, []);
 
   // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่
@@ -141,23 +161,57 @@ const GroupChatScreen = ({ route, navigation }) => {
   }, [messages.length, isLoading]);
 
   useEffect(() => {
-    if (socket && groupId && authUser) {
+    console.log('🔍 Socket useEffect triggered');
+    console.log('🔍 socket:', !!socket);
+    console.log('🔍 socket.connected:', socket?.connected);
+    console.log('🔍 groupId:', groupId);
+    console.log('🔍 authUser:', !!authUser);
+    console.log('🔍 authUser._id:', authUser?._id);
+    
+    if (socket && groupId && authUser && socket.connected) {
       console.log('🔌 Setting up GroupChat socket listeners for group:', groupId);
       console.log('👤 Current user:', authUser._id);
+      console.log('🔌 Socket connected:', socket.connected);
       
       // Reset scroll flags เมื่อเข้าแชทใหม่
       setHasScrolledToEnd(false);
       setIsScrollingToEnd(true);
       
+      console.log('🔌 Attempting to join chatroom:', groupId);
       joinChatroom(groupId);
       
       const handleNewMessage = (data) => {
         console.log('💬 GroupChat received new message:', data);
+        console.log('💬 Data structure:', JSON.stringify(data, null, 2));
         
-        if (data.chatroomId !== groupId) return;
+        if (data.chatroomId !== groupId) {
+          console.log('❌ Message not for this group. Expected:', groupId, 'Got:', data.chatroomId);
+          return;
+        }
         
         // ไม่รับข้อความจากตัวเองผ่าน socket
         if (data.message?.sender?._id !== authUser._id) {
+          // แสดงการแจ้งเตือนสำหรับข้อความจากคนอื่น
+          const senderName = data.message?.sender ? 
+            `${data.message.sender.firstName} ${data.message.sender.lastName}` : 
+            'สมาชิกในกลุ่ม';
+          
+          console.log('🔔 About to show notification for group message');
+          console.log('🔔 Sender ID:', data.message?.sender?._id);
+          console.log('🔔 Current User ID:', authUser._id);
+          console.log('🔔 Group Name:', groupName);
+          console.log('🔔 Message Content:', data.message?.content);
+          
+          NotificationService.showInAppNotification(
+            `💬 ${groupName || 'แชทกลุ่ม'}`,
+            `${senderName}: ${data.message?.content || 'ส่งไฟล์แนบ'}`,
+            { 
+              type: 'group_message', 
+              groupId: groupId,
+              senderId: data.message?.sender?._id 
+            }
+          );
+          
           setMessages(prevMessages => {
             const messageExists = prevMessages.some(msg => msg._id === data.message._id);
             if (messageExists) return prevMessages;
@@ -201,42 +255,92 @@ const GroupChatScreen = ({ route, navigation }) => {
         }
       };
 
+      const handleMessageRead = (data) => {
+        if (data.groupId === groupId) {
+          setMessageReadCount(prev => ({
+            ...prev,
+            [data.messageId]: data.readCount || 0
+          }));
+        }
+      };
+
       socket.on('newMessage', handleNewMessage);
       socket.on('message_deleted', handleMessageDeleted);
       socket.on('message_edited', handleMessageEdited);
+      socket.on('message_read', handleMessageRead);
+      
+      console.log('🔌 Socket event listeners set up successfully');
       
       return () => {
+        console.log('🔌 Cleaning up socket listeners');
         socket.off('newMessage', handleNewMessage);
         socket.off('message_deleted', handleMessageDeleted);
         socket.off('message_edited', handleMessageEdited);
+        socket.off('message_read', handleMessageRead);
       };
+    } else {
+      console.log('❌ Socket setup blocked. Reasons:');
+      console.log('   - socket:', !!socket);
+      console.log('   - socket.connected:', socket?.connected);
+      console.log('   - groupId:', !!groupId);
+      console.log('   - authUser:', !!authUser);
+      
+      // ถ้า socket ยังไม่ connected ให้ลองอีกครั้งหลัง 1 วินาที
+      if (socket && !socket.connected && groupId && authUser) {
+        console.log('⏰ Socket not connected yet, will retry in 1 second...');
+        const retryTimeout = setTimeout(() => {
+          console.log('🔄 Retrying socket setup...');
+          // Force re-run useEffect by updating a dependency
+        }, 1000);
+        
+        return () => clearTimeout(retryTimeout);
+      }
     }
-  }, [groupId, socket, authUser]);
+  }, [socket, socket?.connected, groupId, authUser]);
 
   const loadGroupData = async () => {
     try {
-      setIsLoading(true);
+      startLoading();
       setIsScrollingToEnd(true);
+      updateProgress(10); // เริ่มต้น 10%
       
+      updateProgress(30); // 30% เมื่อเริ่มโหลด
       const [messagesRes, groupRes] = await Promise.all([
         api.get(`/groups/${groupId}/messages`),
         api.get(`/groups/${groupId}`)
       ]);
       
+      updateProgress(70); // 70% เมื่อได้ข้อมูล
       console.log('📨 Group messages loaded:', messagesRes.data);
       console.log('👥 Group info loaded:', groupRes.data);
       
       const loadedMessages = messagesRes.data.data || messagesRes.data.messages || [];
       const groupData = groupRes.data.data || groupRes.data;
       
+      updateProgress(85); // 85% เมื่อประมวลผลข้อมูล
+      
       if (loadedMessages.length === 0) {
         console.log('📨 No messages found - this is a new group chat');
         setMessages([]); // ตั้งค่าเป็น array ว่าง
+        setHasScrolledToEnd(true);
+        setIsScrollingToEnd(false);
       } else {
         setMessages(loadedMessages);
+        
+        // เริ่มต้นข้อมูล messageReadCount สำหรับข้อความที่โหลดมา
+        const initialReadCount = {};
+        loadedMessages.forEach(message => {
+          // สำหรับข้อความของตัวเอง ตั้งค่าเริ่มต้นการอ่าน
+          if (message.sender?._id === authUser._id) {
+            initialReadCount[message._id] = message.readCount || 0;
+          }
+        });
+        setMessageReadCount(initialReadCount);
       }
       console.log('📨 Messages set, total:', loadedMessages.length);
       setGroupInfo(groupData);
+      
+      updateProgress(95); // 95% เมื่อเซ็ตข้อมูลเสร็จ
       
       // แปลงข้อมูลสมาชิกให้ถูกต้อง
       const members = groupData.members || [];
@@ -260,8 +364,10 @@ const GroupChatScreen = ({ route, navigation }) => {
     } catch (error) {
       console.error('Error loading group data:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลกลุ่มได้');
+      stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
     } finally {
-      setIsLoading(false);
+      updateProgress(100); // 100% เมื่อเสร็จสิ้น
+      stopLoading(500); // หยุด loading หลัง 500ms
     }
   };
 
@@ -408,6 +514,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const downloadFile = async (fileUrl, fileName) => {
     try {
       console.log('📥 Downloading file:', fileUrl);
+      console.log('📁 File name:', fileName);
       
       const token = await AsyncStorage.getItem('token');
       if (!token) {
@@ -416,8 +523,16 @@ const GroupChatScreen = ({ route, navigation }) => {
       }
 
       let fullUrl = fileUrl;
-      if (!fileUrl.startsWith('http')) {
+      
+      // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
+      if (fileUrl.includes('cloudinary.com')) {
+        // ใช้ URL โดยตรงสำหรับ Cloudinary
+        fullUrl = fileUrl;
+        console.log('🌤️ Using Cloudinary URL directly:', fullUrl);
+      } else if (!fileUrl.startsWith('http')) {
+        // สำหรับไฟล์ที่เก็บบน server เอง
         fullUrl = `${API_URL}${fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl}`;
+        console.log('🏠 Using local server URL:', fullUrl);
       }
 
       const downloadDir = `${FileSystem.documentDirectory}downloads/`;
@@ -425,13 +540,23 @@ const GroupChatScreen = ({ route, navigation }) => {
       
       const timestamp = new Date().getTime();
       const finalFileName = fileName || `file_${timestamp}`;
-      const localUri = `${downloadDir}${finalFileName}`;
+      // ทำความสะอาดชื่อไฟล์
+      const cleanFileName = finalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const localUri = `${downloadDir}${cleanFileName}`;
 
+      console.log('💾 Downloading to:', localUri);
+
+      // สำหรับ Cloudinary ไม่ต้องใช้ Authorization header
+      const headers = fileUrl.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
+      
       const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: headers
       });
 
+      console.log('📊 Download result:', downloadResult);
+
       if (downloadResult.status === 200) {
+        console.log('✅ Download successful');
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(downloadResult.uri);
         } else {
@@ -441,8 +566,13 @@ const GroupChatScreen = ({ route, navigation }) => {
         throw new Error(`HTTP ${downloadResult.status}`);
       }
     } catch (error) {
-      console.error('Error downloading file:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดได้');
+      console.error('❌ Error downloading file:', error);
+      console.error('Error details:', {
+        message: error.message,
+        url: fileUrl,
+        fileName: fileName
+      });
+      Alert.alert('ข้อผิดพลาด', `ไม่สามารถดาวน์โหลดได้: ${error.message}`);
     }
   };
 
@@ -693,6 +823,25 @@ const GroupChatScreen = ({ route, navigation }) => {
     return showTimeForMessages.has(item._id);
   };
 
+  // ฟังก์ชันสำหรับคำนวณจำนวนคนที่อ่านข้อความ
+  const getReadCount = (messageId) => {
+    return messageReadCount[messageId] || 0;
+  };
+
+  // ฟังก์ชันสำหรับแสดงสถานะการอ่านในกลุ่ม
+  const getGroupReadStatus = (item) => {
+    const readCount = getReadCount(item._id);
+    const totalMembers = groupMembers.length;
+    
+    if (readCount === 0) {
+      return { text: 'ส่งแล้ว', isRead: false };
+    } else if (readCount === totalMembers - 1) { // ลบตัวเองออก
+      return { text: 'อ่านแล้วทุกคน', isRead: true };
+    } else {
+      return { text: `อ่านแล้ว ${readCount} คน`, isRead: true };
+    }
+  };
+
   const renderMessage = ({ item, index }) => {
     const isMyMessage = item.sender?._id === authUser._id;
     const prevMessage = index > 0 ? messages[index - 1] : null;
@@ -769,6 +918,29 @@ const GroupChatScreen = ({ route, navigation }) => {
                     style={styles.messageImage}
                     resizeMode="cover"
                   />
+                  
+                  {/* ปุ่มลบรูปภาพ - แสดงเฉพาะผู้ส่ง */}
+                  {isMyMessage && (
+                    <TouchableOpacity
+                      style={styles.deleteImageButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'ลบรูปภาพ',
+                          'คุณต้องการลบรูปภาพนี้หรือไม่?',
+                          [
+                            { text: 'ยกเลิก', style: 'cancel' },
+                            { 
+                              text: 'ลบ', 
+                              style: 'destructive',
+                              onPress: () => deleteMessage(item._id)
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Text style={styles.deleteButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
                 
                 {/* วันเวลาอยู่ข้างล่างรูปภาพ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
@@ -793,6 +965,23 @@ const GroupChatScreen = ({ route, navigation }) => {
                     ]}>
                       {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
                     </Text>
+                    {/* สถานะอ่าน/ไม่อ่าน สำหรับข้อความของตัวเอง - รูปภาพ */}
+                    {isMyMessage && !item.isTemporary && (
+                      <View style={styles.readStatusContainer}>
+                        <Text style={[
+                          styles.readStatusIcon,
+                          getGroupReadStatus(item).isRead ? styles.readStatusIconRead : styles.readStatusIconSent
+                        ]}>
+                          {getGroupReadStatus(item).isRead ? '✓✓' : '✓'}
+                        </Text>
+                        <Text style={[
+                          styles.readStatusBottom,
+                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
+                        ]}>
+                          {getGroupReadStatus(item).text}
+                        </Text>
+                      </View>
+                    )}
                   </Animated.View>
                 )}
               </View>
@@ -817,6 +1006,29 @@ const GroupChatScreen = ({ route, navigation }) => {
                         {formatFileSize(item.fileSize)}
                       </Text>
                     </View>
+                    
+                    {/* ปุ่มลบไฟล์ - แสดงเฉพาะผู้ส่ง */}
+                    {isMyMessage && (
+                      <TouchableOpacity
+                        style={styles.deleteFileButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'ลบไฟล์',
+                            'คุณต้องการลบไฟล์นี้หรือไม่?',
+                            [
+                              { text: 'ยกเลิก', style: 'cancel' },
+                              { 
+                                text: 'ลบ', 
+                                style: 'destructive',
+                                onPress: () => deleteMessage(item._id)
+                              }
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.deleteButtonText}>×</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </TouchableOpacity>
                 
@@ -842,6 +1054,23 @@ const GroupChatScreen = ({ route, navigation }) => {
                     ]}>
                       {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
                     </Text>
+                    {/* สถานะอ่าน/ไม่อ่าน สำหรับข้อความของตัวเอง - ไฟล์ */}
+                    {isMyMessage && !item.isTemporary && (
+                      <View style={styles.readStatusContainer}>
+                        <Text style={[
+                          styles.readStatusIcon,
+                          getGroupReadStatus(item).isRead ? styles.readStatusIconRead : styles.readStatusIconSent
+                        ]}>
+                          {getGroupReadStatus(item).isRead ? '✓✓' : '✓'}
+                        </Text>
+                        <Text style={[
+                          styles.readStatusBottom,
+                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
+                        ]}>
+                          {getGroupReadStatus(item).text}
+                        </Text>
+                      </View>
+                    )}
                   </Animated.View>
                 )}
               </View>
@@ -895,6 +1124,23 @@ const GroupChatScreen = ({ route, navigation }) => {
                     ]}>
                       {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
                     </Text>
+                    {/* สถานะอ่าน/ไม่อ่าน สำหรับข้อความของตัวเอง - ข้อความธรรมดา */}
+                    {isMyMessage && !item.isTemporary && (
+                      <View style={styles.readStatusContainer}>
+                        <Text style={[
+                          styles.readStatusIcon,
+                          getGroupReadStatus(item).isRead ? styles.readStatusIconRead : styles.readStatusIconSent
+                        ]}>
+                          {getGroupReadStatus(item).isRead ? '✓✓' : '✓'}
+                        </Text>
+                        <Text style={[
+                          styles.readStatusBottom,
+                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
+                        ]}>
+                          {getGroupReadStatus(item).text}
+                        </Text>
+                      </View>
+                    )}
                   </Animated.View>
                 )}
               </View>
@@ -952,10 +1198,13 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFA500" />
-        <Text style={styles.loadingText}>กำลังโหลดข้อความ...</Text>
-      </View>
+      <ProgressLoadingScreen
+        isVisible={isLoading}
+        progress={progress}
+        title="กำลังโหลดกลุ่มแชท..."
+        subtitle="กรุณารอสักครู่"
+        color="#FFA500"
+      />
     );
   }
 
@@ -981,10 +1230,8 @@ const GroupChatScreen = ({ route, navigation }) => {
         <TouchableOpacity 
           style={styles.groupInfoContainer}
           onPress={() => {
-            console.log('🔄 Refreshing group info...');
+            console.log('� Opening members modal...');
             setShowMembersModal(true);
-            // Force refresh group data
-            loadGroupData();
           }}
         >
           <Image
@@ -1194,14 +1441,21 @@ const GroupChatScreen = ({ route, navigation }) => {
           <TextInput
             style={styles.textInput}
             value={inputText}
-            onChangeText={(text) => setInputText(text.replace(/\n/g, ' '))}
+            onChangeText={setInputText}
             placeholder="พิมพ์ข้อความ..."
             placeholderTextColor="#999"
-            multiline={false}
-            numberOfLines={1}
+            multiline
             maxLength={1000}
+            keyboardType="default"
             returnKeyType="send"
-            onSubmitEditing={sendMessage}
+            autoCorrect={true}
+            spellCheck={true}
+            autoCapitalize="sentences"
+            onSubmitEditing={(event) => {
+              if (!event.nativeEvent.text.includes('\n') && inputText.trim()) {
+                sendMessage();
+              }
+            }}
             blurOnSubmit={false}
           />
           
@@ -1794,6 +2048,61 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  deleteImageButton: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    width: 25,
+    height: 25,
+    borderRadius: 12.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  deleteFileButton: {
+    marginLeft: 8,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    lineHeight: 14,
+  },
+  // Read Status Styles
+  readStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  readStatusIcon: {
+    fontSize: 12,
+    marginRight: 4,
+    fontWeight: 'bold',
+  },
+  readStatusIconSent: {
+    color: '#999', // สีเทาสำหรับ "ส่งแล้ว" (✓)
+  },
+  readStatusIconRead: {
+    color: '#007AFF', // สีน้ำเงินสำหรับ "อ่านแล้ว" (✓✓)
+  },
+  readStatusBottom: {
+    fontSize: 10,
+    color: '#666',
+    lineHeight: 12,
+  },
+  myReadStatusBottom: {
+    color: '#666',
+  },
+  otherReadStatusBottom: {
+    color: '#666',
   },
 });
 

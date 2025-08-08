@@ -23,11 +23,13 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import api, { API_URL, deleteMessage } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
+import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import { useProgressLoading } from '../../hooks/useProgressLoading';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
   const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // Loading สำหรับการ scroll ไปข้อความล่าสุด
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false); // Track ว่า scroll ไปข้อความล่าสุดแล้วหรือยัง
   const [messages, setMessages] = useState([]);
@@ -49,7 +51,30 @@ const PrivateChatScreen = ({ route, navigation }) => {
   // ข้อมูลแชทจาก route params
   const { chatroomId, roomName, recipientId, recipientName, recipientAvatar } = route.params || {};
 
+  // ตรวจสอบ chatroomId ตั้งแต่ต้น
   useEffect(() => {
+    if (!chatroomId) {
+      console.error('❌ No chatroomId provided in route params');
+      Alert.alert('ข้อผิดพลาด', 'ไม่พบข้อมูลห้องแชท', [
+        { text: 'ตกลง', onPress: () => navigation.goBack() }
+      ]);
+      return;
+    }
+    console.log('✅ PrivateChatScreen initialized with chatroomId:', chatroomId);
+  }, [chatroomId, navigation]);
+
+  // ฟังก์ชันอัพเดท progress
+  // const updateProgress = (progress) => {
+  //   setLoadingProgress(progress);
+  //   Animated.timing(progressAnimation, {
+  //     toValue: progress / 100,
+  //     duration: 300,
+  //     useNativeDriver: false,
+  //   }).start();
+  // };
+
+  useEffect(() => {
+    startLoading(10); // เริ่มต้น 10%
     loadCurrentUser();
   }, []);
 
@@ -58,7 +83,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
       // Reset scroll flags เมื่อเข้าแชทใหม่
       setHasScrolledToEnd(false);
       setIsScrollingToEnd(true);
+      updateProgress(75); // 75% เมื่อ user และ chatroom พร้อม
       loadMessages();
+    } else if (currentUser && !chatroomId) {
+      // หากโหลด user เสร็จแล้วแต่ไม่มี chatroomId ให้หยุด loading
+      console.warn('⚠️ User loaded but no chatroomId provided');
+      stopLoading();
     }
   }, [currentUser, chatroomId]);
 
@@ -166,6 +196,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('👤 Current user loaded:', currentUser._id);
       console.log('🔌 Socket connected:', socket.connected);
       console.log('🔌 Socket ID:', socket.id);
+      
+      updateProgress(85); // 85% เมื่อ socket พร้อม
       
       // เข้าร่วมห้องแชท
       joinChatroom(chatroomId);
@@ -302,31 +334,37 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const loadCurrentUser = async () => {
     try {
+      updateProgress(10); // เริ่มต้น 10%
       console.log('PrivateChatScreen: Loading current user...');
+      
+      updateProgress(30); // 30% เมื่อเริ่มโหลด user
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         navigation.replace('Login');
         return;
       }
 
+      updateProgress(50); // 50% เมื่อได้ token
       const response = await api.get('/users/current');
       setCurrentUser(response.data);
+      updateProgress(70); // 70% เมื่อโหลด user เสร็จ
+      console.log('✅ User loaded successfully, messages will load next...');
     } catch (error) {
       console.error('Error loading user:', error);
       if (error.response?.status === 401) {
         navigation.replace('Login');
       } else {
         Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
+        stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
       }
-    } finally {
-      setIsLoading(false);
     }
+    // ไม่ต้อง setIsLoading(false) ที่นี่ เพราะจะให้ loadMessages ทำแทน
   };
 
   const loadMessages = useCallback(async () => {
     let loadedMessages = [];
     try {
-      console.log('Loading messages for chatroom:', chatroomId);
+      updateProgress(80); // 80% เมื่อเริ่มโหลดข้อความ
       
       // เพิ่ม timeout สำหรับการโหลดข้อความ
       const loadingTimeout = setTimeout(() => {
@@ -342,27 +380,19 @@ const PrivateChatScreen = ({ route, navigation }) => {
         )
       ]);
       
+      updateProgress(90); // 90% เมื่อได้ response
+      
       clearTimeout(loadingTimeout);
       loadedMessages = response.data.messages || [];
       
-      // Debug: ตรวจสอบ isRead status ของข้อความที่โหลดมา
-      console.log('📨 Messages loaded with read status:');
-      
       if (loadedMessages.length === 0) {
-        console.log('📨 No messages found - this is a new chat');
         setMessages([]); // ตั้งค่าเป็น array ว่าง
+        // เซ็ตสถานะ scroll ให้เสร็จสิ้น เพราะไม่มีข้อความให้ scroll
+        setHasScrolledToEnd(true);
+        setIsScrollingToEnd(false);
       } else {
         loadedMessages.forEach((msg, index) => {
           const isMyMessage = msg.sender._id === currentUser?._id;
-          console.log(`Message ${index + 1}:`, {
-            id: msg._id?.substring(msg._id.length - 4),
-            content: msg.content.substring(0, 20) + '...',
-            sender: msg.sender.firstName,
-            isMyMessage: isMyMessage,
-            isRead: msg.isRead,
-            senderId: msg.sender._id,
-            currentUserId: currentUser?._id
-          });
           
           // แจ้งเตือนถ้าข้อความของเราไม่มี isRead status ที่ถูกต้อง
           if (isMyMessage && msg.isRead === undefined) {
@@ -378,8 +408,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
         })));
       }
       
-      console.log('📨 Messages set, total:', loadedMessages.length);
-      
       // มาร์คข้อความว่าอ่านแล้ว (ใช้ timeout) - ทำเฉพาะเมื่อมีข้อความ
       if (loadedMessages.length > 0) {
         try {
@@ -392,7 +420,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
           
           // ส่ง socket event เพื่อแจ้งว่าได้อ่านข้อความแล้ว
           if (socket && chatroomId) {
-            console.log('📖 Emitting messageRead event for chatroom:', chatroomId);
             socket.emit('messageRead', {
               chatroomId: chatroomId,
               userId: currentUser?._id
@@ -401,8 +428,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
         } catch (readError) {
           console.warn('⚠️ Failed to mark messages as read:', readError.message);
         }
-      } else {
-        console.log('📨 No messages to mark as read - this is a new chat');
       }
       
     } catch (error) {
@@ -414,11 +439,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
         ]);
       } else {
         // สำหรับ error อื่นๆ ให้ตั้งค่า messages เป็น array ว่างเพื่อให้แสดงหน้าแชท
-        console.log('📨 Setting empty messages due to error - allowing chat to display');
         setMessages([]);
       }
     } finally {
-      setIsLoading(false); // ต้องตั้งเป็น false เสมอ ไม่ว่าจะมีข้อความหรือไม่
+      updateProgress(100); // 100% เมื่อเสร็จสิ้น
+      // ใช้ setTimeout เพื่อให้แน่ใจว่า state update เกิดขึ้นใน next tick
+      stopLoading(500); // หยุด loading หลัง 500ms
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -1088,6 +1114,29 @@ const PrivateChatScreen = ({ route, navigation }) => {
                     }}
                     defaultSource={require('../../assets/default-avatar.png')}
                   />
+                  
+                  {/* ปุ่มลบรูปภาพ (แสดงเฉพาะข้อความของตัวเอง) */}
+                  {isMyMessage && (
+                    <TouchableOpacity 
+                      style={styles.deleteImageButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'ลบรูปภาพ',
+                          'คุณต้องการลบรูปภาพนี้หรือไม่?',
+                          [
+                            { text: 'ยกเลิก', style: 'cancel' },
+                            { 
+                              text: 'ลบ', 
+                              style: 'destructive',
+                              onPress: () => handleDeleteMessage(item._id)
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Text style={styles.deleteImageButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               </View>
               
@@ -1218,31 +1267,56 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
                 item.isOptimistic && styles.optimisticMessage
               ]}>
-                <TouchableOpacity 
-                  style={[
-                    styles.fileAttachment,
-                    isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
-                  ]}
-                  onPress={() => showFileOptions(item.file)}
-                >
-                  <View style={styles.fileIcon}>
-                    <Text style={styles.attachIcon}>📎</Text>
-                  </View>
-                  <View style={styles.fileDetails}>
-                    <Text style={[
-                      styles.fileName,
-                      { color: isMyMessage ? "#fff" : "#333" }
-                    ]} numberOfLines={2}>
-                      {item.file.file_name || 'ไฟล์แนบ'}
-                    </Text>
-                    <Text style={[
-                      styles.fileSize,
-                      { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
-                    ]}>
-                      {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                <View style={styles.fileAttachmentContainer}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.fileAttachment,
+                      isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
+                    ]}
+                    onPress={() => showFileOptions(item.file)}
+                  >
+                    <View style={styles.fileIcon}>
+                      <Text style={styles.attachIcon}>📎</Text>
+                    </View>
+                    <View style={styles.fileDetails}>
+                      <Text style={[
+                        styles.fileName,
+                        { color: isMyMessage ? "#fff" : "#333" }
+                      ]} numberOfLines={2}>
+                        {item.file.file_name || 'ไฟล์แนบ'}
+                      </Text>
+                      <Text style={[
+                        styles.fileSize,
+                        { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
+                      ]}>
+                        {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {/* ปุ่มลบไฟล์ (แสดงเฉพาะข้อความของตัวเอง) */}
+                  {isMyMessage && (
+                    <TouchableOpacity 
+                      style={styles.deleteFileButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'ลบไฟล์',
+                          `คุณต้องการลบไฟล์ "${item.file.file_name || 'ไฟล์แนบ'}" หรือไม่?`,
+                          [
+                            { text: 'ยกเลิก', style: 'cancel' },
+                            { 
+                              text: 'ลบ', 
+                              style: 'destructive',
+                              onPress: () => handleDeleteMessage(item._id)
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Text style={styles.deleteFileButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
               
               {/* วันเวลาอยู่ข้างล่างไฟล์ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
@@ -1296,11 +1370,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>กำลังโหลดข้อความ...</Text>
-        <Text style={styles.loadingSubText}>กรุณารอสักครู่</Text>
-      </View>
+      <ProgressLoadingScreen
+        isVisible={isLoading}
+        progress={progress}
+        title="กำลังโหลดข้อความ..."
+        subtitle="กรุณารอสักครู่"
+        color="#007AFF"
+      />
     );
   }
 
@@ -2409,6 +2485,50 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  
+  // Delete button styles for images and files
+  deleteImageButton: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  deleteImageButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    lineHeight: 20,
+  },
+  fileAttachmentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  deleteFileButton: {
+    marginLeft: 8,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteFileButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    lineHeight: 18,
   },
 });
 

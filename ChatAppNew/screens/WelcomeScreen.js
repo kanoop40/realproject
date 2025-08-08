@@ -3,35 +3,54 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
+import ProgressLoadingScreen from '../components/ProgressLoadingScreen';
+import useProgressLoading from '../hooks/useProgressLoading';
 
 const WelcomeScreen = ({ navigation }) => {
   const { user, loading } = useAuth();
+  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
 
   useEffect(() => {
     checkExistingSession();
   }, []);
 
   const checkExistingSession = async () => {
+    startLoading();
     try {
+      updateProgress(20); // เริ่มต้น 20%
       const token = await AsyncStorage.getItem('userToken');
+      updateProgress(50); // 50% เมื่อได้ token
+      
       const userData = await AsyncStorage.getItem('userData');
+      updateProgress(80); // 80% เมื่อได้ user data
       
       if (token && userData) {
         const user = JSON.parse(userData);
         console.log('🔑 Found existing session for:', user.firstName, user.lastName);
         
+        updateProgress(90); // 90% เมื่อประมวลผลข้อมูล
+        
         // นำทางตาม role โดยไม่ต้อง login ใหม่
-        if (user.role === 'admin') {
-          navigation.replace('Admin');
-        } else {
-          navigation.replace('Chat');
-        }
+        setTimeout(() => {
+          updateProgress(100); // 100% เมื่อเสร็จสิ้น
+          setTimeout(() => {
+            if (user.role === 'admin') {
+              navigation.replace('Admin');
+            } else {
+              navigation.replace('Chat');
+            }
+          }, 300);
+        }, 200);
         return;
       }
       
       console.log('❌ No existing session found');
+      updateProgress(100); // 100% แม้ไม่มี session
+      stopLoading(300); // หยุด loading หลัง 300ms
     } catch (error) {
       console.error('Error checking session:', error);
+      updateProgress(100); // 100% เมื่อ error
+      stopLoading(300); // หยุด loading หลัง 300ms
     }
   };
 
@@ -47,14 +66,15 @@ const WelcomeScreen = ({ navigation }) => {
   };
 
   // แสดง loading หากกำลังตรวจสอบ auth
-  if (loading) {
+  if (loading || isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFB800" />
-          <Text style={styles.loadingText}>กำลังตรวจสอบ...</Text>
-        </View>
-      </SafeAreaView>
+      <ProgressLoadingScreen
+        isVisible={loading || isLoading}
+        progress={progress}
+        title="กำลังตรวจสอบ..."
+        subtitle="กรุณารอสักครู่"
+        color="#FFB800"
+      />
     );
   }
 

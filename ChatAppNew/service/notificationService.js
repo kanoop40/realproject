@@ -29,11 +29,16 @@ class NotificationService {
   // แสดงการแจ้งเตือนในแอป (ใช้ Alert แทน push notification)
   showInAppNotification(title, body, data = {}) {
     // ไม่แสดงการแจ้งเตือนถ้าเป็นข้อความจากตัวเอง
-    if (data.senderId === this.currentUserId) {
+    const senderIdString = data.senderId?.toString();
+    const currentUserIdString = this.currentUserId?.toString();
+    
+    if (senderIdString === currentUserIdString) {
+      console.log('🔔 Skipping notification for own message');
       return;
     }
 
-    console.log('🔔 In-app notification:', { title, body, data });
+    console.log('🔔 Showing in-app notification:', { title, body, data });
+    console.log('🔔 Sender ID:', senderIdString, 'Current User ID:', currentUserIdString);
     
     // แสดง Alert แทนการแจ้งเตือน push
     Alert.alert(

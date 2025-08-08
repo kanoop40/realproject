@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,27 +16,23 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { searchUsers, createPrivateChat } from '../../service/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { API_URL } from '../../service/api'; // ใช้ API_URL เดียวกัน
-import { AuthContext } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import LoadingModal from '../../components/LoadingModal';
+import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import useProgressLoading from '../../hooks/useProgressLoading';
 
 const SearchUserScreen = ({ navigation }) => {
-  // Add safety check for context and navigation
-  let user = null;
-  try {
-    const authContext = useContext(AuthContext);
-    user = authContext?.user || null;
-  } catch (error) {
-    console.log('AuthContext error:', error);
-  }
+  // Use proper Auth hook
+  const { user } = useAuth();
 
   const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [chatCreationLoading, setChatCreationLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [chatCreationProgress, setChatCreationProgress] = useState(0); // For chat creation loading
+  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
 
   // Add safety check for navigation
   if (!navigation) {
@@ -67,7 +63,8 @@ const SearchUserScreen = ({ navigation }) => {
       return;
     }
 
-    setIsLoading(true);
+    // ใช้ simple loading แทน progress loading สำหรับการค้นหา
+    setResults([]); // Clear ผลลัพธ์เก่า
     setError(null);
 
     try {
@@ -85,8 +82,6 @@ const SearchUserScreen = ({ navigation }) => {
       console.error('Search error:', error);
       setError('เกิดข้อผิดพลาดในการค้นหา');
       setResults([]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -128,11 +123,11 @@ const SearchUserScreen = ({ navigation }) => {
               try {
                 closeModal();
                 setChatCreationLoading(true);
-                setLoadingProgress(0);
+                setChatCreationProgress(0);
                 
                 // Simulate progress
                 progressInterval = setInterval(() => {
-                  setLoadingProgress(prev => {
+                  setChatCreationProgress(prev => {
                     if (prev >= 90) return prev;
                     return prev + 10;
                   });
@@ -140,7 +135,7 @@ const SearchUserScreen = ({ navigation }) => {
                 
                 // ดึงข้อมูลผู้ใช้ปัจจุบันจาก API เพื่อให้แน่ใจว่าถูกต้อง
                 console.log('Getting current user from API...');
-                setLoadingProgress(20);
+                setChatCreationProgress(20);
                 const currentUserResponse = await Promise.race([
                   api.get('/users/current'),
                   new Promise((_, reject) => 
@@ -151,7 +146,7 @@ const SearchUserScreen = ({ navigation }) => {
                 
                 console.log('Current user from API:', currentUser);
                 console.log('Creating private chat between:', currentUser._id, 'and', selectedUser._id);
-                setLoadingProgress(50);
+                setChatCreationProgress(50);
                 
                 // สร้างหรือดึงแชทส่วนตัวพร้อม timeout
                 const response = await Promise.race([
@@ -161,7 +156,7 @@ const SearchUserScreen = ({ navigation }) => {
                   )
                 ]);
                 
-                setLoadingProgress(100);
+                setChatCreationProgress(100);
                 
                 console.log('Private chat response:', response);
                 
@@ -195,7 +190,7 @@ const SearchUserScreen = ({ navigation }) => {
                   clearInterval(progressInterval);
                 }
                 setChatCreationLoading(false);
-                setLoadingProgress(0);
+                setChatCreationProgress(0);
                 
                 console.error('Error creating chat:', error);
                 console.error('Error details:', {
@@ -325,13 +320,6 @@ const SearchUserScreen = ({ navigation }) => {
           autoCapitalize="none"
           returnKeyType="search"
         />
-        {isLoading && (
-          <ActivityIndicator 
-            size="small" 
-            color="#007AFF" 
-            style={styles.loadingIcon} 
-          />
-        )}
       </View>
 
       <FlatList
@@ -432,7 +420,7 @@ const SearchUserScreen = ({ navigation }) => {
       <LoadingModal
         visible={chatCreationLoading}
         message="กำลังสร้างแชท"
-        progress={loadingProgress}
+        progress={chatCreationProgress}
       />
     </View>
   );

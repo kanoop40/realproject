@@ -17,16 +17,18 @@ import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationService from '../../service/notificationService';
+import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import useProgressLoading from '../../hooks/useProgressLoading';
 
 const ChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, reconnectSocket } = useSocket();
   const { user: authUser, loading: authLoading, login } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [chats, setChats] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
   const [popupAnimation] = useState(new Animated.Value(0));
+  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
   const { recipientId, recipientName, recipientAvatar } = route.params || {};
@@ -188,22 +190,30 @@ const ChatScreen = ({ route, navigation }) => {
 
   const loadCurrentUser = async () => {
     try {
+      startLoading();
+      updateProgress(10); // เริ่มต้น
+      
       console.log('ChatScreen: Loading current user...');
       console.log('ChatScreen: AuthUser from context:', authUser);
       
       // ตรวจสอบ token ก่อน
       const token = await AsyncStorage.getItem('userToken');
+      updateProgress(20); // ได้ token
       console.log('ChatScreen: Token from storage:', token ? 'exists' : 'not found');
       
       if (!token) {
         console.log('ChatScreen: No token found, redirecting to login');
         navigation.replace('Login');
+        stopLoading();
         return;
       }
 
       // ดึงข้อมูลจาก API เสมอ เพื่อให้แน่ใจว่าได้ข้อมูลที่ถูกต้องตาม token
       console.log('ChatScreen: Fetching current user from API...');
+      updateProgress(40); // เริ่มเรียก API
+      
       const response = await api.get('/users/current');
+      updateProgress(60); // ได้ข้อมูลผู้ใช้
       console.log('ChatScreen: User data received from API:', response.data);
       
       // เปรียบเทียบข้อมูลจาก AuthContext และ API
@@ -217,9 +227,11 @@ const ChatScreen = ({ route, navigation }) => {
       if (response.data.role === 'admin') {
         console.log('ChatScreen: User is admin, redirecting to admin screen');
         navigation.replace('Admin');
+        stopLoading();
         return;
       }
 
+      updateProgress(80); // กำลังตั้งค่าผู้ใช้
       console.log('ChatScreen: Setting current user from API');
       setCurrentUser(response.data);
       
@@ -234,6 +246,8 @@ const ChatScreen = ({ route, navigation }) => {
         const token = await AsyncStorage.getItem('userToken');
         await login(response.data, token);
       }
+      
+      updateProgress(100); // เสร็จสิ้น
     } catch (error) {
       console.error('ChatScreen: Error loading user:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
@@ -243,9 +257,10 @@ const ChatScreen = ({ route, navigation }) => {
       } else {
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
+      stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
     } finally {
-      console.log('ChatScreen: Setting loading to false');
-      setIsLoading(false);
+      console.log('ChatScreen: Loading complete');
+      stopLoading(500); // หยุด loading หลัง 500ms
     }
   };
 
@@ -692,21 +707,13 @@ const ChatScreen = ({ route, navigation }) => {
 
   if (isLoading || authLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={{marginTop: 10, textAlign: 'center', fontSize: 16}}>
-          {authLoading ? 'กำลังโหลดข้อมูลผู้ใช้...' : 'กำลังโหลด...'}
-        </Text>
-        <Text style={{marginTop: 5, textAlign: 'center', fontSize: 12, color: '#666'}}>
-          ระบบใช้ Render.com Free Tier ซึ่งอาจต้องใช้เวลา
-        </Text>
-        <Text style={{marginTop: 5, textAlign: 'center', fontSize: 12, color: '#666'}}>
-          30-60 วินาทีในการเริ่มทำงาน กรุณารอสักครู่...
-        </Text>
-        <Text style={{marginTop: 10, textAlign: 'center', fontSize: 11, color: '#999'}}>
-          💡 เคล็ดลับ: หากใช้งานต่อเนื่อง ระบบจะตอบสนองเร็วขึ้น
-        </Text>
-      </View>
+      <ProgressLoadingScreen
+        isVisible={isLoading || authLoading}
+        progress={progress}
+        title={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดข้อมูล..."}
+        subtitle="กรุณารอสักครู่"
+        color="#F5C842"
+      />
     );
   }
 

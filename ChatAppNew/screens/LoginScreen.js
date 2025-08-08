@@ -17,8 +17,8 @@ const LoginScreen = ({ navigation }) => {
   const { login: authLogin } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -33,7 +33,6 @@ const LoginScreen = ({ navigation }) => {
       console.log('🔐 Attempting login with:', { username });
 
       const response = await login(username, password);
-
       console.log('✅ Login successful:', response.data);
 
       // เก็บข้อมูลผู้ใช้และ token  

@@ -15,14 +15,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import api, { API_URL } from '../../service/api';
 import AvatarUnavailableNotice from '../../components/AvatarUnavailableNotice';
+import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import useProgressLoading from '../../hooks/useProgressLoading';
 
 const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -43,16 +45,25 @@ const ProfileScreen = ({ navigation }) => {
 
   const fetchCurrentUser = async () => {
     try {
-      setIsLoading(true);
+      startLoading();
+      updateProgress(10); // เริ่มต้น
+      
       const token = await AsyncStorage.getItem('userToken');
+      updateProgress(30); // ได้ token
+      
       if (!token) {
         console.log('No token found, redirecting to login');
         navigation.replace('Login');
+        stopLoading();
         return;
       }
 
       console.log('Fetching current user with token:', token?.substring(0, 20) + '...');
+      updateProgress(50); // เริ่มเรียก API
+      
       const response = await api.get('/users/current');
+      updateProgress(80); // ได้ข้อมูลผู้ใช้
+      
       console.log('Current user response:', response.data);
       console.log('User avatar from API:', response.data.avatar);
       console.log('Full avatar URL will be:', `${API_URL}/${response.data.avatar}`);
@@ -67,6 +78,8 @@ const ProfileScreen = ({ navigation }) => {
         major: response.data.major || '',
         groupCode: response.data.groupCode || '',
       });
+      
+      updateProgress(100); // เสร็จสิ้น
     } catch (error) {
       console.error('Error fetching current user:', error);
       console.error('Error response:', error.response?.data);
@@ -79,8 +92,9 @@ const ProfileScreen = ({ navigation }) => {
       } else {
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
+      stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
     } finally {
-      setIsLoading(false);
+      stopLoading(500); // หยุด loading หลัง 500ms
     }
   };
 
@@ -278,10 +292,13 @@ const ProfileScreen = ({ navigation }) => {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>กำลังโหลด...</Text>
-      </View>
+      <ProgressLoadingScreen
+        isVisible={isLoading}
+        progress={progress}
+        title="กำลังโหลดโปรไฟล์..."
+        subtitle="กรุณารอสักครู่"
+        color="#007AFF"
+      />
     );
   }
 
