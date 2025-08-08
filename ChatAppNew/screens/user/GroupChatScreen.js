@@ -18,6 +18,7 @@ import NotificationService from '../../service/notificationService';
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
   const { socket, joinChatroom } = useSocket();
+  const [socketStatus, setSocketStatus] = useState('connecting');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isScrollingToEnd, setIsScrollingToEnd] = useState(false);
@@ -61,7 +62,37 @@ const GroupChatScreen = ({ route, navigation }) => {
     console.log('🔍 Socket connected:', socket?.connected);
     console.log('🔍 GroupId:', groupId);
     console.log('🔍 AuthUser exists:', !!authUser);
-  }, []);
+    
+    // ตรวจสอบสถานะ Socket และอัปเดต UI
+    if (socket) {
+      if (socket.connected) {
+        setSocketStatus('connected');
+      } else {
+        setSocketStatus('connecting');
+      }
+      
+      // Listen for socket status changes
+      const handleConnect = () => {
+        setSocketStatus('connected');
+        console.log('🔌 GroupChat: Socket connected');
+      };
+      
+      const handleDisconnect = () => {
+        setSocketStatus('connecting');
+        console.log('🔌 GroupChat: Socket disconnected, will retry...');
+      };
+      
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
+      
+      return () => {
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+      };
+    } else {
+      setSocketStatus('connecting');
+    }
+  }, [socket]);
 
   // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่
   useEffect(() => {
@@ -74,15 +105,12 @@ const GroupChatScreen = ({ route, navigation }) => {
         const scrollToEnd = () => {
           try {
             if (messages.length > 0) {
-              flatListRef.current?.scrollToIndex({ 
-                index: messages.length - 1, 
-                animated: false,
-                viewPosition: 1
+              flatListRef.current?.scrollToEnd({ 
+                animated: false
               });
             }
           } catch (error) {
-            console.log('ScrollToIndex failed, using scrollToEnd:', error);
-            flatListRef.current?.scrollToEnd({ animated: false });
+            console.log('ScrollToEnd failed:', error);
           }
           setHasScrolledToEnd(true);
           setIsScrollingToEnd(false);
@@ -101,28 +129,23 @@ const GroupChatScreen = ({ route, navigation }) => {
         console.log('🚀 Force scrolling to end after loading complete:', messages.length);
         try {
           if (messages.length > 0) {
-            flatListRef.current?.scrollToIndex({ 
-              index: messages.length - 1, 
-              animated: false,
-              viewPosition: 1
+            flatListRef.current?.scrollToEnd({ 
+              animated: false
             });
           }
         } catch (error) {
-          console.log('ScrollToIndex failed, using scrollToEnd:', error);
-          flatListRef.current?.scrollToEnd({ animated: false });
+          console.log('ScrollToEnd failed:', error);
         }
         // ลอง scroll อีกครั้งหลังจาก 200ms
         setTimeout(() => {
           try {
             if (messages.length > 0) {
-              flatListRef.current?.scrollToIndex({ 
-                index: messages.length - 1, 
-                animated: false,
-                viewPosition: 1
+              flatListRef.current?.scrollToEnd({ 
+                animated: false
               });
             }
           } catch (error) {
-            flatListRef.current?.scrollToEnd({ animated: false });
+            console.log('ScrollToEnd retry failed:', error);
           }
           setHasScrolledToEnd(true);
           setIsScrollingToEnd(false);
@@ -145,14 +168,12 @@ const GroupChatScreen = ({ route, navigation }) => {
         console.log('🎯 Final attempt to scroll to end:', messages.length);
         try {
           if (messages.length > 0) {
-            flatListRef.current?.scrollToIndex({ 
-              index: messages.length - 1, 
-              animated: false,
-              viewPosition: 1
+            flatListRef.current?.scrollToEnd({ 
+              animated: false
             });
           }
         } catch (error) {
-          flatListRef.current?.scrollToEnd({ animated: false });
+          console.log('Final scroll attempt failed:', error);
         }
       }, 1000);
       
@@ -162,32 +183,39 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     console.log('🔍 Socket useEffect triggered');
-    console.log('🔍 socket:', !!socket);
+    console.log('🔍 socket exists:', !!socket);
     console.log('🔍 socket.connected:', socket?.connected);
     console.log('🔍 groupId:', groupId);
-    console.log('🔍 authUser:', !!authUser);
+    console.log('🔍 authUser exists:', !!authUser);
     console.log('🔍 authUser._id:', authUser?._id);
     
-    if (socket && groupId && authUser && socket.connected) {
+    if (socket && groupId && authUser) {
       console.log('🔌 Setting up GroupChat socket listeners for group:', groupId);
       console.log('👤 Current user:', authUser._id);
-      console.log('🔌 Socket connected:', socket.connected);
       
       // Reset scroll flags เมื่อเข้าแชทใหม่
       setHasScrolledToEnd(false);
       setIsScrollingToEnd(true);
       
+      // Join chatroom ทันทีไม่ว่า socket จะ connected หรือไม่
+      // เพราะถ้า socket ยังไม่ connected มันจะ queue การ join ไว้
       console.log('🔌 Attempting to join chatroom:', groupId);
       joinChatroom(groupId);
       
       const handleNewMessage = (data) => {
         console.log('💬 GroupChat received new message:', data);
         console.log('💬 Data structure:', JSON.stringify(data, null, 2));
+        console.log('💬 Expected groupId:', groupId);
+        console.log('💬 Received chatroomId:', data.chatroomId);
         
         if (data.chatroomId !== groupId) {
           console.log('❌ Message not for this group. Expected:', groupId, 'Got:', data.chatroomId);
           return;
         }
+        
+        console.log('✅ Message is for this group, processing...');
+        console.log('💬 Message sender ID:', data.message?.sender?._id);
+        console.log('💬 Current user ID:', authUser._id);
         
         // ไม่รับข้อความจากตัวเองผ่าน socket
         if (data.message?.sender?._id !== authUser._id) {
@@ -197,20 +225,25 @@ const GroupChatScreen = ({ route, navigation }) => {
             'สมาชิกในกลุ่ม';
           
           console.log('🔔 About to show notification for group message');
-          console.log('🔔 Sender ID:', data.message?.sender?._id);
-          console.log('🔔 Current User ID:', authUser._id);
+          console.log('🔔 Sender Name:', senderName);
           console.log('🔔 Group Name:', groupName);
           console.log('🔔 Message Content:', data.message?.content);
+          console.log('🔔 NotificationService currentUserId:', NotificationService.currentUserId);
           
-          NotificationService.showInAppNotification(
-            `💬 ${groupName || 'แชทกลุ่ม'}`,
-            `${senderName}: ${data.message?.content || 'ส่งไฟล์แนบ'}`,
-            { 
-              type: 'group_message', 
-              groupId: groupId,
-              senderId: data.message?.sender?._id 
-            }
-          );
+          try {
+            NotificationService.showInAppNotification(
+              `💬 ${groupName || 'แชทกลุ่ม'}`,
+              `${senderName}: ${data.message?.content || 'ส่งไฟล์แนบ'}`,
+              { 
+                type: 'group_message', 
+                groupId: groupId,
+                senderId: data.message?.sender?._id 
+              }
+            );
+            console.log('✅ Notification sent successfully');
+          } catch (error) {
+            console.error('❌ Error showing notification:', error);
+          }
           
           setMessages(prevMessages => {
             const messageExists = prevMessages.some(msg => msg._id === data.message._id);
@@ -270,33 +303,62 @@ const GroupChatScreen = ({ route, navigation }) => {
       socket.on('message_read', handleMessageRead);
       
       console.log('🔌 Socket event listeners set up successfully');
+      console.log('🔌 Socket connection status at setup:', socket.connected ? 'connected' : 'connecting...');
+      console.log('🔌 Socket ID:', socket.id || 'pending');
+      
+      // ถ้า socket ยังไม่ connected ให้แสดงสถานะ
+      if (!socket.connected) {
+        console.log('⏰ Socket not connected yet, but listeners are ready');
+        console.log('⏰ Server might be starting up (cold start)');
+      }
       
       return () => {
-        console.log('🔌 Cleaning up socket listeners');
+        console.log('🔌 Cleaning up socket listeners for group:', groupId);
         socket.off('newMessage', handleNewMessage);
         socket.off('message_deleted', handleMessageDeleted);
         socket.off('message_edited', handleMessageEdited);
         socket.off('message_read', handleMessageRead);
+        console.log('🔌 Socket listeners cleaned up');
       };
     } else {
-      console.log('❌ Socket setup blocked. Reasons:');
-      console.log('   - socket:', !!socket);
+      console.log('❌ Socket setup skipped. Reasons:');
+      console.log('   - socket exists:', !!socket);
       console.log('   - socket.connected:', socket?.connected);
-      console.log('   - groupId:', !!groupId);
-      console.log('   - authUser:', !!authUser);
+      console.log('   - groupId exists:', !!groupId);
+      console.log('   - authUser exists:', !!authUser);
       
-      // ถ้า socket ยังไม่ connected ให้ลองอีกครั้งหลัง 1 วินาที
+      // ถ้า socket มีแต่ยังไม่ connected ให้รอและลองใหม่
       if (socket && !socket.connected && groupId && authUser) {
-        console.log('⏰ Socket not connected yet, will retry in 1 second...');
-        const retryTimeout = setTimeout(() => {
-          console.log('🔄 Retrying socket setup...');
-          // Force re-run useEffect by updating a dependency
+        console.log('⏰ Socket not connected yet, setting up retry mechanism...');
+        
+        const retrySetup = () => {
+          if (socket.connected) {
+            console.log('🔄 Socket is now connected, setting up listeners...');
+            // Setup listeners ทันที
+            socket.on('newMessage', (data) => {
+              console.log('� [Retry] GroupChat received new message:', data);
+              // ... rest of handleNewMessage logic
+            });
+          }
+        };
+        
+        // ลอง connect ทุก 1 วินาที จนกว่าจะ connected
+        const connectInterval = setInterval(() => {
+          if (socket.connected) {
+            console.log('✅ Socket connection established, cleaning up retry interval');
+            clearInterval(connectInterval);
+            retrySetup();
+          } else {
+            console.log('⏰ Still waiting for socket connection...');
+          }
         }, 1000);
         
-        return () => clearTimeout(retryTimeout);
+        return () => {
+          clearInterval(connectInterval);
+        };
       }
     }
-  }, [socket, socket?.connected, groupId, authUser]);
+  }, [socket, groupId, authUser]);
 
   const loadGroupData = async () => {
     try {
@@ -444,10 +506,30 @@ const GroupChatScreen = ({ route, navigation }) => {
 
       console.log('✅ Message sent successfully:', response.data);
       
+      // ส่งข้อความผ่าน Socket เพื่อให้สมาชิกคนอื่นได้รับแบบ real-time
+      const realMessage = response.data.data || response.data;
+      if (socket) {
+        if (socket.connected) {
+          console.log('📡 Emitting message via socket to group:', groupId);
+          socket.emit('sendMessage', {
+            chatroomId: groupId,
+            message: realMessage
+          });
+          console.log('✅ Socket emit completed');
+        } else {
+          console.log('⚠️ Socket exists but not connected yet, message will sync when others refresh');
+          console.log('⚠️ Connection state:', {
+            connected: socket.connected,
+            id: socket.id || 'no-id'
+          });
+        }
+      } else {
+        console.log('⚠️ Socket not available - message sent via API only');
+      }
+      
       // แทนที่ temporary message ด้วยข้อความจริง
       setMessages(prev => {
         const filtered = prev.filter(msg => msg._id !== tempId);
-        const realMessage = response.data.data || response.data;
         return [...filtered, realMessage];
       });
       
@@ -1293,11 +1375,16 @@ const GroupChatScreen = ({ route, navigation }) => {
             styles.messagesContainer,
             messages.length === 0 && styles.emptyMessagesContainer // เพิ่ม style เมื่อไม่มีข้อความ
           ]}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           removeClippedSubviews={false}
-          maxToRenderPerBatch={20}
-          windowSize={10}
-          initialNumToRender={20}
+          maxToRenderPerBatch={15}
+          windowSize={15}
+          initialNumToRender={15}
+          getItemLayout={null} // ลบ getItemLayout เพื่อให้การเลื่อนราบรื่นขึ้น
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+            autoscrollToTopThreshold: 100
+          }}
           ListEmptyComponent={() => (
             <View style={styles.emptyMessageContainer}>
               <Text style={styles.emptyMessageText}>
@@ -1312,28 +1399,12 @@ const GroupChatScreen = ({ route, navigation }) => {
             // Auto-scroll ไปข้อความล่าสุดเมื่อเข้าแชทใหม่
             if (messages.length > 0 && !hasScrolledToEnd) {
               console.log('📏 Content size changed, auto-scrolling to end. Messages:', messages.length);
-              // ใช้ scrollToIndex เพื่อไปที่ข้อความสุดท้าย
-              const scrollToLastMessage = () => {
-                try {
-                  if (messages.length > 0) {
-                    flatListRef.current?.scrollToIndex({ 
-                      index: messages.length - 1, 
-                      animated: false,
-                      viewPosition: 1 // 1 = ข้อความอยู่ด้านล่างสุด
-                    });
-                  }
-                } catch (error) {
-                  // ถ้า scrollToIndex ไม่ได้ ใช้ scrollToEnd
-                  console.log('ScrollToIndex failed, using scrollToEnd:', error);
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
+              // ใช้ scrollToEnd แทน scrollToIndex เพื่อความนุ่มนวล
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
                 setHasScrolledToEnd(true);
                 setIsScrollingToEnd(false);
-              };
-              
-              setTimeout(() => {
-                requestAnimationFrame(scrollToLastMessage);
-              }, 400);
+              }, 100);
             }
           }}
           onLayout={() => {
@@ -1341,15 +1412,9 @@ const GroupChatScreen = ({ route, navigation }) => {
             if (messages.length > 0 && !hasScrolledToEnd) {
               setTimeout(() => {
                 console.log('📐 FlatList layout complete, scrolling to end');
-                try {
-                  flatListRef.current?.scrollToIndex({ 
-                    index: messages.length - 1, 
-                    animated: false,
-                    viewPosition: 1
-                  });
-                } catch (error) {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
+                flatListRef.current?.scrollToEnd({ animated: false });
+                setHasScrolledToEnd(true);
+                setIsScrollingToEnd(false);
               }, 100);
             }
           }}
@@ -1369,15 +1434,9 @@ const GroupChatScreen = ({ route, navigation }) => {
           style={styles.scrollToBottomButton}
           onPress={() => {
             try {
-              if (messages.length > 0) {
-                flatListRef.current?.scrollToIndex({ 
-                  index: messages.length - 1, 
-                  animated: true,
-                  viewPosition: 1
-                });
-              }
-            } catch (error) {
               flatListRef.current?.scrollToEnd({ animated: true });
+            } catch (error) {
+              console.log('Scroll to bottom failed:', error);
             }
             setShowScrollToBottom(false);
           }}

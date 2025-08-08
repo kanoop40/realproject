@@ -28,6 +28,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [showPopup, setShowPopup] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
   const [popupAnimation] = useState(new Animated.Value(0));
+  const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
   const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
@@ -216,6 +217,9 @@ const ChatScreen = ({ route, navigation }) => {
       updateProgress(60); // ได้ข้อมูลผู้ใช้
       console.log('ChatScreen: User data received from API:', response.data);
       
+      // Server พร้อมใช้งาน
+      setServerStatus('ready');
+      
       // เปรียบเทียบข้อมูลจาก AuthContext และ API
       if (authUser && authUser._id !== response.data._id) {
         console.warn('⚠️ Mismatch between AuthContext and API user!');
@@ -251,10 +255,20 @@ const ChatScreen = ({ route, navigation }) => {
     } catch (error) {
       console.error('ChatScreen: Error loading user:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
+      
+      // ตรวจสอบว่าเป็น timeout หรือไม่
+      if (error.message && error.message.includes('timeout')) {
+        console.log('⏰ ChatScreen: API timeout detected, server might be cold starting');
+        setServerStatus('cold_start');
+      } else {
+        setServerStatus('error');
+      }
+      
       if (error.response?.status === 401) {
         console.log('ChatScreen: Unauthorized, redirecting to login');
         navigation.replace('Login');
-      } else {
+      } else if (!error.message.includes('timeout')) {
+        // ไม่แสดง alert ถ้าเป็น timeout เพราะระบบกำลัง retry อยู่
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
       stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
@@ -706,12 +720,23 @@ const ChatScreen = ({ route, navigation }) => {
   }, [currentUser]);
 
   if (isLoading || authLoading) {
+    const isColdStart = serverStatus === 'cold_start';
+    const loadingTitle = authLoading 
+      ? "กำลังตรวจสอบผู้ใช้..." 
+      : isColdStart 
+        ? "เซิร์ฟเวอร์กำลังเริ่มต้น..." 
+        : "กำลังโหลดข้อมูล...";
+    
+    const loadingSubtitle = isColdStart 
+      ? "กรุณารอสักครู่ (30-60 วินาที)" 
+      : "กรุณารอสักครู่";
+    
     return (
       <ProgressLoadingScreen
         isVisible={isLoading || authLoading}
         progress={progress}
-        title={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดข้อมูล..."}
-        subtitle="กรุณารอสักครู่"
+        title={loadingTitle}
+        subtitle={loadingSubtitle}
         color="#F5C842"
       />
     );
@@ -762,6 +787,9 @@ const ChatScreen = ({ route, navigation }) => {
           </Text>
           <Text style={styles.debugText}>
             AuthUser: {authUser?.firstName} {authUser?.lastName} ({authUser?._id?.slice(-6)})
+          </Text>
+          <Text style={styles.debugText}>
+            Server: {serverStatus} | Socket: {socket?.connected ? 'connected' : 'connecting'}
           </Text>
           <TouchableOpacity
             style={styles.searchButton}

@@ -74,18 +74,22 @@ export const SocketProvider = ({ children }) => {
         const socketURL = API_URL.replace('/api', '');
         console.log('🌐 Connecting to socket URL:', socketURL);
         
-        // เชื่อมต่อ Socket.IO
+        // เชื่อมต่อ Socket.IO ด้วยการตั้งค่าที่เหมาะสมสำหรับ Render.com
         const socketInstance = io(socketURL, {
           auth: {
             token: token,
             userId: user._id
           },
           transports: ['websocket', 'polling'],
-          timeout: 30000, // เพิ่มเป็น 30 วินาที
+          timeout: 60000, // เพิ่มเป็น 60 วินาที เพื่อรอ cold start
           forceNew: true,
           reconnection: true,
-          reconnectionAttempts: 8, // เพิ่มจำนวนครั้งการ reconnect
-          reconnectionDelay: 2000 // เพิ่มช่วงเวลารอ
+          reconnectionAttempts: 10, // เพิ่มจำนวนครั้งการ reconnect
+          reconnectionDelay: 3000, // เพิ่มช่วงเวลารอเป็น 3 วินาที
+          reconnectionDelayMax: 10000, // เพิ่มเวลารอสูงสุด
+          autoConnect: true,
+          upgrade: true,
+          rememberUpgrade: true
         });
 
         socketInstance.on('connect', () => {
@@ -103,12 +107,42 @@ export const SocketProvider = ({ children }) => {
 
         socketInstance.on('connect_error', (error) => {
           console.error('❌ Socket connection error:', error.message);
-          console.error('❌ Error details:', error);
+          console.error('❌ Error type:', error.type || 'Unknown');
+          console.error('❌ Error description:', error.description || 'No description');
           setIsConnected(false);
+          
+          // ถ้าเป็น timeout ให้แจ้งผู้ใช้ว่าอาจต้องรอสักครู่
+          if (error.message && error.message.includes('timeout')) {
+            console.log('⏰ Connection timeout - server might be starting up (cold start)');
+            console.log('🔄 Will continue trying to connect...');
+          }
         });
 
-        socketInstance.on('disconnect', () => {
-          console.log('❌ Socket disconnected');
+        socketInstance.on('disconnect', (reason) => {
+          console.log('🔌 Socket disconnected. Reason:', reason);
+          setIsConnected(false);
+          
+          // ถ้า disconnect เพราะ transport error ให้ลองเชื่อมต่อใหม่
+          if (reason === 'transport error' || reason === 'transport close') {
+            console.log('🔄 Will attempt to reconnect due to transport issue...');
+          }
+        });
+
+        socketInstance.on('reconnect', (attemptNumber) => {
+          console.log('🔄 Socket reconnected successfully on attempt:', attemptNumber);
+          setIsConnected(true);
+        });
+
+        socketInstance.on('reconnect_attempt', (attemptNumber) => {
+          console.log(`🔄 Socket reconnection attempt #${attemptNumber}...`);
+        });
+
+        socketInstance.on('reconnect_error', (error) => {
+          console.error('❌ Socket reconnection error:', error.message);
+        });
+
+        socketInstance.on('reconnect_failed', () => {
+          console.error('❌ Socket reconnection failed after all attempts');
           setIsConnected(false);
         });
 
