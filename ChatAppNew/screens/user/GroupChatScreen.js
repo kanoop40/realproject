@@ -1373,14 +1373,18 @@ const GroupChatScreen = ({ route, navigation }) => {
           style={styles.messagesList}
           contentContainerStyle={[
             styles.messagesContainer,
-            messages.length === 0 && styles.emptyMessagesContainer // เพิ่ม style เมื่อไม่มีข้อความ
+            messages.length === 0 && styles.emptyMessagesContainer
           ]}
-          showsVerticalScrollIndicator={true}
+          showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
           maxToRenderPerBatch={15}
           windowSize={15}
           initialNumToRender={15}
-          getItemLayout={null} // ลบ getItemLayout เพื่อให้การเลื่อนราบรื่นขึ้น
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          bounces={true}
+          getItemLayout={null}
           maintainVisibleContentPosition={{
             minIndexForVisible: 0,
             autoscrollToTopThreshold: 100
@@ -1673,10 +1677,13 @@ const styles = StyleSheet.create({
   leaveButtonText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 
   messagesListContainer: { flex: 1 },
-  messagesList: { flex: 1, backgroundColor: '#F5C842' },
+  messagesList: { 
+    flex: 1, 
+    backgroundColor: 'transparent'
+  },
   messagesContainer: { 
     padding: 16,
-    flexGrow: 1 // เพิ่มเพื่อให้ empty component แสดงที่กลางจอ
+    flexGrow: 1
   },
   emptyMessagesContainer: {
     justifyContent: 'center',

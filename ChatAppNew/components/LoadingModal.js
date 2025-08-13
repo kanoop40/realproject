@@ -30,7 +30,7 @@ const LoadingModal = ({ visible, message, progress = 0 }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="small" color="#FFA500" />
           <Text style={styles.message}>{message}{dots}</Text>
           {progress > 0 && (
             <View style={styles.progressContainer}>
@@ -55,35 +55,35 @@ const styles = StyleSheet.create({
   },
   container: {
     backgroundColor: 'white',
-    padding: 30,
-    borderRadius: 15,
+    padding: 20,
+    borderRadius: 12,
     alignItems: 'center',
-    minWidth: 200,
-    maxWidth: 300,
+    minWidth: 160,
+    maxWidth: 250,
   },
   message: {
-    marginTop: 15,
-    fontSize: 16,
+    marginTop: 12,
+    fontSize: 14,
     textAlign: 'center',
     color: '#333',
     fontWeight: '500',
   },
   progressContainer: {
-    marginTop: 20,
+    marginTop: 15,
     width: '100%',
     alignItems: 'center',
   },
   progressBar: {
     width: '100%',
-    height: 6,
+    height: 4,
     backgroundColor: '#E0E0E0',
-    borderRadius: 3,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#007AFF',
-    borderRadius: 3,
+    backgroundColor: '#FFA500',
+    borderRadius: 2,
   },
   progressText: {
     marginTop: 8,

@@ -20,7 +20,8 @@ const {
     sendGroupMessage,
     getGroupMessages,
     deleteGroupMessage,
-    editGroupMessage
+    editGroupMessage,
+    markGroupMessagesAsRead
 } = require('../controllers/groupChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
@@ -120,6 +121,10 @@ router.delete('/:id/messages/:messageId', deleteGroupMessage);
 // @route   PUT /api/groups/:id/messages/:messageId
 // @desc    แก้ไขข้อความในกลุ่ม
 router.put('/:id/messages/:messageId', require('../controllers/groupChatController').editGroupMessage);
+
+// @route   PUT /api/groups/:id/read
+// @desc    มาร์คข้อความในกลุ่มว่าอ่านแล้ว
+router.put('/:id/read', markGroupMessagesAsRead);
 
 // @route   POST /api/groups/:id/upload
 // @desc    อัพโหลดไฟล์ในกลุ่ม (alias สำหรับ messages endpoint)

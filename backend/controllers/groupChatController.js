@@ -98,10 +98,35 @@ const getUserGroups = asyncHandler(async (req, res) => {
     .populate('members.user', 'firstName lastName username role avatar')
     .sort({ lastActivity: -1 });
 
+    // เพิ่มการนับ unread count สำหรับแต่ละกลุ่ม
+    const groupsWithUnreadCount = await Promise.all(
+        groups.map(async (group) => {
+            try {
+                // หาข้อความที่ยังไม่อ่านในกลุ่มนี้
+                const unreadCount = await Messages.countDocuments({
+                    chatroomId: group._id,
+                    sender: { $ne: userId }, // ไม่นับข้อความที่ส่งเอง
+                    readBy: { $not: { $elemMatch: { user: userId } } } // ยังไม่อ่าน
+                });
+
+                return {
+                    ...group.toObject(),
+                    unreadCount: unreadCount || 0
+                };
+            } catch (error) {
+                console.error('Error counting unread messages for group:', group._id, error);
+                return {
+                    ...group.toObject(),
+                    unreadCount: 0
+                };
+            }
+        })
+    );
+
     res.json({
         success: true,
-        data: groups,
-        count: groups.length
+        data: groupsWithUnreadCount,
+        count: groupsWithUnreadCount.length
     });
 });
 
@@ -784,10 +809,10 @@ const deleteGroupMessage = asyncHandler(async (req, res) => {
 // @access  Private
 const updateGroup = asyncHandler(async (req, res) => {
     const groupId = req.params.id;
-    const { name } = req.body;
+    const { groupName } = req.body;
     const userId = req.user._id;
 
-    if (!name || name.trim() === '') {
+    if (!groupName || groupName.trim() === '') {
         res.status(400);
         throw new Error('กรุณาใส่ชื่อกลุ่ม');
     }
@@ -799,12 +824,12 @@ const updateGroup = asyncHandler(async (req, res) => {
     }
 
     // ตรวจสอบว่าเป็น admin ของกลุ่ม
-    if (group.admin.toString() !== userId.toString()) {
+    if (group.creator.toString() !== userId.toString()) {
         res.status(403);
         throw new Error('ไม่มีสิทธิ์แก้ไขกลุ่มนี้');
     }
 
-    group.name = name.trim();
+    group.groupName = groupName.trim();
     await group.save();
 
     res.json({
@@ -833,7 +858,7 @@ const updateGroupAvatar = asyncHandler(async (req, res) => {
     }
 
     // ตรวจสอบว่าเป็น admin ของกลุ่ม
-    if (group.admin.toString() !== userId.toString()) {
+    if (group.creator.toString() !== userId.toString()) {
         res.status(403);
         throw new Error('ไม่มีสิทธิ์แก้ไขกลุ่มนี้');
     }
@@ -878,7 +903,7 @@ const addMembers = asyncHandler(async (req, res) => {
     }
 
     // ตรวจสอบว่าเป็น admin ของกลุ่ม
-    if (group.admin.toString() !== userId.toString()) {
+    if (group.creator.toString() !== userId.toString()) {
         res.status(403);
         throw new Error('ไม่มีสิทธิ์เพิ่มสมาชิกในกลุ่มนี้');
     }
@@ -1027,6 +1052,73 @@ const editGroupMessage = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    มาร์คข้อความในกลุ่มว่าอ่านแล้ว
+// @route   PUT /api/groups/:id/read
+// @access  Private
+const markGroupMessagesAsRead = asyncHandler(async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user._id;
+
+    try {
+        // ตรวจสอบว่าเป็นสมาชิกของกลุ่มหรือไม่
+        const group = await GroupChat.findById(groupId);
+        if (!group) {
+            res.status(404);
+            throw new Error('ไม่พบกลุ่ม');
+        }
+
+        const isMember = group.members.some(member => 
+            member.user.toString() === userId.toString()
+        );
+
+        if (!isMember) {
+            res.status(403);
+            throw new Error('ไม่มีสิทธิ์เข้าถึงกลุ่มนี้');
+        }
+
+        // อัปเดตข้อความทั้งหมดในกลุ่มที่ยังไม่อ่านให้เป็นอ่านแล้ว
+        const result = await Messages.updateMany(
+            {
+                chatroomId: groupId,
+                sender: { $ne: userId }, // ไม่รวมข้อความของตัวเอง
+                readBy: { $not: { $elemMatch: { user: userId } } } // ยังไม่อ่าน
+            },
+            {
+                $push: {
+                    readBy: {
+                        user: userId,
+                        readAt: new Date()
+                    }
+                }
+            }
+        );
+
+        console.log(`📖 Marked ${result.modifiedCount} group messages as read for user ${userId} in group ${groupId}`);
+
+        // ส่ง Socket event เพื่อแจ้ง update อื่นๆ
+        if (req.app.locals.io && result.modifiedCount > 0) {
+            req.app.locals.io.to(groupId).emit('messageRead', {
+                chatroomId: groupId,
+                userId: userId,
+                readCount: result.modifiedCount
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'มาร์คข้อความว่าอ่านแล้วเรียบร้อย',
+            readCount: result.modifiedCount
+        });
+
+    } catch (error) {
+        console.error('❌ Error marking group messages as read:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการมาร์คข้อความว่าอ่านแล้ว',
+            error: error.message
+        });
+    }
+});
+
 module.exports = {
     createGroup,
     getUserGroups,
@@ -1044,5 +1136,6 @@ module.exports = {
     sendGroupMessage,
     getGroupMessages,
     deleteGroupMessage,
-    editGroupMessage
+    editGroupMessage,
+    markGroupMessagesAsRead
 };

@@ -6,7 +6,7 @@ const ProgressLoadingScreen = ({
   progress = 0, 
   title = "กำลังโหลด...", 
   subtitle = "กรุณารอสักครู่",
-  color = "#007AFF" 
+  color = "#FFA500" 
 }) => {
   const progressAnimation = React.useRef(new Animated.Value(progress / 100)).current;
 
@@ -22,7 +22,7 @@ const ProgressLoadingScreen = ({
 
   return (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color={color} style={{ marginBottom: 20 }} />
+      <ActivityIndicator size="small" color={color} style={{ marginBottom: 10 }} />
       <Text style={[styles.loadingText, { color: color }]}>{title}</Text>
       
       {/* Progress Bar Container */}
@@ -60,37 +60,37 @@ const styles = {
     paddingHorizontal: 20,
   },
   loadingText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: 6,
     textAlign: 'center',
   },
   loadingSubText: {
-    fontSize: 14,
+    fontSize: 11,
     color: '#666',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 6,
   },
   progressContainer: {
-    width: '80%',
+    width: '60%',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: 10,
+    marginBottom: 6,
   },
   progressBarBackground: {
     width: '100%',
-    height: 8,
+    height: 4,
     backgroundColor: '#E0E0E0',
-    borderRadius: 4,
+    borderRadius: 2,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 2,
   },
   progressText: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '600',
   },
 };

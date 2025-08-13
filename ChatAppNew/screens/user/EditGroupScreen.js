@@ -14,7 +14,7 @@ import {
   Platform
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import api, { API_URL } from '../../service/api';
+import api, { updateGroup, updateGroupAvatar, addGroupMembers, getGroupDetails, API_URL } from '../../service/api';
 import * as ImagePicker from 'expo-image-picker';
 
 const EditGroupScreen = ({ route, navigation }) => {
@@ -173,7 +173,7 @@ const EditGroupScreen = ({ route, navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: [ImagePicker.MediaType.Images],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -218,7 +218,7 @@ const EditGroupScreen = ({ route, navigation }) => {
 
       // อัปเดตชื่อกลุ่ม (ถ้ามีการเปลี่ยนแปลง)
       if (groupName.trim() && groupName.trim() !== groupInfo?.groupName) {
-        const nameResponse = await api.put(`/groups/${groupId}`, {
+        const nameResponse = await updateGroup(groupId, {
           groupName: groupName.trim(),
         });
         console.log('✅ Group name updated:', nameResponse.data);
@@ -227,18 +227,13 @@ const EditGroupScreen = ({ route, navigation }) => {
       // อัปเดตรูปภาพกลุ่ม (ถ้ามี)
       if (groupAvatar && groupAvatar.uri) {
         const formData = new FormData();
-        formData.append('avatar', {
+        formData.append('groupAvatar', {
           uri: groupAvatar.uri,
           type: 'image/jpeg',
           name: 'group-avatar.jpg',
         });
 
-        const avatarResponse = await api.put(`/groups/${groupId}/avatar`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-
+        const avatarResponse = await updateGroupAvatar(groupId, formData);
         console.log('✅ Group avatar updated:', avatarResponse.data);
       }
 
@@ -249,9 +244,7 @@ const EditGroupScreen = ({ route, navigation }) => {
 
       if (newMemberIds.length > 0) {
         console.log('🔄 Adding new members:', newMemberIds);
-        const addMembersResponse = await api.post(`/groups/${groupId}/invite`, {
-          userIds: newMemberIds
-        });
+        const addMembersResponse = await addGroupMembers(groupId, newMemberIds);
         console.log('✅ New members added:', addMembersResponse.data);
       }
 

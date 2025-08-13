@@ -220,5 +220,36 @@ export const markNotificationAsRead = (notificationId) => {
   return api.put(`/notifications/${notificationId}/read`);
 };
 
+// Group API functions
+export const createGroup = (groupData) => {
+  console.log('➕ Creating group:', Object.keys(groupData));
+  return api.post('/groups', groupData);
+};
+
+export const updateGroup = (groupId, groupData) => {
+  console.log('✏️ Updating group:', groupId, Object.keys(groupData));
+  return api.put(`/groups/${groupId}`, groupData);
+};
+
+export const updateGroupAvatar = (groupId, formData) => {
+  console.log('🖼️ Updating group avatar:', groupId);
+  return api.put(`/groups/${groupId}/avatar`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 180000, // 3 นาทีสำหรับการอัพโหลดรูป
+  });
+};
+
+export const addGroupMembers = (groupId, userIds) => {
+  console.log('👥 Adding group members:', groupId, userIds);
+  return api.post(`/groups/${groupId}/invite`, { userIds });
+};
+
+export const getGroupDetails = (groupId) => {
+  console.log('📋 Getting group details:', groupId);
+  return api.get(`/groups/${groupId}`);
+};
+
 export { API_URL };
 export default api;

@@ -1443,7 +1443,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
           ref={flatListRef}
           data={messages}
           keyExtractor={(item, index) => {
-            // สร้าง unique key เพื่อป้องกัน duplicate
             if (item._id) {
               return `${item._id}_${item.timestamp || Date.now()}_${index}`;
             }
@@ -1453,10 +1452,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
           style={styles.messagesList}
           contentContainerStyle={[
             styles.messagesContainer,
-            messages.length === 0 && styles.emptyMessagesContainer // เพิ่ม style เมื่อไม่มีข้อความ
+            messages.length === 0 && styles.emptyMessagesContainer
           ]}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          bounces={true}
           ListEmptyComponent={() => (
             <View style={styles.emptyMessageContainer}>
               <Text style={styles.emptyMessageText}>
@@ -1815,11 +1818,11 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     flex: 1,
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: 'transparent'
   },
   messagesContainer: {
     padding: 16,
-    flexGrow: 1 // เพิ่มเพื่อให้ empty component แสดงที่กลางจอ
+    flexGrow: 1
   },
   emptyMessagesContainer: {
     justifyContent: 'center',

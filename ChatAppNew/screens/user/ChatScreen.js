@@ -71,6 +71,35 @@ const ChatScreen = ({ route, navigation }) => {
           console.log('👤 Ignoring own message in ChatScreen');
           return;
         }
+
+        // แสดงการแจ้งเตือนสำหรับข้อความใหม่
+        const senderName = data.message.sender ? 
+          `${data.message.sender.firstName} ${data.message.sender.lastName}` : 
+          'Unknown';
+        
+        // ตรวจสอบว่าเป็นข้อความจากกลุ่มหรือแชทส่วนตัว
+        const isGroupMessage = data.isGroup || data.groupId;
+        const chatName = data.groupName || data.roomName || 'แชท';
+        
+        console.log('🔔 Showing notification for new message from:', senderName);
+        console.log('🔔 Is group message:', isGroupMessage);
+        console.log('🔔 Chat name:', chatName);
+        
+        // ใช้ NotificationService เพื่อแสดงการแจ้งเตือน
+        const notificationTitle = isGroupMessage ? 
+          `${chatName}: ${senderName}` : 
+          `ข้อความจาก ${senderName}`;
+        
+        NotificationService.showInAppNotification(
+          notificationTitle,
+          data.message.content,
+          { 
+            senderId: data.message.sender._id,
+            chatroomId: data.chatroomId,
+            isGroup: isGroupMessage,
+            groupName: data.groupName
+          }
+        );
         
         // รีเฟรชรายการแชทเพื่อให้ได้ unread count ที่ถูกต้องจาก server
         console.log('🔄 Refreshing chat list to get updated unread count...');
@@ -86,13 +115,17 @@ const ChatScreen = ({ route, navigation }) => {
             if (chat._id === data.chatroomId) {
               console.log('📝 Updating chat with new message:', data.chatroomId);
               
+              // อัปเดต unread count สำหรับทั้งแชทส่วนตัวและกลุ่ม
+              const currentUnreadCount = chat.unreadCount || 0;
+              
               return {
                 ...chat,
                 lastMessage: {
                   content: data.message.content,
                   timestamp: data.message.timestamp,
                   sender: data.message.sender
-                }
+                },
+                unreadCount: currentUnreadCount + 1 // เพิ่ม unread count
               };
             }
             return chat;
@@ -298,7 +331,7 @@ const ChatScreen = ({ route, navigation }) => {
         isGroup: true,
         participants: group.members,
         lastMessage: group.lastMessage || null,
-        unreadCount: 0 // TODO: implement unread count for groups
+        unreadCount: group.unreadCount || 0 // ใช้ unreadCount จาก server
       }));
       
       console.log('🔍 Private chats:', privateChats.length);
@@ -493,6 +526,29 @@ const ChatScreen = ({ route, navigation }) => {
 
   const handleChatPress = async (chat) => {
     if (chat.isGroup) {
+      // มาร์คข้อความกลุ่มว่าอ่านแล้วเมื่อเข้าแชท
+      if (chat.unreadCount > 0) {
+        try {
+          console.log('📖 Marking group chat as read:', chat._id, 'unreadCount:', chat.unreadCount);
+          await api.put(`/groups/${chat._id}/read`);
+          
+          // อัพเดท local state
+          setChats(prevChats => {
+            return prevChats.map(c => {
+              if (c._id === chat._id) {
+                console.log('📖 Local state updated - group unreadCount reset to 0 for:', c._id);
+                return { ...c, unreadCount: 0 };
+              }
+              return c;
+            });
+          });
+          
+          console.log('✅ Marked group chat as read:', chat._id);
+        } catch (error) {
+          console.error('❌ Error marking group chat as read:', error);
+        }
+      }
+      
       // นำทางไปยังหน้าแชทกลุ่ม
       navigation.navigate('GroupChat', {
         groupId: chat._id,
@@ -806,13 +862,14 @@ const ChatScreen = ({ route, navigation }) => {
           renderItem={renderChatItem}
           style={styles.chatsList}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          initialNumToRender={8}
-          getItemLayout={(data, index) => (
-            {length: 80, offset: 80 * index, index}
-          )}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={15}
+          windowSize={15}
+          initialNumToRender={10}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          bounces={true}
         />
       )}
 
