@@ -14,8 +14,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import api, { API_URL } from '../../service/api';
-import AvatarUnavailableNotice from '../../components/AvatarUnavailableNotice';
-import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+// เอา AvatarUnavailableNotice import ออก
+// import AvatarUnavailableNotice from '../../components/AvatarUnavailableNotice';
+import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import useProgressLoading from '../../hooks/useProgressLoading';
 
 const ProfileScreen = ({ navigation }) => {
@@ -145,10 +146,10 @@ const ProfileScreen = ({ navigation }) => {
       const response = await api.put('/users/update-profile', allowedData);
       setCurrentUser(response.data);
       setShowEditModal(false);
-      Alert.alert('สำเร็จ', 'อัพเดทโปรไฟล์เรียบร้อยแล้ว');
+      // เอาการแจ้งเตือนออก - Alert.alert('สำเร็จ', 'อัพเดทโปรไฟล์เรียบร้อยแล้ว');
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัพเดทโปรไฟล์ได้');
+      // เอาการแจ้งเตือนออก - Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัพเดทโปรไฟล์ได้');
     } finally {
       setIsUpdating(false);
     }
@@ -231,10 +232,10 @@ const ProfileScreen = ({ navigation }) => {
       }));
       
       console.log('📸 New avatar path set:', newAvatarPath);
-      Alert.alert('สำเร็จ', 'อัพโหลดรูปโปรไฟล์เรียบร้อยแล้ว');
+      // เอาการแจ้งเตือนออก - Alert.alert('สำเร็จ', 'อัพโหลดรูปโปรไฟล์เรียบร้อยแล้ว');
     } catch (error) {
       console.error('Error uploading image:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัพโหลดรูปภาพได้');
+      // เอาการแจ้งเตือนออก - Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัพโหลดรูปภาพได้');
     } finally {
       setIsUpdating(false);
     }
@@ -274,7 +275,7 @@ const ProfileScreen = ({ navigation }) => {
         newPassword: passwordForm.newPassword,
       });
 
-      Alert.alert('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว');
+      // เอาการแจ้งเตือนออก - Alert.alert('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว');
       setShowPasswordModal(false);
       setPasswordForm({
         currentPassword: '',
@@ -284,7 +285,7 @@ const ProfileScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error changing password:', error);
       const errorMessage = error.response?.data?.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้';
-      Alert.alert('ข้อผิดพลาด', errorMessage);
+      // เอาการแจ้งเตือนออก - Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsUpdating(false);
     }
@@ -292,12 +293,12 @@ const ProfileScreen = ({ navigation }) => {
 
   if (isLoading) {
     return (
-      <ProgressLoadingScreen
+      <InlineLoadingScreen
         isVisible={isLoading}
         progress={progress}
-        title="กำลังโหลดโปรไฟล์..."
+        title="LOADING"
         subtitle="กรุณารอสักครู่"
-        color="#007AFF"
+        backgroundColor="#F5C842"
       />
     );
   }
@@ -369,8 +370,8 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.roleText}>{translateRole(currentUser?.role)}</Text>
           </View>
           
-          {/* Avatar Notice */}
-          <AvatarUnavailableNotice />
+          {/* เอา Avatar Notice ออก */}
+          {/* <AvatarUnavailableNotice /> */}
 
         {/* Details Section */}
         <View style={styles.detailsSection}>

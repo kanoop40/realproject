@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
 
   const loadUser = async () => {
     try {
-      // Wake up server ก่อนโหลดข้อมูล user
+      // Wake up server ก่อนโหลดข้อมูล user (ไม่รอผลลัพธ์)
       console.log('🏥 Starting health check...');
       wakeUpServer(); // ไม่รอผลลัพธ์ ให้ทำงานพื้นหลัง
       
@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
+      // ตั้ง loading เป็น false ทันทีโดยไม่ต้องรอ
       setLoading(false);
     }
   };

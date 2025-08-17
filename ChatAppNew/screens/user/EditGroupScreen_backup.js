@@ -19,7 +19,23 @@ import * as ImagePicker from 'expo-image-picker';
 
 const EditGroupScreen = ({ route, navigation }) => {
   const { groupId } = route.params;
-  const { user: authUser } = useAuth();
+  const { use              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.classItem}
+                  onPress={() => addUsersByClassCode(item.classCode)}
+                >
+                  <View style={styles.classTextContainer}>
+                    <Text style={styles.classText}>
+                      {item.classCode || 'ไม่มีรหัสกลุ่มเรียน'}
+                    </Text>
+                    <Text style={styles.classSubText}>
+                      {item.userCount} คน
+                    </Text>
+                  </View>
+                  <Text style={styles.addText}>+ เพิ่ม</Text>
+                </TouchableOpacity>
+              )}Auth();
+  const authUser = user;
   const [groupInfo, setGroupInfo] = useState(null);
   const [groupName, setGroupName] = useState('');
   const [groupAvatar, setGroupAvatar] = useState(null);
@@ -44,7 +60,7 @@ const EditGroupScreen = ({ route, navigation }) => {
   useEffect(() => {
     loadGroupData();
     loadUsers();
-    loadMajors(); // อนุญาตให้ทุกคนเข้าถึง
+    loadMajors(); // โหลด majors สำหรับทุกคน
   }, [groupId]);
 
   const loadGroupData = async () => {
@@ -164,41 +180,24 @@ const EditGroupScreen = ({ route, navigation }) => {
 
   const selectAvatarImage = async () => {
     try {
-      console.log('🖼️ Starting image selection...');
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('📱 Media library permission status:', status);
-      
       if (status !== 'granted') {
         Alert.alert('ข้อผิดพลาด', 'กรุณาอนุญาตการเข้าถึงรูปภาพ');
         return;
       }
 
-      console.log('📸 Launching image picker...');
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: [ImagePicker.MediaType.Images],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
-      console.log('📸 Image picker result:', {
-        canceled: result.canceled,
-        hasAssets: result.assets ? result.assets.length : 0,
-        firstAsset: result.assets?.[0] ? 'exists' : 'none'
-      });
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        console.log('✅ Setting group avatar:', {
-          uri: result.assets[0].uri,
-          width: result.assets[0].width,
-          height: result.assets[0].height
-        });
         setGroupAvatar(result.assets[0]);
-      } else {
-        console.log('❌ Image selection canceled or no assets');
       }
     } catch (error) {
-      console.error('❌ Error picking image:', error);
+      console.error('Error picking image:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเลือกรูปภาพได้');
     }
   };
@@ -212,6 +211,25 @@ const EditGroupScreen = ({ route, navigation }) => {
         return [...prev, user];
       }
     });
+  };
+
+  const removeMember = (user) => {
+    const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    
+    Alert.alert(
+      'ลบสมาชิก', 
+      `คุณต้องการลบ "${displayName}" ออกจากกลุ่มหรือไม่?`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ลบ',
+          style: 'destructive',
+          onPress: () => {
+            setSelectedUsers(prev => prev.filter(u => u._id !== user._id));
+          }
+        }
+      ]
+    );
   };
 
   const handleUpdateGroup = async () => {
@@ -241,12 +259,6 @@ const EditGroupScreen = ({ route, navigation }) => {
 
       // อัปเดตรูปภาพกลุ่ม (ถ้ามี)
       if (groupAvatar && groupAvatar.uri) {
-        console.log('🖼️ Updating group avatar...', {
-          uri: groupAvatar.uri,
-          type: groupAvatar.type,
-          fileName: groupAvatar.fileName
-        });
-        
         const formData = new FormData();
         formData.append('groupAvatar', {
           uri: groupAvatar.uri,
@@ -254,42 +266,42 @@ const EditGroupScreen = ({ route, navigation }) => {
           name: 'group-avatar.jpg',
         });
 
-        console.log('📤 Sending FormData to updateGroupAvatar...');
-        try {
-          const avatarResponse = await updateGroupAvatar(groupId, formData);
-          console.log('✅ Group avatar updated successfully:', avatarResponse.data);
-        } catch (avatarError) {
-          console.error('❌ Avatar update error:', avatarError);
-          console.error('❌ Avatar error response:', avatarError.response?.data);
-          throw avatarError; // Re-throw to be caught by outer try-catch
-        }
+        const avatarResponse = await updateGroupAvatar(groupId, formData);
+        console.log('✅ Group avatar updated:', avatarResponse.data);
       }
 
-      // อัปเดตสมาชิก (เพิ่มสมาชิกใหม่)
+      // อัปเดตสมาชิก (เพิ่มสมาชิกใหม่และลบสมาชิกที่ไม่ต้องการ)
       const currentMemberIds = currentMembers.map(member => member._id);
       const selectedUserIds = selectedUsers.map(user => user._id);
       const newMemberIds = selectedUserIds.filter(id => !currentMemberIds.includes(id));
+      const removedMemberIds = currentMemberIds.filter(id => 
+        id !== authUser._id && !selectedUserIds.includes(id)
+      );
 
+      // เพิ่มสมาชิกใหม่
       if (newMemberIds.length > 0) {
         console.log('🔄 Adding new members:', newMemberIds);
         const addMembersResponse = await addGroupMembers(groupId, newMemberIds);
         console.log('✅ New members added:', addMembersResponse.data);
       }
 
-      // โหลดข้อมูลกลุ่มใหม่หลังจากอัปเดต
-      await loadGroupData();
+      // ลบสมาชิกที่ไม่ต้องการ
+      if (removedMemberIds.length > 0) {
+        console.log('🔄 Removing members:', removedMemberIds);
+        for (const memberId of removedMemberIds) {
+          try {
+            await api.delete(`/groups/${groupId}/members/${memberId}`);
+            console.log('✅ Member removed:', memberId);
+          } catch (removeError) {
+            console.error('❌ Error removing member:', memberId, removeError);
+          }
+        }
+      }
 
       Alert.alert('สำเร็จ', 'อัปเดตข้อมูลกลุ่มเรียบร้อยแล้ว', [
         {
           text: 'ตกลง',
-          onPress: () => {
-            // ส่ง flag กลับไปให้ parent screen รีเฟรช
-            navigation.navigate('GroupChat', { 
-              groupId, 
-              refresh: true,
-              updatedMembers: selectedUsers.length 
-            });
-          }
+          onPress: () => navigation.goBack()
         }
       ]);
 
@@ -401,14 +413,13 @@ const EditGroupScreen = ({ route, navigation }) => {
               <Text style={styles.addMemberButtonText}>+ เพิ่มสมาชิก</Text>
             </TouchableOpacity>
 
-            {(authUser.role === 'teacher' || authUser.role === 'อาจารย์') && (
-              <TouchableOpacity
-                style={[styles.addMemberButton, { backgroundColor: '#4CAF50', borderColor: '#45a049' }]}
-                onPress={() => setShowMajorSelection(true)}
-              >
-                <Text style={styles.addMemberButtonText}>เพิ่มจากกลุ่มเรียน</Text>
-              </TouchableOpacity>
-            )}
+            {/* แสดงปุ่มเพิ่มจากกลุ่มเรียนสำหรับทุกคน */}
+            <TouchableOpacity
+              style={[styles.addMemberButton, { backgroundColor: '#4CAF50', borderColor: '#45a049' }]}
+              onPress={() => setShowMajorSelection(true)}
+            >
+              <Text style={styles.addMemberButtonText}>เพิ่มจากกลุ่มเรียน</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Selected Members Display */}
@@ -431,7 +442,7 @@ const EditGroupScreen = ({ route, navigation }) => {
                     {displayName}
                   </Text>
                   <TouchableOpacity 
-                    onPress={() => toggleUserSelection(user)}
+                    onPress={() => removeMember(user)}
                     style={styles.removeChipButton}
                   >
                     <Text style={styles.removeChipText}>×</Text>
@@ -580,16 +591,9 @@ const EditGroupScreen = ({ route, navigation }) => {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.classItem}
-                  onPress={() => addUsersByClassCode(item.classCode)}
+                  onPress={() => addUsersByClassCode(item)}
                 >
-                  <View style={styles.classTextContainer}>
-                    <Text style={styles.classText}>
-                      {item.classCode || 'ไม่มีรหัสกลุ่มเรียน'}
-                    </Text>
-                    <Text style={styles.classSubText}>
-                      {item.userCount} คน
-                    </Text>
-                  </View>
+                  <Text style={styles.classText}>{item || 'ไม่มีรหัสกลุ่มเรียน'}</Text>
                   <Text style={styles.addText}>+ เพิ่ม</Text>
                 </TouchableOpacity>
               )}
@@ -916,18 +920,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginHorizontal: 16,
   },
-  classTextContainer: {
-    flex: 1,
-  },
   classText: {
     fontSize: 16,
     color: '#333',
+    flex: 1,
     fontWeight: '600',
-  },
-  classSubText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
   },
   addText: {
     fontSize: 16,

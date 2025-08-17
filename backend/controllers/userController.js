@@ -853,11 +853,12 @@ const getUsersForGroupCreation = asyncHandler(async (req, res) => {
 
 const getMajors = asyncHandler(async (req, res) => {
     try {
-        const currentUserRole = req.user.role;
+        // อนุญาตให้ทุก user เข้าถึงได้ (ไม่จำกัดแค่ teacher)
+        // const currentUserRole = req.user.role;
         
-        if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
-            return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลสาขาได้' });
-        }
+        // if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
+        //     return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลสาขาได้' });
+        // }
 
         // หาสาขาที่มีอยู่และนับจำนวนรหัสกลุ่มเรียนในแต่ละสาขา
         const majors = await User.aggregate([
@@ -913,11 +914,12 @@ const getMajors = asyncHandler(async (req, res) => {
 const getClassCodesByMajor = asyncHandler(async (req, res) => {
     try {
         const { major } = req.params;
-        const currentUserRole = req.user.role;
+        // อนุญาตให้ทุกคนเข้าถึงได้ (ไม่จำกัดแค่ teacher)
+        // const currentUserRole = req.user.role;
         
-        if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
-            return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลกลุ่มเรียนได้' });
-        }
+        // if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
+        //     return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลกลุ่มเรียนได้' });
+        // }
 
         // หา groupCode ที่มีอยู่ในสาขานั้น
         const classCodes = await User.aggregate([

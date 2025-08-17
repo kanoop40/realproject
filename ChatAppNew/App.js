@@ -12,7 +12,8 @@ import UserDetailScreen from './screens/admin/UserDetailScreen';
 
 import ChatScreen from './screens/user/ChatScreen';
 import PrivateChatScreen from './screens/user/PrivateChatScreen';
-import SearchUserScreen from './screens/user/SearchUserScreen';
+
+import NewSearchUserScreen from './screens/user/NewSearchUserScreen';
 import ProfileScreen from './screens/user/ProfileScreen';
 import CreateGroupScreen from './screens/user/CreateGroupScreen';
 import EditGroupScreen from './screens/user/EditGroupScreen';
@@ -48,7 +49,7 @@ export default function App() {
             <Stack.Screen name="Admin" component={AdminScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
-            <Stack.Screen name="Search" component={SearchUserScreen} />
+            <Stack.Screen name="Search" component={NewSearchUserScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} /> 
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="EditGroup" component={EditGroupScreen} />

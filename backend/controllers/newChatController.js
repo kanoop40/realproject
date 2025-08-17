@@ -605,6 +605,18 @@ const markAsRead = asyncHandler(async (req, res) => {
 
         console.log('📖 Messages marked as read by current user:', updateResult.modifiedCount);
 
+        // ส่ง socket event เฉพาะเมื่อมีข้อความที่ถูกอ่านจริงๆ
+        if (updateResult.modifiedCount > 0 && req.app.locals.io) {
+            req.app.locals.io.to(id).emit('messageRead', {
+                chatroomId: id,
+                readBy: userId,
+                timestamp: new Date()
+            });
+            console.log('✅ MessageRead event emitted via HTTP');
+        } else {
+            console.log('📖 No unread messages from others, skipping messageRead event');
+        }
+
         console.log('✅ Messages marked as read successfully');
         res.json({ message: 'อ่านข้อความแล้ว' });
     } catch (error) {

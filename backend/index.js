@@ -307,15 +307,17 @@ io.on('connection', async (socket) => {
             
             console.log('✅ Messages marked as read in database, updated:', updateResult.modifiedCount);
             
-            // ส่งการแจ้งเตือนการอ่านข้อความไปยังคนอื่นในห้องแชท
-            // เพื่อให้ข้อความของพวกเขาแสดงสถานะ "อ่านแล้ว"
-            socket.to(data.chatroomId).emit('messageRead', {
-                chatroomId: data.chatroomId,
-                readBy: data.userId,
-                timestamp: new Date()
-            });
-            
-            console.log('✅ MessageRead event broadcasted to chatroom');
+            // ส่งการแจ้งเตือนการอ่านข้อความไปยังคนอื่นในห้องแชทเฉพาะเมื่อมีข้อความที่ถูกอ่านจริงๆ
+            if (updateResult.modifiedCount > 0) {
+                socket.to(data.chatroomId).emit('messageRead', {
+                    chatroomId: data.chatroomId,
+                    readBy: data.userId,
+                    timestamp: new Date()
+                });
+                console.log('✅ MessageRead event broadcasted to chatroom');
+            } else {
+                console.log('📖 No unread messages from others, skipping messageRead event');
+            }
         } catch (error) {
             console.error('❌ Error handling messageRead event:', error);
         }

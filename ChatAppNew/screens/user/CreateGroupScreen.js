@@ -152,7 +152,12 @@ const CreateGroupScreen = ({ navigation }) => {
   );
 
   const handleCreateGroup = async () => {
-    if (!groupName.trim()) {
+    console.log('handleCreateGroup called');
+    console.log('groupName value:', groupName);
+    console.log('description value:', description);
+    
+    // Check if groupName exists and has content after trim
+    if (!groupName || !groupName.trim()) {
       Alert.alert('ข้อผิดพลาด', 'กรุณาใส่ชื่อกลุ่ม');
       return;
     }
@@ -164,6 +169,7 @@ const CreateGroupScreen = ({ navigation }) => {
 
     setIsLoading(true);
     try {
+      console.log('Creating FormData...');
       // สร้าง FormData สำหรับส่งข้อมูลรวมรูปภาพ
       const formData = new FormData();
       
@@ -173,8 +179,9 @@ const CreateGroupScreen = ({ navigation }) => {
         ...selectedUsers.map(user => ({ user: user._id, role: 'member' }))
       ];
 
+      console.log('Appending data to FormData...');
       formData.append('groupName', groupName.trim());
-      formData.append('description', description.trim());
+      formData.append('description', (description || '').trim());
       formData.append('members', JSON.stringify(members));
 
       // เพิ่มรูปภาพถ้ามี
@@ -194,25 +201,64 @@ const CreateGroupScreen = ({ navigation }) => {
       });
       
       console.log('Group created successfully:', response.data);
-      Alert.alert(
-        'สำเร็จ',
-        'สร้างกลุ่มสำเร็จแล้ว',
-        [
-          {
-            text: 'ตกลง',
-            onPress: () => {
-              // กลับไปหน้าแชทและรีเฟรชรายการ
-              navigation.navigate('Chat', { refresh: true });
-            }
-          }
-        ]
-      );
+      
+      // ในสร้างกลุ่มสำเร็จ - ให้หยุด loading และทำ navigation ทันที
+      const groupId = response.data._id || response.data.group?._id;
+      const createdGroupName = response.data.groupName || response.data.group?.groupName;
+      
+      if (groupId) {
+        console.log('Navigating to created group:', groupId, createdGroupName);
+        
+        // หยุด loading ก่อน navigate เพื่อป้องกัน iOS freeze
+        setIsLoading(false);
+        
+        // Navigate ทันทีโดยไม่แสดง Alert สำหรับ iOS
+        if (Platform.OS === 'ios') {
+          navigation.replace('GroupChat', {
+            groupId: groupId,
+            groupName: createdGroupName,
+            groupImage: response.data.groupAvatar || response.data.group?.groupAvatar,
+            fromCreate: true
+          });
+        } else {
+          // สำหรับ Android ยังคงแสดง Alert
+          Alert.alert(
+            'สำเร็จ',
+            'สร้างกลุ่มสำเร็จแล้ว',
+            [
+              {
+                text: 'ตกลง',
+                onPress: () => {
+                  navigation.replace('GroupChat', {
+                    groupId: groupId,
+                    groupName: createdGroupName,
+                    groupImage: response.data.groupAvatar || response.data.group?.groupAvatar,
+                    fromCreate: true
+                  });
+                }
+              }
+            ]
+          );
+        }
+      } else {
+        // หยุด loading และกลับไปหน้าแชท
+        setIsLoading(false);
+        console.log('No groupId found, navigating to Chat screen');
+        navigation.navigate('Chat', { refresh: true });
+      }
 
     } catch (error) {
       console.error('Error creating group:', error);
+      console.error('Error response:', error.response?.data);
+      
+      // หยุด loading เมื่อเกิดข้อผิดพลาด
+      setIsLoading(false);
+      
       const errorMessage = error.response?.data?.message || 'ไม่สามารถสร้างกลุ่มได้';
       Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
+      // ใส่ finally เป็น safety net
+      console.log('Create group process completed, ensuring loading is stopped');
       setIsLoading(false);
     }
   };

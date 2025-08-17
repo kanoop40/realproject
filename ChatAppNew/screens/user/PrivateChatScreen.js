@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList,
+  ScrollView,
   Image,
   TextInput,
   KeyboardAvoidingView,
@@ -21,16 +22,20 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
-import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import { useProgressLoading } from '../../hooks/useProgressLoading';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
   const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
-  const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // Loading สำหรับการ scroll ไปข้อความล่าสุด
+  
+  // เพิ่ม local loading state เป็น fallback
+  const [localIsLoading, setLocalIsLoading] = useState(true);
+  // const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // ปิดการใช้งาน scroll loading
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false); // Track ว่า scroll ไปข้อความล่าสุดแล้วหรือยัง
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -38,6 +43,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [scrollToBottomOnLoad, setScrollToBottomOnLoad] = useState(true);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedModalImage, setSelectedModalImage] = useState(null);
@@ -49,145 +55,103 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const flatListRef = React.useRef(null); // เพิ่ม ref สำหรับ FlatList
 
   // ข้อมูลแชทจาก route params
-  const { chatroomId, roomName, recipientId, recipientName, recipientAvatar } = route.params || {};
+  const { 
+    chatroomId, 
+    roomName, 
+    recipientId, 
+    recipientName, 
+    recipientAvatar,
+    showInitialLoading = false,
+    fromSearch = false
+  } = route.params || {};
+
+  // กำหนด initial loading state ตาม parameter
+  useEffect(() => {
+    if (showInitialLoading || fromSearch) {
+      setLocalIsLoading(true);
+      startLoading();
+    }
+  }, [showInitialLoading, fromSearch]);
 
   // ตรวจสอบ chatroomId ตั้งแต่ต้น
   useEffect(() => {
     if (!chatroomId) {
       console.error('❌ No chatroomId provided in route params');
+      setLocalIsLoading(false);
+      stopLoading();
       Alert.alert('ข้อผิดพลาด', 'ไม่พบข้อมูลห้องแชท', [
         { text: 'ตกลง', onPress: () => navigation.goBack() }
       ]);
       return;
     }
-    console.log('✅ PrivateChatScreen initialized with chatroomId:', chatroomId);
   }, [chatroomId, navigation]);
 
-  // ฟังก์ชันอัพเดท progress
-  // const updateProgress = (progress) => {
-  //   setLoadingProgress(progress);
-  //   Animated.timing(progressAnimation, {
-  //     toValue: progress / 100,
-  //     duration: 300,
-  //     useNativeDriver: false,
-  //   }).start();
-  // };
-
   useEffect(() => {
-    startLoading(10); // เริ่มต้น 10%
+    startLoading(10);
+    if (!fromSearch && !showInitialLoading) {
+      setLocalIsLoading(true);
+    }
     loadCurrentUser();
   }, []);
 
   useEffect(() => {
     if (currentUser && chatroomId) {
+      console.log('🔄 User and chatroom ready, loading messages');
       // Reset scroll flags เมื่อเข้าแชทใหม่
       setHasScrolledToEnd(false);
-      setIsScrollingToEnd(true);
       updateProgress(75); // 75% เมื่อ user และ chatroom พร้อม
       loadMessages();
     } else if (currentUser && !chatroomId) {
+      console.log('🔄 User loaded but no chatroom, stopping loading');
       // หากโหลด user เสร็จแล้วแต่ไม่มี chatroomId ให้หยุด loading
-      console.warn('⚠️ User loaded but no chatroomId provided');
+      setLocalIsLoading(false);
       stopLoading();
     }
   }, [currentUser, chatroomId]);
 
-  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่
+  // Force หยุด loading หลังจาก 3 วินาที เผื่อมีปัญหา (หรือ 1 วินาทีถ้าเข้าจาก search)
+  useEffect(() => {
+    const timeoutDuration = fromSearch ? 1000 : 3000; // เข้าจาก search หยุดเร็วขึ้น
+    const forceStopTimer = setTimeout(() => {
+      console.log(`🔄 Force stopping loading after ${timeoutDuration/1000} seconds as fallback`);
+      stopLoading();
+      setLocalIsLoading(false);
+    }, timeoutDuration);
+    
+    return () => clearTimeout(forceStopTimer);
+  }, [fromSearch]);
+
+  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด)
   useEffect(() => {
     if (messages.length > 0 && !hasScrolledToEnd) {
-      // รอให้ FlatList render เสร็จแล้วค่อย scroll
-      console.log('📍 Auto-scrolling to end on messages change:', messages.length);
+      console.log('📍 Auto-scrolling to end on messages change (background):', messages.length);
       
-      // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า render เสร็จแล้ว
-      const timeoutId = setTimeout(() => {
-        const scrollToEnd = () => {
-          try {
-            if (messages.length > 0) {
-              flatListRef.current?.scrollToIndex({ 
-                index: messages.length - 1, 
-                animated: false,
-                viewPosition: 1
-              });
-            }
-          } catch (error) {
-            console.log('ScrollToIndex failed, using scrollToEnd:', error);
-            flatListRef.current?.scrollToEnd({ animated: false });
+      // ใช้ timeout เดียวเพื่อลด multiple scroll attempts
+      const scrollTimeoutId = setTimeout(() => {
+        try {
+          if (messages.length > 0 && flatListRef.current) {
+            flatListRef.current.scrollToEnd({ animated: false });
+            setHasScrolledToEnd(true);
           }
-          setHasScrolledToEnd(true);
-          setIsScrollingToEnd(false);
-        };
-        requestAnimationFrame(scrollToEnd);
-      }, 300);
+        } catch (error) {
+          console.log('Scroll failed:', error);
+        }
+      }, Platform.OS === 'ios' ? 200 : 100); // iOS ใช้เวลานานขึ้น
       
-      return () => clearTimeout(timeoutId);
+      return () => clearTimeout(scrollTimeoutId);
     }
   }, [messages.length, hasScrolledToEnd]);
 
-  // Force scroll เมื่อโหลดข้อความเสร็จและไม่ loading แล้ว
+  // Force stop loading เมื่อ messages โหลดเสร็จ (สำหรับ iOS)
   useEffect(() => {
-    if (!isLoading && messages.length > 0 && !hasScrolledToEnd) {
-      const forceScroll = () => {
-        console.log('🚀 Force scrolling to end after loading complete:', messages.length);
-        try {
-          if (messages.length > 0) {
-            flatListRef.current?.scrollToIndex({ 
-              index: messages.length - 1, 
-              animated: false,
-              viewPosition: 1
-            });
-          }
-        } catch (error) {
-          console.log('ScrollToIndex failed, using scrollToEnd:', error);
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }
-        // ลอง scroll อีกครั้งหลังจาก 200ms
-        setTimeout(() => {
-          try {
-            if (messages.length > 0) {
-              flatListRef.current?.scrollToIndex({ 
-                index: messages.length - 1, 
-                animated: false,
-                viewPosition: 1
-              });
-            }
-          } catch (error) {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-          setHasScrolledToEnd(true);
-          setIsScrollingToEnd(false);
-        }, 200);
-      };
-      
-      const timeoutId = setTimeout(() => {
-        requestAnimationFrame(forceScroll);
+    if (messages.length > 0) {
+      console.log('🔄 Messages loaded, force stopping all loading states');
+      setTimeout(() => {
+        stopLoading();
+        setLocalIsLoading(false);
       }, 100);
-      
-      return () => clearTimeout(timeoutId);
     }
-  }, [isLoading, messages.length, hasScrolledToEnd]);
-
-  // เพิ่ม useEffect เพื่อ force scroll หลังจาก component mount และมีข้อความ
-  useEffect(() => {
-    if (messages.length > 0 && !isLoading) {
-      // รอ 1 วินาทีแล้วลอง scroll อีกครั้ง ในกรณีที่ useEffect อื่นไม่ทำงาน
-      const finalScrollTimeout = setTimeout(() => {
-        console.log('🎯 Final attempt to scroll to end:', messages.length);
-        try {
-          if (messages.length > 0) {
-            flatListRef.current?.scrollToIndex({ 
-              index: messages.length - 1, 
-              animated: false,
-              viewPosition: 1
-            });
-          }
-        } catch (error) {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }
-      }, 1000);
-      
-      return () => clearTimeout(finalScrollTimeout);
-    }
-  }, [messages.length, isLoading]);
+  }, [messages]);
 
   // Socket.IO listeners
   useEffect(() => {
@@ -332,7 +296,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [socket, chatroomId, currentUser]); // เพิ่ม currentUser dependency
 
-  const loadCurrentUser = async () => {
+  const loadCurrentUser = useCallback(async () => {
     try {
       updateProgress(10); // เริ่มต้น 10%
       console.log('PrivateChatScreen: Loading current user...');
@@ -359,7 +323,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
     }
     // ไม่ต้อง setIsLoading(false) ที่นี่ เพราะจะให้ loadMessages ทำแทน
-  };
+  }, [updateProgress, navigation, stopLoading]);
 
   const loadMessages = useCallback(async () => {
     let loadedMessages = [];
@@ -389,7 +353,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         setMessages([]); // ตั้งค่าเป็น array ว่าง
         // เซ็ตสถานะ scroll ให้เสร็จสิ้น เพราะไม่มีข้อความให้ scroll
         setHasScrolledToEnd(true);
-        setIsScrollingToEnd(false);
+        // setIsScrollingToEnd(false);
       } else {
         loadedMessages.forEach((msg, index) => {
           const isMyMessage = msg.sender._id === currentUser?._id;
@@ -443,8 +407,25 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
     } finally {
       updateProgress(100); // 100% เมื่อเสร็จสิ้น
-      // ใช้ setTimeout เพื่อให้แน่ใจว่า state update เกิดขึ้นใน next tick
-      stopLoading(500); // หยุด loading หลัง 500ms
+      console.log('🔄 Stopping loading in loadMessages finally block');
+      // หยุด loading ทันทีไม่ต้องรอ
+      stopLoading(); // หยุด loading ทันที
+      setLocalIsLoading(false); // หยุด local loading เป็น fallback
+      console.log('✅ Loading stopped successfully');
+      
+      // Force stop loading หลัง 100ms สำหรับ iOS
+      setTimeout(() => {
+        console.log('🔄 Force stopping all loading states');
+        stopLoading();
+        setLocalIsLoading(false);
+      }, 100);
+      
+      // Fallback: หยุด loading อีกครั้งหลัง 500ms เผื่อไม่ทำงาน
+      setTimeout(() => {
+        console.log('🔄 Final fallback stopLoading after 500ms');
+        stopLoading();
+        setLocalIsLoading(false);
+      }, 500);
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -680,32 +661,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
     if (!selectedModalImage) return;
     
     try {
+      // ขอ permission
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('ข้อผิดพลาด', 'ต้องการสิทธิ์ในการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ');
+        return;
+      }
+      
       Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
       
       const fileName = `image_${Date.now()}.jpg`;
       
       console.log('📥 Starting image download:', selectedModalImage);
       
+      // ดาวน์โหลดไฟล์ชั่วคราว
+      const tempUri = `${FileSystem.documentDirectory}temp_${fileName}`;
       const downloadResult = await FileSystem.downloadAsync(
         selectedModalImage,
-        FileSystem.documentDirectory + fileName
+        tempUri
       );
       
       console.log('✅ Image download completed:', downloadResult.uri);
       
-      const isAvailable = await Sharing.isAvailableAsync();
-      
-      if (isAvailable) {
-        await Sharing.shareAsync(downloadResult.uri, {
-          mimeType: 'image/jpeg',
-          dialogTitle: `บันทึกรูปภาพ: ${fileName}`
-        });
-      } else {
+      if (downloadResult.status === 200) {
+        // บันทึกไปที่ MediaLibrary (Gallery/Photos)
+        const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+        
+        // ลบไฟล์ชั่วคราว
+        await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+        
         Alert.alert(
-          'ดาวน์โหลดเรียบร้อย',
-          `รูปภาพถูกบันทึกที่: ${downloadResult.uri}`,
-          [{ text: 'ตกลง', style: 'default' }]
+          'บันทึกสำเร็จ!',
+          `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${fileName}`
         );
+        
+        console.log('✅ Image saved to gallery:', asset);
+      } else {
+        throw new Error(`HTTP ${downloadResult.status}`);
       }
       
     } catch (error) {
@@ -716,8 +708,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const downloadFile = async (file) => {
     try {
-      // แสดง loading
-      Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+      console.log('📥 Starting download:', file);
       
       // ตรวจสอบ URL ให้ถูกต้อง
       let fileUrl;
@@ -728,76 +719,124 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
       
       const fileName = file.file_name || 'downloaded_file';
+      const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
       
-      console.log('📥 Starting download:', fileUrl);
+      console.log('� File info:', { fileName, fileExtension, fileUrl });
       
-      // ดาวน์โหลดไฟล์ไปยัง temporary directory
-      const downloadResult = await FileSystem.downloadAsync(
-        fileUrl,
-        FileSystem.documentDirectory + fileName
-      );
+      // ตรวจสอบประเภทไฟล์
+      const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
+      const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', '3gp'].includes(fileExtension);
+      const isMedia = isImage || isVideo;
       
-      console.log('✅ Download completed:', downloadResult.uri);
-      
-      // ตรวจสอบว่าสามารถแชร์ไฟล์ได้หรือไม่
-      const isAvailable = await Sharing.isAvailableAsync();
-      
-      if (isAvailable) {
-        // ใช้ Sharing API เพื่อเปิดไฟล์หรือแชร์
-        await Sharing.shareAsync(downloadResult.uri, {
-          mimeType: file.mimeType || 'application/octet-stream',
-          dialogTitle: `เปิดไฟล์: ${fileName}`
-        });
+      if (isMedia) {
+        // สำหรับรูปภาพและวิดีโอ - บันทึกไปที่ Gallery/Photos
+        try {
+          // ขอ permission
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('ข้อผิดพลาด', 'ต้องการสิทธิ์ในการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ/วิดีโอ');
+            return;
+          }
+          
+          Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+          
+          // ดาวน์โหลดไฟล์ชั่วคราว
+          const timestamp = new Date().getTime();
+          const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
+          
+          const downloadResult = await FileSystem.downloadAsync(fileUrl, tempUri);
+          
+          if (downloadResult.status === 200) {
+            // บันทึกไปที่ MediaLibrary (Gallery/Photos)
+            const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+            
+            // ลบไฟล์ชั่วคราว
+            await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+            
+            Alert.alert(
+              'บันทึกสำเร็จ!',
+              isImage ? 
+                `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${fileName}` : 
+                `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${fileName}`
+            );
+            
+            console.log('✅ Media saved to gallery:', asset);
+          } else {
+            throw new Error(`HTTP ${downloadResult.status}`);
+          }
+          
+        } catch (mediaError) {
+          console.error('❌ Error saving to gallery:', mediaError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกไฟล์ไปที่แกลเลอรี่ได้');
+        }
       } else {
-        // ถ้าไม่สามารถแชร์ได้ ให้แสดงข้อมูลไฟล์
-        Alert.alert(
-          'ไฟล์ดาวน์โหลดเรียบร้อย',
-          `ชื่อไฟล์: ${fileName}\nขนาด: ${formatFileSize(file.size)}\nที่เก็บ: ${downloadResult.uri}`,
-          [
-            { text: 'ตกลง', style: 'default' },
-            { 
-              text: 'คัดลอกที่อยู่', 
-              onPress: () => {
-                // คัดลอก path ไปยัง clipboard (ถ้าต้องการ)
-                console.log('File path:', downloadResult.uri);
+        // สำหรับไฟล์อื่นๆ - บันทึกไปที่ Downloads folder
+        try {
+          Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+          
+          if (Platform.OS === 'ios') {
+            // iOS: ใช้ Sharing API เหมือนเดิม
+            const timestamp = new Date().getTime();
+            const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
+            
+            const downloadResult = await FileSystem.downloadAsync(fileUrl, tempUri);
+            
+            if (downloadResult.status === 200) {
+              // ใช้ Sharing API เพื่อให้ผู้ใช้เลือกที่เก็บ
+              const isAvailable = await Sharing.isAvailableAsync();
+              
+              if (isAvailable) {
+                await Sharing.shareAsync(downloadResult.uri, {
+                  mimeType: file.mimeType || 'application/octet-stream',
+                  dialogTitle: `บันทึกไฟล์: ${fileName}`
+                });
+              } else {
+                Alert.alert(
+                  'ดาวน์โหลดสำเร็จ',
+                  `ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`,
+                  [{ text: 'ตกลง', style: 'default' }]
+                );
               }
+            } else {
+              throw new Error(`HTTP ${downloadResult.status}`);
             }
-          ]
-        );
+          } else {
+            // Android: บันทึกตรงไปที่ Downloads folder
+            const downloadDir = `${FileSystem.documentDirectory}Downloads/`;
+            await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
+            
+            // สร้างชื่อไฟล์ที่ไม่ซ้ำ
+            const timestamp = new Date().getTime();
+            const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const finalFileName = `${cleanFileName.split('.')[0]}_${timestamp}.${fileExtension}`;
+            
+            const downloadResult = await FileSystem.downloadAsync(
+              fileUrl,
+              `${downloadDir}${finalFileName}`
+            );
+            
+            if (downloadResult.status === 200) {
+              Alert.alert(
+                'ดาวน์โหลดสำเร็จ!',
+                `ไฟล์ถูกบันทึกไปที่ Downloads folder แล้ว\nชื่อไฟล์: ${finalFileName}\n\nคุณสามารถหาไฟล์ได้ใน File Manager > Downloads`,
+                [{ text: 'ตกลง', style: 'default' }]
+              );
+              
+              console.log('✅ File saved to Downloads:', downloadResult.uri);
+            } else {
+              throw new Error(`HTTP ${downloadResult.status}`);
+            }
+          }
+          
+        } catch (fileError) {
+          console.error('❌ Error saving file:', fileError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
+        }
       }
       
     } catch (error) {
       console.error('❌ Error downloading file:', error);
-      
-      // ถ้าดาวน์โหลดไม่ได้ ลองเปิด URL ใน browser
-      try {
-        const fileUrl = `${API_URL}${file.url || file.file_path}`;
-        const canOpen = await Linking.canOpenURL(fileUrl);
-        
-        if (canOpen) {
-          Alert.alert(
-            'ไม่สามารถดาวน์โหลดได้',
-            'คุณต้องการเปิดไฟล์ในเบราว์เซอร์หรือไม่?',
-            [
-              { text: 'ยกเลิก', style: 'cancel' },
-              { 
-                text: 'เปิด', 
-                onPress: () => Linking.openURL(fileUrl)
-              }
-            ]
-          );
-        } else {
-          Alert.alert(
-            'ข้อผิดพลาด',
-            `ไม่สามารถดาวน์โหลดไฟล์ได้\nชื่อไฟล์: ${file.file_name}\nขนาด: ${formatFileSize(file.size)}`
-          );
-        }
-      } catch (linkError) {
-        Alert.alert(
-          'ข้อผิดพลาด',
-          `ไม่สามารถเข้าถึงไฟล์ได้\nชื่อไฟล์: ${file.file_name}\nขนาด: ${formatFileSize(file.size)}`
-        );
-      }
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
     }
   };
 
@@ -1035,10 +1074,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
         // Double press detected - แก้ไขข้อความ
         handleMessageDoublePress(item);
       } else {
-        // Single press - แสดง/ซ่อนเวลา (เฉพาะข้อความที่ไม่ใช่ล่าสุด)
-        if (index !== messages.length - 1) {
-          toggleShowTime(item._id);
-        }
+        // Single press - แสดง/ซ่อนเวลา (สำหรับทุกข้อความ)
+        toggleShowTime(item._id);
         item.lastPress = now;
       }
     };
@@ -1368,34 +1405,73 @@ const PrivateChatScreen = ({ route, navigation }) => {
     );
   }, [currentUser, recipientAvatar, recipientName, messages, showTimeForMessages, timeAnimations]);
 
-  if (isLoading) {
+  // ฟังก์ชันแสดง loading content ในกรอบข้อความ - ปิดใช้งานทั้งหมดสำหรับ iOS
+  const renderMessageLoadingContent = () => {
+    // แสดง loading เฉพาะเมื่อ localIsLoading เป็น true
+    if (localIsLoading) {
+      return (
+        <View style={styles.messageLoadingContainer}>
+          <InlineLoadingScreen
+            isVisible={true}
+            progress={progress}
+            title="LOADING"
+            subtitle="กรุณารอสักครู่"
+            backgroundColor="#F5C842"
+          />
+        </View>
+      );
+    }
+    
+    // แสดง FlatList เมื่อไม่ loading
     return (
-      <ProgressLoadingScreen
-        isVisible={isLoading}
-        progress={progress}
-        title="กำลังโหลดข้อความ..."
-        subtitle="กรุณารอสักครู่"
-        color="#007AFF"
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item, index) => `${item._id}_${index}`}
+        renderItem={renderMessage}
+        style={styles.messagesList}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          if (scrollToBottomOnLoad && messages.length > 0) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+              setScrollToBottomOnLoad(false);
+            }, 100);
+          }
+        }}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyMessageContainer}>
+            <Text style={styles.emptyMessageText}>
+              ยังไม่มีข้อความในแชทนี้
+            </Text>
+            <Text style={styles.emptyMessageSubText}>
+              เริ่มต้นการสนทนาได้เลย!
+            </Text>
+          </View>
+        )}
       />
     );
-  }
+  };
 
   return (
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Loading overlay สำหรับการ scroll */}
-      {isScrollingToEnd && (
+      {/* Loading overlay สำหรับการ scroll - ปิดการใช้งาน */}
+      {/* {isScrollingToEnd && (
         <View style={styles.scrollLoadingOverlay}>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.scrollLoadingText}>กำลังไปที่ข้อความล่าสุด...</Text>
         </View>
-      )}
+      )} */}
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('Chat', { 
+            chatId: route.params?.returnChatId || route.params?.chatroomId 
+          })}
           style={styles.backButton}
         >
           <Text style={styles.backIcon}>←</Text>
@@ -1434,98 +1510,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
       </View>
 
       {/* รายการข้อความ */}
-      <TouchableOpacity 
+      <View 
         style={styles.messagesListContainer}
-        activeOpacity={1}
-        onPress={() => setShowAttachmentMenu(false)}
+        onTouchStart={() => setShowAttachmentMenu(false)}
+        pointerEvents="auto"
       >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => {
-            if (item._id) {
-              return `${item._id}_${item.timestamp || Date.now()}_${index}`;
-            }
-            return `message_${index}_${item.timestamp || Date.now()}_${item.sender?._id || 'unknown'}`;
-          }}
-          renderItem={renderMessage}
-          style={styles.messagesList}
-          contentContainerStyle={[
-            styles.messagesContainer,
-            messages.length === 0 && styles.emptyMessagesContainer
-          ]}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          scrollEnabled={true}
-          nestedScrollEnabled={true}
-          keyboardShouldPersistTaps="handled"
-          bounces={true}
-          ListEmptyComponent={() => (
-            <View style={styles.emptyMessageContainer}>
-              <Text style={styles.emptyMessageText}>
-                ยังไม่มีข้อความในแชทนี้
-              </Text>
-              <Text style={styles.emptyMessageSubText}>
-                เริ่มต้นการสนทนาได้เลย!
-              </Text>
-            </View>
-          )}
-          maxToRenderPerBatch={20}
-          windowSize={10}
-          initialNumToRender={20}
-          onScroll={(event) => {
-            const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-            const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
-            setShowScrollToBottom(!isAtBottom);
-          }}
-          onContentSizeChange={(contentWidth, contentHeight) => {
-            // Auto-scroll ไปข้อความล่าสุดเมื่อเข้าแชทใหม่
-            if (messages.length > 0 && !hasScrolledToEnd) {
-              console.log('📏 Content size changed, auto-scrolling to end. Messages:', messages.length);
-              // ใช้ scrollToIndex เพื่อไปที่ข้อความสุดท้าย
-              const scrollToLastMessage = () => {
-                try {
-                  if (messages.length > 0) {
-                    flatListRef.current?.scrollToIndex({ 
-                      index: messages.length - 1, 
-                      animated: false,
-                      viewPosition: 1 // 1 = ข้อความอยู่ด้านล่างสุด
-                    });
-                  }
-                } catch (error) {
-                  // ถ้า scrollToIndex ไม่ได้ ใช้ scrollToEnd
-                  console.log('ScrollToIndex failed, using scrollToEnd:', error);
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
-                setHasScrolledToEnd(true);
-                setIsScrollingToEnd(false);
-              };
-              
-              setTimeout(() => {
-                requestAnimationFrame(scrollToLastMessage);
-              }, 400);
-            }
-          }}
-          onLayout={() => {
-            // เมื่อ FlatList layout เสร็จ
-            if (messages.length > 0 && !hasScrolledToEnd) {
-              setTimeout(() => {
-                console.log('📐 FlatList layout complete, scrolling to end');
-                try {
-                  flatListRef.current?.scrollToIndex({ 
-                    index: messages.length - 1, 
-                    animated: false,
-                    viewPosition: 1
-                  });
-                } catch (error) {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
-              }, 100);
-            }
-          }}
-          scrollEventThrottle={16}
-        />
-      </TouchableOpacity>
+        {/* แสดง loading หรือรายการข้อความ */}
+        {renderMessageLoadingContent()}
+      </View>
 
       {/* Scroll to Bottom Button */}
       {showScrollToBottom && (
@@ -2532,6 +2524,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     lineHeight: 18,
+  },
+  messageLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
 });
 

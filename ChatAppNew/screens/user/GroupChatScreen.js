@@ -8,10 +8,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
-import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import useProgressLoading from '../../hooks/useProgressLoading';
 import NotificationService from '../../service/notificationService';
 
@@ -21,7 +22,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [socketStatus, setSocketStatus] = useState('connecting');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [isScrollingToEnd, setIsScrollingToEnd] = useState(false);
+  // const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // ปิดการใช้งาน scroll loading
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -42,7 +43,33 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [messageReadCount, setMessageReadCount] = useState({}); // เก็บจำนวนคนที่อ่านข้อความแต่ละข้อความ
   const flatListRef = useRef(null);
 
-  const { groupId, groupName, groupAvatar } = route.params || {};
+  const { 
+    groupId, 
+    groupName, 
+    groupAvatar, 
+    refresh, 
+    updatedMembers,
+    showInitialLoading = false,
+    fromCreate = false
+  } = route.params || {};
+
+  // กำหนด initial loading state สำหรับ iOS เมื่อสร้างกลุ่มใหม่
+  useEffect(() => {
+    if (showInitialLoading || fromCreate) {
+      console.log('🔄 Starting initial loading for iOS from group creation');
+      startLoading();
+    }
+  }, [showInitialLoading, fromCreate]);
+
+  // เช็ครับ refresh parameter จาก EditGroupScreen
+  useEffect(() => {
+    if (refresh && updatedMembers !== undefined) {
+      console.log('🔄 Refreshing group data from EditGroupScreen with updated members:', updatedMembers);
+      loadGroupData();
+      // Reset navigation params หลังจาก refresh
+      navigation.setParams({ refresh: false, updatedMembers: undefined });
+    }
+  }, [refresh, updatedMembers]);
 
   useEffect(() => {
     loadGroupData();
@@ -94,18 +121,18 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   }, [socket]);
 
-  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่
+  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด)
   useEffect(() => {
     if (messages.length > 0 && !hasScrolledToEnd) {
-      // รอให้ FlatList render เสร็จแล้วค่อย scroll
-      console.log('📍 Auto-scrolling to end on messages change:', messages.length);
+      // รอให้ FlatList render เสร็จแล้วค่อย scroll (ไม่ต้องรอ loading เสร็จ)
+      console.log('📍 Auto-scrolling to end on messages change (background):', messages.length);
       
       // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า render เสร็จแล้ว
       const timeoutId = setTimeout(() => {
         const scrollToEnd = () => {
           try {
-            if (messages.length > 0) {
-              flatListRef.current?.scrollToEnd({ 
+            if (messages.length > 0 && flatListRef.current) {
+              flatListRef.current.scrollToEnd({ 
                 animated: false
               });
             }
@@ -113,52 +140,36 @@ const GroupChatScreen = ({ route, navigation }) => {
             console.log('ScrollToEnd failed:', error);
           }
           setHasScrolledToEnd(true);
-          setIsScrollingToEnd(false);
+          // setIsScrollingToEnd(false);
         };
         requestAnimationFrame(scrollToEnd);
-      }, 300);
+      }, 100); // ลดเวลา delay เหลือ 100ms
       
       return () => clearTimeout(timeoutId);
     }
-  }, [messages.length, hasScrolledToEnd]);
+  }, [messages.length, hasScrolledToEnd]); // ไม่ใส่ isLoading ใน dependency
 
-  // Force scroll เมื่อโหลดข้อความเสร็จและไม่ loading แล้ว
+  // เพิ่ม useEffect เพื่อ scroll ทันทีเมื่อมี messages (ไม่รอ loading)
   useEffect(() => {
-    if (!isLoading && messages.length > 0 && !hasScrolledToEnd) {
-      const forceScroll = () => {
-        console.log('🚀 Force scrolling to end after loading complete:', messages.length);
+    if (messages.length > 0) {
+      // scroll ทันทีเมื่อมี messages โดยไม่ต้องรอ loading เสร็จ
+      console.log('🎯 Immediate scroll attempt (background):', messages.length);
+      
+      const immediateScrollTimeout = setTimeout(() => {
         try {
-          if (messages.length > 0) {
-            flatListRef.current?.scrollToEnd({ 
+          if (messages.length > 0 && flatListRef.current) {
+            flatListRef.current.scrollToEnd({ 
               animated: false
             });
           }
         } catch (error) {
-          console.log('ScrollToEnd failed:', error);
+          console.log('ScrollToEnd immediate failed:', error);
         }
-        // ลอง scroll อีกครั้งหลังจาก 200ms
-        setTimeout(() => {
-          try {
-            if (messages.length > 0) {
-              flatListRef.current?.scrollToEnd({ 
-                animated: false
-              });
-            }
-          } catch (error) {
-            console.log('ScrollToEnd retry failed:', error);
-          }
-          setHasScrolledToEnd(true);
-          setIsScrollingToEnd(false);
-        }, 200);
-      };
+      }, 50); // เริ่ม scroll เร็วมาก
       
-      const timeoutId = setTimeout(() => {
-        requestAnimationFrame(forceScroll);
-      }, 100);
-      
-      return () => clearTimeout(timeoutId);
+      return () => clearTimeout(immediateScrollTimeout);
     }
-  }, [isLoading, messages.length, hasScrolledToEnd]);
+  }, [messages.length]); // ไม่ใส่ isLoading ใน dependency
 
   // เพิ่ม useEffect เพื่อ force scroll หลังจาก component mount และมีข้อความ
   useEffect(() => {
@@ -195,7 +206,7 @@ const GroupChatScreen = ({ route, navigation }) => {
       
       // Reset scroll flags เมื่อเข้าแชทใหม่
       setHasScrolledToEnd(false);
-      setIsScrollingToEnd(true);
+      // setIsScrollingToEnd(true);
       
       // Join chatroom ทันทีไม่ว่า socket จะ connected หรือไม่
       // เพราะถ้า socket ยังไม่ connected มันจะ queue การ join ไว้
@@ -363,7 +374,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const loadGroupData = async () => {
     try {
       startLoading();
-      setIsScrollingToEnd(true);
+      // setIsScrollingToEnd(true);
       updateProgress(10); // เริ่มต้น 10%
       
       updateProgress(30); // 30% เมื่อเริ่มโหลด
@@ -385,7 +396,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         console.log('📨 No messages found - this is a new group chat');
         setMessages([]); // ตั้งค่าเป็น array ว่าง
         setHasScrolledToEnd(true);
-        setIsScrollingToEnd(false);
+        // setIsScrollingToEnd(false);
       } else {
         setMessages(loadedMessages);
         
@@ -617,35 +628,126 @@ const GroupChatScreen = ({ route, navigation }) => {
         console.log('🏠 Using local server URL:', fullUrl);
       }
 
-      const downloadDir = `${FileSystem.documentDirectory}downloads/`;
-      await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
+      const finalFileName = fileName || `file_${new Date().getTime()}`;
+      const fileExtension = finalFileName.split('.').pop()?.toLowerCase() || '';
       
-      const timestamp = new Date().getTime();
-      const finalFileName = fileName || `file_${timestamp}`;
-      // ทำความสะอาดชื่อไฟล์
-      const cleanFileName = finalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const localUri = `${downloadDir}${cleanFileName}`;
-
-      console.log('💾 Downloading to:', localUri);
+      // ตรวจสอบประเภทไฟล์
+      const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
+      const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', '3gp'].includes(fileExtension);
+      const isMedia = isImage || isVideo;
 
       // สำหรับ Cloudinary ไม่ต้องใช้ Authorization header
       const headers = fileUrl.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
       
-      const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
-        headers: headers
-      });
+      if (isMedia) {
+        // สำหรับรูปภาพและวิดีโอ - บันทึกไปที่ Gallery/Photos
+        try {
+          // ขอ permission
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('ข้อผิดพลาด', 'ต้องการสิทธิ์ในการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ/วิดีโอ');
+            return;
+          }
+          
+          Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+          
+          // ดาวน์โหลดไฟล์ชั่วคราว
+          const timestamp = new Date().getTime();
+          const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
+          
+          const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {
+            headers: headers
+          });
 
-      console.log('📊 Download result:', downloadResult);
-
-      if (downloadResult.status === 200) {
-        console.log('✅ Download successful');
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(downloadResult.uri);
-        } else {
-          Alert.alert('ดาวน์โหลดเรียบร้อย', `ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`);
+          if (downloadResult.status === 200) {
+            // บันทึกไปที่ MediaLibrary (Gallery/Photos)
+            const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+            
+            // ลบไฟล์ชั่วคราว
+            await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+            
+            Alert.alert(
+              'บันทึกสำเร็จ!',
+              isImage ? 
+                `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
+                `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
+            );
+            
+            console.log('✅ Media saved to gallery:', asset);
+          } else {
+            throw new Error(`HTTP ${downloadResult.status}`);
+          }
+          
+        } catch (mediaError) {
+          console.error('❌ Error saving to gallery:', mediaError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกไฟล์ไปที่แกลเลอรี่ได้');
         }
       } else {
-        throw new Error(`HTTP ${downloadResult.status}`);
+        // สำหรับไฟล์อื่นๆ - บันทึกไปที่ Downloads folder
+        try {
+          Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+          
+          if (Platform.OS === 'ios') {
+            // iOS: ใช้ Sharing API เหมือนเดิม
+            const timestamp = new Date().getTime();
+            const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
+            
+            const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {
+              headers: headers
+            });
+
+            if (downloadResult.status === 200) {
+              // ใช้ Sharing API เพื่อให้ผู้ใช้เลือกที่เก็บ
+              const isAvailable = await Sharing.isAvailableAsync();
+              
+              if (isAvailable) {
+                await Sharing.shareAsync(downloadResult.uri, {
+                  dialogTitle: `บันทึกไฟล์: ${finalFileName}`
+                });
+              } else {
+                Alert.alert(
+                  'ดาวน์โหลดสำเร็จ',
+                  `ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`,
+                  [{ text: 'ตกลง', style: 'default' }]
+                );
+              }
+            } else {
+              throw new Error(`HTTP ${downloadResult.status}`);
+            }
+          } else {
+            // Android: บันทึกตรงไปที่ Downloads folder
+            const downloadDir = `${FileSystem.documentDirectory}Downloads/`;
+            await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
+            
+            const timestamp = new Date().getTime();
+            // ทำความสะอาดชื่อไฟล์
+            const cleanFileName = finalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const localUri = `${downloadDir}${cleanFileName}_${timestamp}`;
+
+            console.log('💾 Downloading to:', localUri);
+            
+            const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
+              headers: headers
+            });
+
+            console.log('📊 Download result:', downloadResult);
+
+            if (downloadResult.status === 200) {
+              console.log('✅ Download successful');
+              Alert.alert(
+                'ดาวน์โหลดสำเร็จ!',
+                `ไฟล์ถูกบันทึกไปที่ Downloads folder แล้ว\nชื่อไฟล์: ${cleanFileName}_${timestamp}\n\nคุณสามารถหาไฟล์ได้ใน File Manager > Downloads`,
+                [{ text: 'ตกลง', style: 'default' }]
+              );
+            } else {
+              throw new Error(`HTTP ${downloadResult.status}`);
+            }
+          }
+          
+        } catch (fileError) {
+          console.error('❌ Error saving file:', fileError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
+        }
       }
     } catch (error) {
       console.error('❌ Error downloading file:', error);
@@ -925,6 +1027,16 @@ const GroupChatScreen = ({ route, navigation }) => {
   };
 
   const renderMessage = ({ item, index }) => {
+    // ข้อความระบบ (เช่น การเข้าร่วมกลุ่ม)
+    if (item.messageType === 'system') {
+      return (
+        <View style={styles.systemMessageContainer}>
+          <Text style={styles.systemMessageText}>{item.content}</Text>
+          <Text style={styles.systemMessageTime}>{formatDateTime(item.timestamp || item.time)}</Text>
+        </View>
+      );
+    }
+
     const isMyMessage = item.sender?._id === authUser._id;
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDate = !prevMessage || 
@@ -939,10 +1051,8 @@ const GroupChatScreen = ({ route, navigation }) => {
         // Double press detected - แก้ไขข้อความ
         handleMessageDoublePress(item);
       } else {
-        // Single press - แสดง/ซ่อนเวลา (เฉพาะข้อความที่ไม่ใช่ล่าสุด)
-        if (index !== messages.length - 1) {
-          toggleShowTime(item._id);
-        }
+        // Single press - แสดง/ซ่อนเวลา (สำหรับทุกข้อความ)
+        toggleShowTime(item._id);
         item.lastPress = now;
       }
     };
@@ -1278,34 +1388,42 @@ const GroupChatScreen = ({ route, navigation }) => {
     );
   };
 
-  if (isLoading) {
+  // ฟังก์ชันแสดง loading content ในกรอบข้อความ
+  const renderMessageLoadingContent = () => {
     return (
-      <ProgressLoadingScreen
-        isVisible={isLoading}
-        progress={progress}
-        title="กำลังโหลดกลุ่มแชท..."
-        subtitle="กรุณารอสักครู่"
-        color="#FFA500"
-      />
+      <View style={styles.messageLoadingContainer}>
+        <InlineLoadingScreen
+          isVisible={true}
+          progress={progress}
+          title="LOADING"
+          subtitle="กรุณารอสักครู่"
+          backgroundColor="#F5C842"
+        />
+      </View>
     );
-  }
+  };
 
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Loading overlay สำหรับการ scroll */}
-      {isScrollingToEnd && (
+      {/* Loading overlay สำหรับการ scroll - ปิดการใช้งาน */}
+      {/* {isScrollingToEnd && (
         <View style={styles.scrollLoadingOverlay}>
           <ActivityIndicator size="large" color="#FFA500" />
           <Text style={styles.scrollLoadingText}>กำลังไปที่ข้อความล่าสุด...</Text>
         </View>
-      )}
+      )} */}
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Chat', { 
+            chatId: route.params?.returnChatId || route.params?.groupId 
+          })} 
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         
@@ -1365,24 +1483,28 @@ const GroupChatScreen = ({ route, navigation }) => {
         activeOpacity={1}
         onPress={() => setShowAttachmentMenu(false)}
       >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => item._id?.toString() || `message_${index}_${item.timestamp}`}
-          renderItem={renderMessage}
-          style={styles.messagesList}
-          contentContainerStyle={[
-            styles.messagesContainer,
-            messages.length === 0 && styles.emptyMessagesContainer
-          ]}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          maxToRenderPerBatch={15}
-          windowSize={15}
-          initialNumToRender={15}
-          scrollEnabled={true}
-          nestedScrollEnabled={true}
-          keyboardShouldPersistTaps="handled"
+        {/* แสดง loading หรือรายการข้อความ */}
+        {isLoading ? (
+          renderMessageLoadingContent()
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item, index) => item._id?.toString() || `message_${index}_${item.timestamp}`}
+            renderItem={renderMessage}
+            style={styles.messagesList}
+            contentContainerStyle={[
+              styles.messagesContainer,
+              messages.length === 0 && styles.emptyMessagesContainer
+            ]}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+            maxToRenderPerBatch={15}
+            windowSize={15}
+            initialNumToRender={15}
+            scrollEnabled={true}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
           bounces={true}
           getItemLayout={null}
           maintainVisibleContentPosition={{
@@ -1400,26 +1522,30 @@ const GroupChatScreen = ({ route, navigation }) => {
             </View>
           )}
           onContentSizeChange={(contentWidth, contentHeight) => {
-            // Auto-scroll ไปข้อความล่าสุดเมื่อเข้าแชทใหม่
+            // Auto-scroll ไปข้อความล่าสุดเฉพาะเมื่อมีข้อความใหม่ (ไม่ใช่เมื่อแสดง/ซ่อน timestamp)
             if (messages.length > 0 && !hasScrolledToEnd) {
-              console.log('📏 Content size changed, auto-scrolling to end. Messages:', messages.length);
-              // ใช้ scrollToEnd แทน scrollToIndex เพื่อความนุ่มนวล
+              console.log('📏 Content size changed, scrolling to end due to new messages. Messages:', messages.length);
+              // scroll ทันทีโดยไม่รอ hasScrolledToEnd
               setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: false });
-                setHasScrolledToEnd(true);
-                setIsScrollingToEnd(false);
-              }, 100);
+                if (flatListRef.current && messages.length > 0) {
+                  flatListRef.current.scrollToEnd({ animated: false });
+                  setHasScrolledToEnd(true);
+                  // setIsScrollingToEnd(false);
+                }
+              }, 50); // ลดจาก 100ms เหลือ 50ms
             }
           }}
           onLayout={() => {
-            // เมื่อ FlatList layout เสร็จ
+            // เมื่อ FlatList layout เสร็จ - scroll เฉพาะเมื่อยังไม่เคย scroll (ระหว่างโหลด)
             if (messages.length > 0 && !hasScrolledToEnd) {
+              console.log('📐 FlatList layout complete, scrolling to end due to initial load');
               setTimeout(() => {
-                console.log('📐 FlatList layout complete, scrolling to end');
-                flatListRef.current?.scrollToEnd({ animated: false });
-                setHasScrolledToEnd(true);
-                setIsScrollingToEnd(false);
-              }, 100);
+                if (flatListRef.current && messages.length > 0) {
+                  flatListRef.current.scrollToEnd({ animated: false });
+                  setHasScrolledToEnd(true);
+                  // setIsScrollingToEnd(false);
+                }
+              }, 10); // เร็วมาก
             }
           }}
           onScroll={(event) => {
@@ -1428,8 +1554,8 @@ const GroupChatScreen = ({ route, navigation }) => {
             setShowScrollToBottom(!isAtBottom);
           }}
           scrollEventThrottle={16}
-          keyboardShouldPersistTaps="handled"
         />
+        )}
       </TouchableOpacity>
 
       {/* Scroll to Bottom Button */}
@@ -1721,21 +1847,31 @@ const styles = StyleSheet.create({
   
   messageAvatarContainer: { marginRight: 8 },
   messageAvatar: { width: 32, height: 32, borderRadius: 16 },
-  messageContentContainer: { maxWidth: '80%', alignItems: 'flex-end' },
+  messageContentContainer: { maxWidth: '85%', alignItems: 'flex-end' },
   senderName: { fontSize: 12, color: '#666', fontWeight: '500', marginBottom: 2, marginLeft: 4 },
   
   messageBubble: {
     maxWidth: '85%', // เพิ่มความกว้างสำหรับข้อความยาว
-    padding: 12, 
-    borderRadius: 12, 
-    backgroundColor: '#fff', 
-    flexShrink: 0, // ไม่ให้กล่องข้อความหดเล็กลง
-    alignSelf: 'flex-start' // ให้กล่องปรับขนาดตามเนื้อหา
+    minWidth: 'auto', // ให้กล่องปรับขนาดตามเนื้อหา
+    padding: 12,
+    borderRadius: 12, // เปลี่ยนจาก 18 เป็น 12 เพื่อให้เป็นสี่เหลี่ยมมนๆ
+    backgroundColor: '#fff', // กล่องข้อความเป็นสีขาว
+    flexShrink: 1, // ให้กล่องสามารถหดได้ตามเนื้อหา
+    alignSelf: 'flex-start', // ให้กล่องปรับขนาดตามเนื้อหา
   },
-  myMessageBubble: { backgroundColor: '#fff', borderBottomRightRadius: 12 },
+  myMessageBubble: { 
+    backgroundColor: '#fff', 
+    borderBottomRightRadius: 12, // ปรับให้สม่ำเสมอ
+    alignSelf: 'flex-end', // ให้ข้อความของตัวเองชิดขวา
+  },
   otherMessageBubble: {
-    backgroundColor: '#fff', borderBottomLeftRadius: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2
+    backgroundColor: '#fff', 
+    borderBottomLeftRadius: 12, // ปรับให้สม่ำเสมอ
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2, 
+    elevation: 2
   },
   
   messageText: { 
@@ -1804,32 +1940,105 @@ const styles = StyleSheet.create({
   fileSize: { fontSize: 12, marginTop: 2 },
   fileTimeContainer: { marginTop: 4, alignItems: 'flex-end' },
 
-  inputContainer: { padding: 16, paddingTop: 8, backgroundColor: '#F5C842', borderTopWidth: 0 },
+  inputContainer: { 
+    padding: 16, 
+    paddingTop: 8, 
+    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    borderTopWidth: 0, // เอาเส้นขอบบนออก
+  },
   messageInputRow: {
-    flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#fff',
-    borderRadius: 25, paddingHorizontal: 4, paddingVertical: 4
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    backgroundColor: '#fff', // เปลี่ยนเป็นสีขาว
+    borderRadius: 25, 
+    paddingHorizontal: 4, 
+    paddingVertical: 4,
   },
   plusButton: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFA500',
-    justifyContent: 'center', alignItems: 'center', marginRight: 8
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#FFA500',
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 8,
   },
   plusIcon: { fontSize: 20, color: '#fff', fontWeight: 'bold' },
   textInput: {
-    flex: 1, borderWidth: 0, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
-    marginRight: 8, maxHeight: 100, fontSize: 16, backgroundColor: 'transparent'
+    flex: 1, 
+    borderWidth: 0, 
+    borderRadius: 20, 
+    paddingHorizontal: 16, 
+    paddingVertical: 10,
+    marginRight: 8, 
+    maxHeight: 100, 
+    fontSize: 16, 
+    backgroundColor: 'transparent',
   },
-  sendTextButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: '#FFA500' },
-  sendTextLabel: { fontSize: 16, color: '#fff', fontWeight: '500' },
+  sendTextButton: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 20, 
+    backgroundColor: '#FFA500',
+  },
+  sendTextLabel: { 
+    fontSize: 16, 
+    color: '#fff', 
+    fontWeight: '500',
+  },
 
   attachmentMenu: {
-    position: 'absolute', bottom: 70, left: 20, backgroundColor: '#fff', borderRadius: 12, padding: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5, zIndex: 1000
+    position: 'absolute', 
+    bottom: 60, 
+    left: 20, 
+    backgroundColor: '#fff', 
+    borderRadius: 12, 
+    padding: 8,
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 4, 
+    elevation: 5, 
+    zIndex: 1000
   },
-  attachmentMenuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, minWidth: 120 },
-  attachmentMenuIcon: { fontSize: 18, marginRight: 12 },
-  attachmentMenuText: { fontSize: 16, color: '#333' },
+  attachmentMenuItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 12, 
+    paddingHorizontal: 16, 
+    minWidth: 120 
+  },
+  attachmentMenuIcon: { 
+    fontSize: 18, 
+    marginRight: 12 
+  },
+  attachmentMenuText: { 
+    fontSize: 16, 
+    color: '#333' 
+  },
 
-  selectedFileContainer: { paddingHorizontal: 15, paddingTop: 10 },
+  selectedFileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  fileInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fileName: {
+    marginLeft: 8,
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  removeFileButton: {
+    padding: 4,
+  },
   selectedFile: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa',
     borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e9ecef'
@@ -2169,6 +2378,35 @@ const styles = StyleSheet.create({
   },
   otherReadStatusBottom: {
     color: '#666',
+  },
+  
+  // System Message Styles
+  systemMessageContainer: {
+    alignItems: 'center',
+    marginVertical: 8,
+    paddingHorizontal: 20,
+  },
+  systemMessageText: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    color: '#666',
+    fontSize: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    textAlign: 'center',
+    overflow: 'hidden',
+  },
+  systemMessageTime: {
+    color: '#999',
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  messageLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
 });
 

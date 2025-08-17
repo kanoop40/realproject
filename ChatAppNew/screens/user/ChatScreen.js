@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -17,7 +17,7 @@ import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationService from '../../service/notificationService';
-import ProgressLoadingScreen from '../../components/ProgressLoadingScreen';
+import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import useProgressLoading from '../../hooks/useProgressLoading';
 
 const ChatScreen = ({ route, navigation }) => {
@@ -25,20 +25,113 @@ const ChatScreen = ({ route, navigation }) => {
   const { user: authUser, loading: authLoading, login } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [chats, setChats] = useState([]);
+  const [hiddenChats, setHiddenChats] = useState([]); // เพิ่มสำหรับเก็บแชทที่ซ่อน
+  const hiddenChatsRef = useRef([]); // เพิ่ม ref สำหรับ hiddenChats
+  const joinedChatroomsRef = useRef(new Set()); // เพิ่ม ref เพื่อ track chatrooms ที่ join แล้ว (สำหรับ iOS)
+  const focusTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่ focus
+  const lastLoadUserTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่โหลด user ครั้งล่าสุด
   const [showPopup, setShowPopup] = useState(false);
-  const [chatToDelete, setChatToDelete] = useState(null);
   const [popupAnimation] = useState(new Animated.Value(0));
   const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
   const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
-  const { recipientId, recipientName, recipientAvatar } = route.params || {};
+  const { 
+    recipientId, 
+    recipientName, 
+    recipientAvatar, 
+    newChatId, 
+    refresh, 
+    openChatId, 
+    openChatParams 
+  } = route.params || {};
+
+  // Effect สำหรับเปิดแชทอัตโนมัติ
+  useEffect(() => {
+    if (openChatId && openChatParams && currentUser) {
+      console.log('🔄 Auto opening chat:', openChatId);
+      
+      // รีเฟรชรายการแชทก่อน
+      const openChatDirectly = async () => {
+        try {
+          await loadChats();
+          
+          // รอให้ข้อมูลโหลดเสร็จแล้วเปิดแชท
+          setTimeout(() => {
+            navigation.navigate('PrivateChat', openChatParams);
+          }, 500);
+          
+        } catch (error) {
+          console.error('Error loading chats before opening:', error);
+          // ถ้าโหลดไม่ได้ก็เปิดแชทต่อไป
+          navigation.navigate('PrivateChat', openChatParams);
+        }
+      };
+      
+      openChatDirectly();
+      
+      // เคลียร์ params หลังจากใช้แล้ว
+      navigation.setParams({ 
+        openChatId: undefined, 
+        openChatParams: undefined 
+      });
+    }
+  }, [openChatId, openChatParams, currentUser, navigation]);
+
+  // Effect สำหรับรีเฟรชเมื่อมี newChatId
+  useEffect(() => {
+    if (newChatId && refresh && currentUser) {
+      console.log('🔄 New chat detected, refreshing chat list:', newChatId);
+      // รีเฟรชรายการแชท
+      const refreshChats = async () => {
+        try {
+          await loadChats();
+        } catch (error) {
+          console.error('Error refreshing chats:', error);
+        }
+      };
+      refreshChats();
+      
+      // เคลียร์ params หลังจากใช้แล้ว
+      navigation.setParams({ 
+        newChatId: undefined, 
+        refresh: undefined 
+      });
+    }
+  }, [newChatId, refresh, currentUser, navigation]);
+
+  // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount
+  useEffect(() => {
+    return () => {
+      console.log('🧹 ChatScreen unmounting, clearing joined chatrooms tracking');
+      joinedChatroomsRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (!authLoading) {
-      loadCurrentUser();
+      // ป้องกันการโหลด user บ่อยเกินไป
+      const now = Date.now();
+      if (now - lastLoadUserTimeRef.current > 5000) { // ห่างอย่างน้อย 5 วินาที
+        lastLoadUserTimeRef.current = now;
+        loadCurrentUser();
+      } else {
+        console.log('🚫 Skipping loadCurrentUser - too frequent');
+        // ถ้ามี authUser แล้ว ให้ใช้ข้อมูลนั้นแทน
+        if (authUser) {
+          console.log('✅ Using existing authUser data');
+          setCurrentUser(authUser);
+          setServerStatus('ready');
+        }
+      }
+      loadHiddenChats(); // โหลดรายการแชทที่ซ่อน
     }
   }, [authLoading]);
+
+  // อัพเดท hiddenChatsRef เมื่อ hiddenChats เปลี่ยน
+  useEffect(() => {
+    hiddenChatsRef.current = hiddenChats;
+  }, [hiddenChats]);
 
   useEffect(() => {
     if (currentUser) {
@@ -52,6 +145,16 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [currentUser, recipientId]);
 
+  // Refresh chats when screen comes into focus (เช่น หลังจากออกจากกลุ่ม)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentUser && !recipientId) {
+        console.log('🔄 ChatScreen focused - refreshing chats...');
+        loadChats();
+      }
+    }, [currentUser, recipientId])
+  );
+
   // Socket listeners สำหรับ real-time updates
   useEffect(() => {
     if (socket && currentUser) {
@@ -59,64 +162,75 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('🔌 Socket status:', socket.connected ? 'connected' : 'disconnected');
       console.log('🔌 Socket ID:', socket.id);
       
+      // Reset joined chatrooms tracking เมื่อ socket reconnect (สำหรับ iOS)
+      if (socket.connected) {
+        console.log('🔄 Socket connected, resetting joined chatrooms tracking for iOS');
+        joinedChatroomsRef.current.clear();
+      }
+      
       // ฟังข้อความใหม่จากทุกห้องแชท
-      const handleNewMessage = (data) => {
+      const handleNewMessage = async (data) => {
         console.log('💬 ChatScreen received new message:', data);
         console.log('💬 Message sender:', data.message?.sender);
         console.log('💬 Current user:', currentUser._id);
         console.log('💬 Chatroom ID:', data.chatroomId);
         
-        // ไม่ต้องอัพเดทถ้าเป็นข้อความของตัวเอง
-        if (data.message.sender._id === currentUser._id) {
-          console.log('👤 Ignoring own message in ChatScreen');
-          return;
+        // ตรวจสอบว่าแชทนี้ถูกซ่อนอยู่หรือไม่ หากใช่ให้แสดงกลับ
+        if (hiddenChatsRef.current.includes(data.chatroomId)) {
+          console.log('🔄 Unhiding chat due to new message:', data.chatroomId);
+          await unhideChat(data.chatroomId);
         }
-
-        // แสดงการแจ้งเตือนสำหรับข้อความใหม่
-        const senderName = data.message.sender ? 
-          `${data.message.sender.firstName} ${data.message.sender.lastName}` : 
-          'Unknown';
         
-        // ตรวจสอบว่าเป็นข้อความจากกลุ่มหรือแชทส่วนตัว
-        const isGroupMessage = data.isGroup || data.groupId;
-        const chatName = data.groupName || data.roomName || 'แชท';
+        // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
+        const isOwnMessage = data.message.sender._id === currentUser._id;
         
-        console.log('🔔 Showing notification for new message from:', senderName);
-        console.log('🔔 Is group message:', isGroupMessage);
-        console.log('🔔 Chat name:', chatName);
+        if (!isOwnMessage) {
+          // แสดงการแจ้งเตือนสำหรับข้อความใหม่ (เฉพาะข้อความของคนอื่น)
+          const senderName = data.message.sender ? 
+            `${data.message.sender.firstName} ${data.message.sender.lastName}` : 
+            'Unknown';
+          
+          // ตรวจสอบว่าเป็นข้อความจากกลุ่มหรือแชทส่วนตัว
+          const isGroupMessage = data.isGroup || data.groupId;
+          const chatName = data.groupName || data.roomName || 'แชท';
+          
+          console.log('🔔 Showing notification for new message from:', senderName);
+          console.log('🔔 Is group message:', isGroupMessage);
+          console.log('🔔 Chat name:', chatName);
+          
+          // ใช้ NotificationService เพื่อแสดงการแจ้งเตือน
+          const notificationTitle = isGroupMessage ? 
+            `${chatName}: ${senderName}` : 
+            `ข้อความจาก ${senderName}`;
+          
+          NotificationService.showInAppNotification(
+            notificationTitle,
+            data.message.content,
+            { 
+              senderId: data.message.sender._id,
+              chatroomId: data.chatroomId,
+              isGroup: isGroupMessage,
+              groupName: data.groupName
+            }
+          );
+        } else {
+          console.log('👤 Processing own message in ChatScreen (no notification)');
+        }
         
-        // ใช้ NotificationService เพื่อแสดงการแจ้งเตือน
-        const notificationTitle = isGroupMessage ? 
-          `${chatName}: ${senderName}` : 
-          `ข้อความจาก ${senderName}`;
-        
-        NotificationService.showInAppNotification(
-          notificationTitle,
-          data.message.content,
-          { 
-            senderId: data.message.sender._id,
-            chatroomId: data.chatroomId,
-            isGroup: isGroupMessage,
-            groupName: data.groupName
-          }
-        );
-        
-        // รีเฟรชรายการแชทเพื่อให้ได้ unread count ที่ถูกต้องจาก server
-        console.log('🔄 Refreshing chat list to get updated unread count...');
-        
-        // อัพเดทรายการแชทเมื่อมีข้อความใหม่ และรีเฟรชข้อมูลจาก server
-        setTimeout(() => {
-          loadChats();
-        }, 500); // รอสักครู่เพื่อให้ server process ข้อความก่อน
+        // อัพเดท local state แทนการรีเฟรชจาก server
+        console.log('🔄 Updating local chat list state...');
         
         // อัพเดท local state แบบชั่วคราวก่อนที่จะรีเฟรช
         setChats(prevChats => {
+          let chatFound = false;
           const updatedChats = prevChats.map(chat => {
             if (chat._id === data.chatroomId) {
-              console.log('📝 Updating chat with new message:', data.chatroomId);
+              console.log('📝 Updating existing chat with new message:', data.chatroomId);
+              chatFound = true;
               
-              // อัปเดต unread count สำหรับทั้งแชทส่วนตัวและกลุ่ม
+              // อัปเดต unread count เฉพาะข้อความของคนอื่น (ไม่ใช่ข้อความของตัวเอง)
               const currentUnreadCount = chat.unreadCount || 0;
+              const newUnreadCount = isOwnMessage ? currentUnreadCount : currentUnreadCount + 1;
               
               return {
                 ...chat,
@@ -125,12 +239,37 @@ const ChatScreen = ({ route, navigation }) => {
                   timestamp: data.message.timestamp,
                   sender: data.message.sender
                 },
-                unreadCount: currentUnreadCount + 1 // เพิ่ม unread count
+                unreadCount: newUnreadCount
               };
             }
             return chat;
           });
-          return updatedChats;
+          
+          // ถ้าไม่พบแชท (อาจถูกซ่อนหรือเป็นแชทใหม่) ให้รีเฟรชจาก server
+          if (!chatFound) {
+            console.log('📝 Chat not found in current list, will refresh:', data.chatroomId);
+            setTimeout(() => {
+              const refreshChats = async () => {
+                try {
+                  await loadChats();
+                } catch (error) {
+                  console.error('Error refreshing chats after new message:', error);
+                }
+              };
+              refreshChats();
+            }, 500);
+            return updatedChats;
+          }
+          
+          // เรียงลำดับใหม่ตามเวลาข้อความล่าสุด (แชทที่มีข้อความใหม่จะขึ้นไปบนสุด)
+          const sortedUpdatedChats = updatedChats.sort((a, b) => {
+            const aTime = new Date(a.lastMessage?.timestamp || a.lastActivity || a.createdAt);
+            const bTime = new Date(b.lastMessage?.timestamp || b.lastActivity || b.createdAt);
+            return bTime - aTime; // เรียงจากใหม่สุดไปเก่าสุด
+          });
+          
+          console.log('🔄 Re-sorted chats after message update (including own messages)');
+          return sortedUpdatedChats;
         });
       };
 
@@ -139,11 +278,8 @@ const ChatScreen = ({ route, navigation }) => {
         console.log('👁️ Message read update received:', data);
         console.log('👁️ Chatroom ID:', data.chatroomId);
         
-        // รีเฟรชรายการแชทเพื่อให้ได้ unread count ที่ถูกต้องจาก server
-        console.log('🔄 Refreshing chat list to get updated unread count after read...');
-        setTimeout(() => {
-          loadChats();
-        }, 200); // รอสักครู่เพื่อให้ server process การอ่านข้อความ
+        // อัพเดท local state แทนการรีเฟรชจาก server
+        console.log('🔄 Updating local unread count...');
         
         // อัพเดท local state แบบชั่วคราวก่อนที่จะรีเฟรช
         setChats(prevChats => {
@@ -170,28 +306,6 @@ const ChatScreen = ({ route, navigation }) => {
       };
     }
   }, [socket, currentUser]);
-
-  // เพิ่ม focus listener เพื่อรีเฟรชแชทเมื่อกลับมาหน้านี้
-  useFocusEffect(
-    useCallback(() => {
-      if (currentUser && !recipientId) {
-        console.log('📱 ChatScreen focused, refreshing chats...');
-        loadChats();
-      }
-    }, [currentUser, recipientId, loadChats])
-  );
-
-  // Refresh chats when screen comes into focus
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (currentUser && !recipientId) {
-        console.log('ChatScreen: Screen focused, refreshing chats...');
-        loadChats();
-      }
-    });
-
-    return unsubscribe;
-  }, [navigation, currentUser, recipientId, loadChats]);
 
   const handleDirectChat = async () => {
     try {
@@ -222,7 +336,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadCurrentUser = async () => {
+  const loadCurrentUser = async (retryCount = 0) => {
     try {
       startLoading();
       updateProgress(10); // เริ่มต้น
@@ -289,6 +403,15 @@ const ChatScreen = ({ route, navigation }) => {
       console.error('ChatScreen: Error loading user:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
       
+      // Handle 429 (Too Many Requests) with retry
+      if (error.response?.status === 429 && retryCount < 2) {
+        console.log(`⏳ Rate limit hit, retrying in 3 seconds... (attempt ${retryCount + 1}/3)`);
+        setTimeout(() => {
+          loadCurrentUser(retryCount + 1);
+        }, 3000); // รอ 3 วินาทีแล้วลองใหม่
+        return;
+      }
+      
       // ตรวจสอบว่าเป็น timeout หรือไม่
       if (error.message && error.message.includes('timeout')) {
         console.log('⏰ ChatScreen: API timeout detected, server might be cold starting');
@@ -300,6 +423,17 @@ const ChatScreen = ({ route, navigation }) => {
       if (error.response?.status === 401) {
         console.log('ChatScreen: Unauthorized, redirecting to login');
         navigation.replace('Login');
+      } else if (error.response?.status === 429) {
+        console.log('⚠️ Rate limit exceeded, using AuthContext data if available');
+        // ถ้าถูก rate limit และมี authUser ให้ใช้ข้อมูลนั้นแทน
+        if (authUser) {
+          console.log('✅ Using AuthContext data due to rate limit');
+          setCurrentUser(authUser);
+          setServerStatus('ready');
+          NotificationService.setCurrentUser(authUser);
+        } else {
+          Alert.alert('ข้อผิดพลาด', 'เซิร์ฟเวอร์ยุ่ง กรุณาลองใหม่ในอีกสักครู่');
+        }
       } else if (!error.message.includes('timeout')) {
         // ไม่แสดง alert ถ้าเป็น timeout เพราะระบบกำลัง retry อยู่
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
@@ -311,7 +445,34 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadChats = useCallback(async () => {
+  // โหลดรายการแชทที่ซ่อน
+  const loadHiddenChats = async () => {
+    try {
+      const hidden = await AsyncStorage.getItem(`hiddenChats_${authUser?._id}`);
+      if (hidden) {
+        const hiddenList = JSON.parse(hidden);
+        console.log('📱 Loaded hidden chats:', hiddenList);
+        setHiddenChats(hiddenList);
+      } else {
+        console.log('📱 No hidden chats found');
+        setHiddenChats([]);
+      }
+    } catch (error) {
+      console.error('Error loading hidden chats:', error);
+      setHiddenChats([]);
+    }
+  };
+
+  // บันทึกรายการแชทที่ซ่อน
+  const saveHiddenChats = async (hiddenList) => {
+    try {
+      await AsyncStorage.setItem(`hiddenChats_${authUser?._id}`, JSON.stringify(hiddenList));
+    } catch (error) {
+      console.error('Error saving hidden chats:', error);
+    }
+  };
+
+  const loadChats = async () => {
     try {
       console.log('ChatScreen: Loading chats...');
       const [chatsResponse, groupsResponse] = await Promise.all([
@@ -336,32 +497,62 @@ const ChatScreen = ({ route, navigation }) => {
       
       console.log('🔍 Private chats:', privateChats.length);
       console.log('🔍 Group chats:', groupChats.length);
-      console.log('🔍 Sample group chat:', groupChats[0] ? {
-        id: groupChats[0]._id,
-        name: groupChats[0].roomName,
-        isGroup: groupChats[0].isGroup
-      } : 'none');
-      
-      const allChats = [...privateChats, ...groupChats].sort((a, b) => {
-        const aTime = a.lastMessage?.timestamp || a.lastActivity || a.createdAt;
-        const bTime = b.lastMessage?.timestamp || b.lastActivity || b.createdAt;
-        return new Date(bTime) - new Date(aTime);
-      });
-      
-      console.log('🔍 All chats after sort:', allChats.map(chat => ({
-        id: chat._id,
-        name: chat.roomName || 'private',
-        isGroup: chat.isGroup || false
+      console.log('🔍 Group chats detail:', groupChats.map(g => ({
+        id: g._id, 
+        name: g.roomName, 
+        members: g.participants?.length 
       })));
       
-      setChats(allChats);
+      // ปรับ logic: แสดงแชทส่วนตัวทั้งหมด ไม่กรองออกแม้ไม่มีข้อความ
+      // เพราะแชทที่สร้างใหม่จากการค้นหาผู้ใช้ต้องแสดงทันที
+      const filteredPrivateChats = privateChats; // แสดงแชทส่วนตัวทั้งหมด
+      
+      // แชทกลุ่ม: กรองเฉพาะกลุ่มที่ user เป็นสมาชิก (double-check)
+      const filteredGroupChats = groupChats.filter(group => {
+        const isMember = group.participants?.some(member => 
+          member.user?._id === currentUser._id || member._id === currentUser._id
+        );
+        if (!isMember) {
+          console.log('🔍 Filtering out group (not a member):', group.roomName);
+        }
+        return isMember;
+      });
+      
+      const allChats = [...filteredPrivateChats, ...filteredGroupChats];
+      
+      // กรองออกแชทที่ซ่อนไว้ (เฉพาะแชทส่วนตัว ไม่รวมแชทกลุ่ม)
+      const visibleChats = allChats.filter(chat => 
+        chat.isGroup || !hiddenChatsRef.current.includes(chat._id) // แชทกลุ่มแสดงเสมอ
+      );
+      
+      // เรียงตามเวลาล่าสุด (แชทที่มีกิจกรรมล่าสุดจะอยู่บนสุด)
+      const sortedChats = visibleChats.sort((a, b) => {
+        // ใช้เวลาล่าสุดจาก lastMessage, lastActivity หรือ createdAt
+        const aTime = new Date(a.lastMessage?.timestamp || a.lastActivity || a.createdAt || 0);
+        const bTime = new Date(b.lastMessage?.timestamp || b.lastActivity || b.createdAt || 0);
+        
+        // เรียงจากใหม่สุดไปเก่าสุด
+        return bTime - aTime;
+      });
+      
+      console.log('🔍 All chats after filtering:', sortedChats.length);
+      console.log('🔍 Hidden chats:', hiddenChatsRef.current);
+      console.log('🔍 All chats before hiding filter:', allChats.length);
+      console.log('🔍 Visible chats after hiding filter:', visibleChats.length);
+      
+      setChats(sortedChats);
       console.log('✅ Updated chats state with', allChats.length, 'items');
       
-      // Join ทุกห้องแชทที่ user เป็นสมาชิกเพื่อรับ real-time updates
+      // Join ทุกห้องแชทที่ user เป็นสมาชิกเพื่อรับ real-time updates (ป้องกันการ join ซ้ำใน iOS)
       if (joinChatroom) {
         allChats.forEach(chat => {
-          console.log('🏠 Joining chatroom for real-time updates:', chat._id);
-          joinChatroom(chat._id);
+          if (!joinedChatroomsRef.current.has(chat._id)) {
+            console.log('🏠 Joining chatroom for real-time updates:', chat._id);
+            joinChatroom(chat._id);
+            joinedChatroomsRef.current.add(chat._id);
+          } else {
+            console.log('⏭️ Skipping already joined chatroom:', chat._id);
+          }
         });
       }
     } catch (error) {
@@ -375,108 +566,75 @@ const ChatScreen = ({ route, navigation }) => {
         ]);
       }
     }
-  }, [navigation, joinChatroom]);
+  };
 
-  const deleteChat = async (chatId) => {
+  // ฟังก์ชันซ่อนแชท (แทนการลบ)
+  const hideChat = async (chatId) => {
     try {
-      console.log('🗑️ Deleting chat:', chatId);
-      console.log('🔍 Current chats in state:', chats.length, 'items');
-      console.log('🔍 Chat IDs in state:', chats.map(c => c._id));
+      console.log('� Hiding chat:', chatId);
       
-      // ตรวจสอบว่าเป็น group chat หรือ private chat
-      const chatToDelete = chats.find(chat => chat._id === chatId);
-      console.log('🔍 Found chat to delete:', chatToDelete ? {
-        id: chatToDelete._id,
-        name: chatToDelete.roomName || 'private',
-        isGroup: chatToDelete.isGroup,
-        hasIsGroupProperty: 'isGroup' in chatToDelete
-      } : 'not found');
+      const newHiddenChats = [...hiddenChats, chatId];
+      setHiddenChats(newHiddenChats);
+      await saveHiddenChats(newHiddenChats);
       
-      // ถ้าไม่พบ chat ใน state ให้ลองทั้งสอง endpoint
-      if (!chatToDelete) {
-        console.log('⚠️ Chat not found in state, trying both endpoints...');
-        
-        // ลอง group endpoint ก่อน
-        try {
-          console.log('🎯 Trying group endpoint:', `/groups/${chatId}`);
-          const response = await api.delete(`/groups/${chatId}`);
-          console.log('✅ Chat deleted as group successfully:', response.data);
-          
-          // รีเฟรชรายการแชทใหม่
-          console.log('🔄 Refreshing chat list after deletion...');
-          await loadChats();
-          
-          setChatToDelete(null);
-          Alert.alert('สำเร็จ', 'ลบกลุ่มแชทเรียบร้อยแล้ว');
-          return;
-        } catch (groupError) {
-          console.log('❌ Group endpoint failed:', groupError.response?.status);
-          
-          // ถ้า group endpoint ไม่ได้ ลอง private chat endpoint
-          try {
-            console.log('🎯 Trying private chat endpoint:', `/chats/${chatId}`);
-            const response = await api.delete(`/chats/${chatId}`);
-            console.log('✅ Chat deleted as private chat successfully:', response.data);
-            
-            // รีเฟรชรายการแชทใหม่
-            console.log('🔄 Refreshing chat list after deletion...');
-            await loadChats();
-            
-            setChatToDelete(null);
-            Alert.alert('สำเร็จ', 'ลบแชทส่วนตัวเรียบร้อยแล้ว');
-            return;
-          } catch (privateError) {
-            console.log('❌ Private chat endpoint also failed:', privateError.response?.status);
-            throw privateError; // ส่งต่อ error เพื่อให้ catch block ด้านล่างจัดการ
-          }
-        }
-      }
+      // อัปเดตรายการแชทในหน้าจอ
+      setChats(prev => prev.filter(chat => chat._id !== chatId));
       
-      const isGroupChat = chatToDelete?.isGroup;
+      Alert.alert('สำเร็จ', 'ซ่อนห้องแชทเรียบร้อยแล้ว');
       
-      console.log('🔍 Chat type:', isGroupChat ? 'Group Chat' : 'Private Chat');
-      
-      // ใช้ endpoint ที่ถูกต้องตามประเภทของแชท
-      const endpoint = isGroupChat ? `/groups/${chatId}` : `/chats/${chatId}`;
-      console.log('🎯 Using endpoint:', endpoint);
-      
-      const response = await api.delete(endpoint);
-      console.log('✅ Chat deleted successfully:', response.data);
-      
-      // รีเฟรชรายการแชทใหม่
-      console.log('🔄 Refreshing chat list after deletion...');
-      await loadChats();
-      
-      setChatToDelete(null);
-      Alert.alert('สำเร็จ', 'ลบห้องแชทเรียบร้อยแล้ว');
     } catch (error) {
-      console.error('❌ Error deleting chat:', error);
-      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error hiding chat:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถซ่อนห้องแชทได้');
+    }
+  };
+
+  // ฟังก์ชันสำหรับแสดงแชทที่ซ่อนกลับมา (เมื่อได้รับข้อความใหม่)
+  const unhideChat = async (chatId) => {
+    try {
+      console.log('🔄 Unhiding chat:', chatId);
+      const newHiddenChats = hiddenChatsRef.current.filter(id => id !== chatId);
+      setHiddenChats(newHiddenChats);
+      hiddenChatsRef.current = newHiddenChats;
+      await saveHiddenChats(newHiddenChats);
+      console.log('✅ Chat unhidden successfully:', chatId);
       
-      let errorMessage = 'ไม่สามารถลบห้องแชทได้';
-      if (error.response?.status === 403) {
-        errorMessage = 'คุณไม่มีสิทธิ์ลบห้องแชทนี้';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'ไม่พบห้องแชทที่ต้องการลบ';
-        // ลบออกจาก state ถ้าไม่พบในเซิร์ฟเวอร์
-        setChats(prev => prev.filter(chat => chat._id !== chatId));
-      }
+      // รีเฟรชรายการแชทเพื่อแสดงแชทที่ unhide แล้ว
+      setTimeout(() => {
+        const refreshChats = async () => {
+          try {
+            await loadChats();
+          } catch (error) {
+            console.error('Error refreshing after unhide:', error);
+          }
+        };
+        refreshChats();
+      }, 100);
       
-      Alert.alert('ข้อผิดพลาด', errorMessage);
+    } catch (error) {
+      console.error('Error unhiding chat:', error);
     }
   };
 
   const handleLongPressChat = (chat) => {
-    setChatToDelete(chat);
+    // ไม่อนุญาตให้ซ่อนแชทกลุ่ม
+    if (chat.isGroup) {
+      Alert.alert(
+        'ไม่สามารถซ่อนได้',
+        'ไม่สามารถซ่อนแชทกลุ่มได้ หากต้องการออกจากกลุ่มให้เข้าไปในแชทกลุ่ม',
+        [{ text: 'ตกลง', style: 'default' }]
+      );
+      return;
+    }
+    
     Alert.alert(
-      'ลบห้องแชท',
-      `คุณต้องการลบห้องแชท "${chat.roomName || 'แชทส่วนตัว'}" หรือไม่?`,
+      'ซ่อนห้องแชท',
+      `คุณต้องการซ่อนห้องแชท "${chat.roomName || 'แชทส่วนตัว'}" หรือไม่?\n\n(แชทจะถูกซ่อนจากรายการ แต่ยังสามารถเข้าถึงได้หากมีข้อความใหม่)`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         { 
-          text: 'ลบ', 
+          text: 'ซ่อน', 
           style: 'destructive',
-          onPress: () => deleteChat(chat._id)
+          onPress: () => hideChat(chat._id)
         }
       ]
     );
@@ -534,12 +692,19 @@ const ChatScreen = ({ route, navigation }) => {
           
           // อัพเดท local state
           setChats(prevChats => {
-            return prevChats.map(c => {
+            const updatedChats = prevChats.map(c => {
               if (c._id === chat._id) {
                 console.log('📖 Local state updated - group unreadCount reset to 0 for:', c._id);
                 return { ...c, unreadCount: 0 };
               }
               return c;
+            });
+            
+            // เรียงลำดับใหม่หลังจากอัปเดต
+            return updatedChats.sort((a, b) => {
+              const aTime = new Date(a.lastMessage?.timestamp || a.lastActivity || a.createdAt || 0);
+              const bTime = new Date(b.lastMessage?.timestamp || b.lastActivity || b.createdAt || 0);
+              return bTime - aTime;
             });
           });
           
@@ -553,7 +718,8 @@ const ChatScreen = ({ route, navigation }) => {
       navigation.navigate('GroupChat', {
         groupId: chat._id,
         groupName: chat.roomName,
-        groupImage: chat.groupImage
+        groupImage: chat.groupImage,
+        returnChatId: chat._id // เพิ่ม chatId สำหรับ unhide เมื่อกลับมา
       });
     } else {
       // หาผู้ใช้อื่นที่ไม่ใช่ตัวเอง
@@ -592,7 +758,8 @@ const ChatScreen = ({ route, navigation }) => {
         recipientName: otherParticipant ? 
           `${otherParticipant.firstName} ${otherParticipant.lastName}` : 
           'แชทส่วนตัว',
-        recipientAvatar: otherParticipant?.avatar
+        recipientAvatar: otherParticipant?.avatar,
+        returnChatId: chat._id // เพิ่ม chatId สำหรับ unhide เมื่อกลับมา
       });
     }
   };
@@ -605,7 +772,7 @@ const ChatScreen = ({ route, navigation }) => {
     });
   };
 
-  const renderChatItem = useCallback(({ item }) => {
+  const renderChatItem = ({ item }) => {
     if (item.isGroup) {
       // Render group chat item
       return (
@@ -773,30 +940,7 @@ const ChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       );
     }
-  }, [currentUser]);
-
-  if (isLoading || authLoading) {
-    const isColdStart = serverStatus === 'cold_start';
-    const loadingTitle = authLoading 
-      ? "กำลังตรวจสอบผู้ใช้..." 
-      : isColdStart 
-        ? "เซิร์ฟเวอร์กำลังเริ่มต้น..." 
-        : "กำลังโหลดข้อมูล...";
-    
-    const loadingSubtitle = isColdStart 
-      ? "กรุณารอสักครู่ (30-60 วินาที)" 
-      : "กรุณารอสักครู่";
-    
-    return (
-      <ProgressLoadingScreen
-        isVisible={isLoading || authLoading}
-        progress={progress}
-        title={loadingTitle}
-        subtitle={loadingSubtitle}
-        color="#F5C842"
-      />
-    );
-  }
+  };
 
   // Debug info
   console.log('ChatScreen render:', {
@@ -809,6 +953,33 @@ const ChatScreen = ({ route, navigation }) => {
     socketConnected: socket ? 'connected' : 'disconnected',
     socketId: socket?.id || 'no-id'
   });
+
+  // สร้าง loading component สำหรับใช้ในส่วนของ content
+  const renderLoadingContent = () => {
+    const isColdStart = serverStatus === 'cold_start';
+    const loadingTitle = authLoading 
+      ? "กำลังตรวจสอบผู้ใช้..." 
+      : isColdStart 
+        ? "เซิร์ฟเวอร์กำลังเริ่มต้น..." 
+        : "กำลังโหลดข้อมูล...";
+    
+    const loadingSubtitle = isColdStart 
+      ? "กรุณารอสักครู่ (30-60 วินาที)" 
+      : "กรุณารอสักครู่";
+    
+    return (
+      <View style={styles.loadingContentContainer}>
+        <InlineLoadingScreen
+          isVisible={true}
+          progress={progress}
+          title="LOADING"
+          subtitle={loadingSubtitle}
+          color="#FFFFFF"
+          backgroundColor="#F5C842"
+        />
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -830,7 +1001,10 @@ const ChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {chats.length === 0 ? (
+      {/* Content Area - แสดง loading, empty state หรือ chat list */}
+      {(isLoading || authLoading) ? (
+        renderLoadingContent()
+      ) : chats.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
@@ -861,15 +1035,21 @@ const ChatScreen = ({ route, navigation }) => {
           keyExtractor={(item) => item._id}
           renderItem={renderChatItem}
           style={styles.chatsList}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          maxToRenderPerBatch={15}
-          windowSize={15}
-          initialNumToRender={10}
+          contentContainerStyle={styles.chatsListContent}
+          showsVerticalScrollIndicator={true}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={20}
+          windowSize={10}
+          initialNumToRender={15}
           scrollEnabled={true}
-          nestedScrollEnabled={true}
+          nestedScrollEnabled={false}
           keyboardShouldPersistTaps="handled"
           bounces={true}
+          alwaysBounceVertical={true}
+          decelerationRate="normal"
+          scrollEventThrottle={16}
+          getItemLayout={null}
+          onScrollToIndexFailed={() => {}}
         />
       )}
 
@@ -944,7 +1124,8 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffffff' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: '#ffffffff', // เปลี่ยนเป็นสีเหลือง
+    overflow: 'hidden', // ป้องกัน overflow
   },
   loadingContainer: {
     flex: 1,
@@ -973,10 +1154,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#E6B800' // เปลี่ยนเป็นสีเหลืองเข้ม
   },
   
+  // Loading Content Styles
+  loadingContentContainer: {
+    flex: 1,
+    backgroundColor: '#F5C842', // สีเหลืองเหมือนพื้นหลัง
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
   // Chat List Styles
   chatsList: {
     flex: 1,
     backgroundColor: '#ffffffff' // เปลี่ยนเป็นสีเหลือง
+  },
+  chatsListContent: {
+    flexGrow: 1,
+    paddingBottom: 90, // เพิ่มระยะห่างจากปุ่ม floating button
   },
  chatItem: {
   flexDirection: 'row',

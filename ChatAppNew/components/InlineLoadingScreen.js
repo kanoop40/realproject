@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated } from 'react-native';
 
-const ProgressLoadingScreen = ({ 
+const InlineLoadingScreen = ({ 
   isVisible = true, 
   progress = 0, 
   title = "LOADING", 
   subtitle = "กรุณารอสักครู่",
-  color = "#FFFFFF" 
+  color = "#FFFFFF",
+  backgroundColor = "#F5C842"
 }) => {
   const progressAnimation = useRef(new Animated.Value(progress / 100)).current;
   
@@ -49,7 +50,10 @@ const ProgressLoadingScreen = ({
   const letters = title.split('');
 
   return (
-    <View style={styles.loadingContainer}>
+    <View 
+      style={[styles.loadingContainer, { backgroundColor }]}
+      pointerEvents={isVisible ? 'auto' : 'none'}
+    >
       {/* Animated Letters */}
       <View style={styles.letterContainer}>
         {letters.map((letter, index) => (
@@ -63,13 +67,13 @@ const ProgressLoadingScreen = ({
                   {
                     translateY: letterAnimations[index].interpolate({
                       inputRange: [0, 1],
-                      outputRange: [30, 0], // Slide up effect
+                      outputRange: [20, 0], // Smaller slide up effect
                     }),
                   },
                   {
                     scale: letterAnimations[index].interpolate({
                       inputRange: [0, 1],
-                      outputRange: [0.5, 1], // Scale up effect
+                      outputRange: [0.7, 1], // Smaller scale effect
                     }),
                   },
                 ],
@@ -90,7 +94,7 @@ const ProgressLoadingScreen = ({
                 {
                   translateY: letterAnimations[letterAnimations.length - 1]?.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [30, 0],
+                    outputRange: [20, 0],
                   }) || 0,
                 },
               ],
@@ -120,17 +124,28 @@ const ProgressLoadingScreen = ({
           {Math.round(progress)}%
         </Text>
       </View>
+      
+      {subtitle && (
+        <Text style={styles.subtitleText}>
+          {subtitle}
+        </Text>
+      )}
     </View>
   );
 };
 
 const styles = {
   loadingContainer: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E6B800', // Black background like the image
     paddingHorizontal: 20,
+    paddingVertical: 40,
+    zIndex: 1000,
   },
   letterContainer: {
     flexDirection: 'row',
@@ -138,35 +153,42 @@ const styles = {
     marginBottom: 40,
   },
   letterText: {
-    fontSize: 24,
+    fontSize: 32, // ขยายให้ใหญ่ขึ้นเหมือนในรูป
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    fontFamily: 'System', // Use system font for consistency
+    color: '#333333',
+    letterSpacing: 3,
+    fontFamily: 'System',
   },
   progressContainer: {
-    width: '70%',
+    width: '80%',
     alignItems: 'center',
   },
   progressBarBackground: {
     width: '100%',
-    height: 6,
-    backgroundColor: '#333333', // Dark gray background
-    borderRadius: 3,
+    height: 8, // ขยายความหนาของ progress bar
+    backgroundColor: '#E6B800',
+    borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#FFFFFF', // White progress bar
-    borderRadius: 3,
+    backgroundColor: '#333333',
+    borderRadius: 4,
   },
   progressText: {
-    fontSize: 14,
+    fontSize: 18, // ขยายขนาดเปอร์เซ็นต์
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#333333',
     letterSpacing: 1,
+    marginBottom: 8,
+  },
+  subtitleText: {
+    fontSize: 16, // ขยายขนาด subtitle
+    color: '#666666',
+    textAlign: 'center',
+    marginTop: 20,
   },
 };
 
-export default ProgressLoadingScreen;
+export default InlineLoadingScreen;

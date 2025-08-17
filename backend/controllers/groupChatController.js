@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const GroupChat = require('../models/GroupChatModel');
 const User = require('../models/UserModel');
 const Messages = require('../models/MessagesModel');
+const Chatrooms = require('../models/ChatroomsModel');
 const Notification = require('../models/NotificationModel');
 const { deleteOldAvatar } = require('../config/cloudinary');
 
@@ -934,6 +935,65 @@ const addMembers = asyncHandler(async (req, res) => {
 
     // Populate ข้อมูลสมาชิกใหม่
     await group.populate('members.user', 'firstName lastName name email avatar');
+
+    // สร้างข้อความแจ้งเตือนสำหรับสมาชิกใหม่ที่เข้ากลุ่ม
+    const addedUsers = usersToAdd.filter(user => newMembers.includes(user._id.toString()));
+    const memberNames = addedUsers.map(user => `${user.firstName} ${user.lastName}`).join(', ');
+    
+    // สร้าง chatroom_id สำหรับ group (ใช้ group._id)
+    let chatroom = await Chatrooms.findOne({ group_id: group._id });
+    
+    if (!chatroom) {
+        // สร้าง chatroom ใหม่สำหรับ group ถ้ายังไม่มี
+        chatroom = new Chatrooms({
+            group_id: group._id,
+            name: group.groupName,
+            isGroup: true,
+            members: group.members.map(m => m.user)
+        });
+        await chatroom.save();
+    }
+    
+    // สร้างข้อความระบบแจ้งว่ามีสมาชิกใหม่เข้ามา
+    const systemMessage = new Messages({
+        chat_id: chatroom._id,
+        group_id: group._id,
+        user_id: req.user._id, // ใช้ผู้ที่เพิ่มสมาชิกเป็น sender
+        content: `${memberNames} เข้าร่วมกลุ่ม`,
+        messageType: 'system',
+        time: new Date()
+    });
+    
+    await systemMessage.save();
+    
+    // Populate ข้อมูล sender
+    await systemMessage.populate('user_id', 'firstName lastName name email avatar');
+
+    // ส่ง socket event ไปยังสมาชิกทั้งหมดในกลุ่ม
+    const io = req.app.get('io');
+    if (io) {
+        console.log('📢 Emitting member_added system message to group:', group._id);
+        
+        // ส่งข้อความระบบผ่าน newMessage event
+        io.to(group._id.toString()).emit('newMessage', {
+            Messages_id: systemMessage._id,
+            chat_id: systemMessage.chat_id,
+            group_id: systemMessage.group_id,
+            user_id: systemMessage.user_id,
+            content: systemMessage.content,
+            messageType: 'system',
+            time: systemMessage.time,
+            sender: systemMessage.user_id // เพื่อให้ frontend แสดงชื่อคนที่เพิ่มสมาชิก
+        });
+        
+        // ส่ง event พิเศษสำหรับการเพิ่มสมาชิก (สำหรับ UI updates)
+        io.to(group._id.toString()).emit('member_added', {
+            groupId: group._id,
+            newMembers: addedUsers,
+            addedBy: req.user,
+            message: `${memberNames} เข้าร่วมกลุ่ม`
+        });
+    }
 
     res.json({
         success: true,

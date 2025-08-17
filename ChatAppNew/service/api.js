@@ -4,8 +4,8 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Development API URL (local network IP)
-const API_URL = 'https://realproject-mg25.onrender.com';
-
+const API_URL = 'http://192.168.2.36:5000';
+//const API_URL = 'https://realproject-mg25.onrender.com';
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
   Platform: Platform.OS,
