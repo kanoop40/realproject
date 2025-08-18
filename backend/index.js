@@ -49,7 +49,16 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ?
         'https://192.168.1.34:8081',
         'https://192.168.1.34:8082', // Expo alternative port
         'http://192.168.1.34:19006',
-        'https://192.168.1.34:19006'
+        'https://192.168.1.34:19006',
+        // New IP addresses
+        'exp://172.22.98.120:8081',
+        'exp://172.22.98.120:8082',
+        'http://172.22.98.120:8081',
+        'http://172.22.98.120:8082',
+        'https://172.22.98.120:8081',
+        'https://172.22.98.120:8082',
+        'http://172.22.98.120:19006',
+        'https://172.22.98.120:19006'
     ];
 
 // Socket.IO configuration with environment-based CORS

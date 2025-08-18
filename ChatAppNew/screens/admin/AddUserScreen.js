@@ -306,6 +306,9 @@ const AddUserScreen = ({ navigation }) => {
             text: 'กลับหน้าแอดมิน',
             style: 'cancel',
             onPress: () => {
+              setShowFacultyModal(false);
+              setShowMajorModal(false);
+              setShowGroupModal(false);
               navigation.navigate('Admin', { refresh: true });
             }
           }
