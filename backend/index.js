@@ -58,7 +58,9 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ?
         'https://172.22.98.120:8081',
         'https://172.22.98.120:8082',
         'http://172.22.98.120:19006',
-        'https://172.22.98.120:19006'
+        'https://172.22.98.120:19006',
+        // Production URLs
+        'https://realproject-mg25.onrender.com'
     ];
 
 // Socket.IO configuration with environment-based CORS
