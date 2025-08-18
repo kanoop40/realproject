@@ -85,7 +85,8 @@ const io = socketIo(server, {
                        origin.includes('.exp.direct') ||
                        /^https?:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin) ||
                        /^https?:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) ||
-                       /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/.test(origin);
+                       /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/.test(origin) ||
+                       /^https?:\/\/.*\.onrender\.com$/.test(origin); // รองรับ Render domains
             });
             
             if (isAllowed) {
@@ -98,7 +99,12 @@ const io = socketIo(server, {
         },
         methods: ["GET", "POST"],
         credentials: true
-    }
+    },
+    // เพิ่มการตั้งค่าสำหรับ production
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 // Security middleware
