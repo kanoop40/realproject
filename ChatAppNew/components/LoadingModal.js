@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, ActivityIndicator, StyleSheet } from 'react-native';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 
 const LoadingModal = ({ visible, message, progress = 0 }) => {
   const [dots, setDots] = useState('');
@@ -49,23 +50,24 @@ const LoadingModal = ({ visible, message, progress = 0 }) => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: COLORS.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   container: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 12,
+    backgroundColor: COLORS.background,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.sm + 4,
     alignItems: 'center',
     minWidth: 160,
     maxWidth: 250,
+    ...SHADOWS.lg,
   },
   message: {
-    marginTop: 12,
-    fontSize: 14,
+    marginTop: SPACING.sm + 4,
+    fontSize: TYPOGRAPHY.fontSize.sm,
     textAlign: 'center',
-    color: '#333',
+    color: COLORS.textPrimary,
     fontWeight: '500',
   },
   progressContainer: {

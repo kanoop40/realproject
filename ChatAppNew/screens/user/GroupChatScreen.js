@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import useProgressLoading from '../../hooks/useProgressLoading';
 import NotificationService from '../../service/notificationService';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();

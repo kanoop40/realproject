@@ -1,13 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated } from 'react-native';
+import { COLORS, TYPOGRAPHY, SPACING } from '../styles/theme';
 
 const InlineLoadingScreen = ({ 
   isVisible = true, 
   progress = 0, 
   title = "LOADING", 
   subtitle = "กรุณารอสักครู่",
-  color = "#FFFFFF",
-  backgroundColor = "#F5C842"
+  color = COLORS.textPrimary,
+  backgroundColor = COLORS.background
 }) => {
   const progressAnimation = useRef(new Animated.Value(progress / 100)).current;
   
@@ -143,19 +144,19 @@ const styles = {
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xl,
     zIndex: 1000,
   },
   letterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: SPACING.xl,
   },
   letterText: {
-    fontSize: 32, // ขยายให้ใหญ่ขึ้นเหมือนในรูป
+    fontSize: TYPOGRAPHY.fontSize['3xl'],
     fontWeight: 'bold',
-    color: '#333333',
+    color: COLORS.textPrimary,
     letterSpacing: 3,
     fontFamily: 'System',
   },
@@ -165,29 +166,29 @@ const styles = {
   },
   progressBarBackground: {
     width: '100%',
-    height: 8, // ขยายความหนาของ progress bar
-    backgroundColor: '#E6B800',
+    height: 8,
+    backgroundColor: COLORS.backgroundTertiary,
     borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: SPACING.sm + 4,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#333333',
+    backgroundColor: COLORS.primary,
     borderRadius: 4,
   },
   progressText: {
-    fontSize: 18, // ขยายขนาดเปอร์เซ็นต์
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: 'bold',
-    color: '#333333',
+    color: COLORS.textPrimary,
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   subtitleText: {
-    fontSize: 16, // ขยายขนาด subtitle
-    color: '#666666',
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: SPACING.lg,
   },
 };
 

@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import InlineLoadingScreen from '../components/InlineLoadingScreen';
 import useProgressLoading from '../hooks/useProgressLoading';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 
 const WelcomeScreen = ({ navigation }) => {
   const { user, loading } = useAuth();
@@ -102,53 +103,57 @@ const WelcomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: COLORS.background
   },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 40
+    gap: SPACING.xl
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    gap: SPACING.lg,
+    backgroundColor: COLORS.background
   },
   loadingText: {
-    fontSize: 16,
-    color: '#333', // เปลี่ยนเป็นสีเข้ม
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textPrimary,
     textAlign: 'center'
   },
   logo: {
     width: 80,
     height: 80,
-    marginBottom: 20
+    marginBottom: SPACING.lg
   },
   loginButton: {
-    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
+    backgroundColor: COLORS.primary,
     width: 150,
-    paddingVertical: 12,
-    borderRadius: 8
+    paddingVertical: SPACING.sm + 4,
+    borderRadius: RADIUS.sm,
+    ...SHADOWS.md
   },
   loginButtonText: {
-    color: 'white',
+    color: COLORS.textInverse,
     textAlign: 'center',
-    fontSize: 18
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: '600'
   },
   clearButton: {
-    backgroundColor: '#ff3b30',
+    backgroundColor: COLORS.error,
     width: 200,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 20
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    marginTop: SPACING.lg,
+    ...SHADOWS.sm
   },
   clearButtonText: {
-    color: 'white',
+    color: COLORS.textInverse,
     textAlign: 'center',
-    fontSize: 14
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: '500'
   }
 });
 

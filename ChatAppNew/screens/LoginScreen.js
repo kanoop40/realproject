@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login } from '../service/api';
 import { useAuth } from '../context/AuthContext';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 
 const LoginScreen = ({ navigation }) => {
   const { login: authLogin } = useAuth();
@@ -120,77 +121,83 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: COLORS.background
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: SPACING.lg,
     justifyContent: 'center'
   },
   title: {
-    fontSize: 24,
+    fontSize: TYPOGRAPHY.fontSize['2xl'],
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 30,
-    color: '#333' // เปลี่ยนเป็นสีเข้ม
+    marginBottom: SPACING.xl,
+    color: COLORS.textPrimary
   },
   form: {
     width: '100%'
   },
   inputWrapper: {
-    marginBottom: 20
+    marginBottom: SPACING.lg
   },
   label: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: '#333'
+    fontSize: TYPOGRAPHY.fontSize.md,
+    marginBottom: SPACING.xs,
+    color: COLORS.textPrimary,
+    fontWeight: '500'
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fff' // เพิ่มพื้นหลังสีขาว
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm + 4,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    backgroundColor: COLORS.background,
+    color: COLORS.textPrimary
   },
   loginButton: {
-    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
-    padding: 15,
-    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    padding: SPACING.md,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
-    marginTop: 20
+    marginTop: SPACING.lg,
+    ...SHADOWS.md
   },
   loginButtonDisabled: {
-    opacity: 0.7
+    opacity: 0.6
   },
   loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: 'bold'
   },
   testButton: {
-    backgroundColor: '#28a745',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: COLORS.success,
+    padding: SPACING.sm + 2,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: SPACING.lg,
+    ...SHADOWS.sm
   },
   testButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSize.sm,
     fontWeight: 'bold'
   },
   debugButton: {
-    backgroundColor: '#ffc107',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: COLORS.warning,
+    padding: SPACING.sm + 2,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: SPACING.lg,
+    ...SHADOWS.sm
   },
   errorText: {
-    color: '#d32f2f', // เปลี่ยนเป็นสีแดงเข้ม
+    color: COLORS.error,
     textAlign: 'center',
-    marginBottom: 10
+    marginBottom: SPACING.sm + 2,
+    fontSize: TYPOGRAPHY.fontSize.sm
   }
 });
 

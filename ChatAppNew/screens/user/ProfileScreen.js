@@ -18,6 +18,7 @@ import api, { API_URL } from '../../service/api';
 // import AvatarUnavailableNotice from '../../components/AvatarUnavailableNotice';
 import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import useProgressLoading from '../../hooks/useProgressLoading';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -634,71 +635,75 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: COLORS.background,
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#333', // เปลี่ยนเป็นสีเข้ม
+    marginTop: SPACING.sm + 2,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.lg,
     paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
-    borderBottomWidth: 0, // ลบเส้นขอบ
-    borderBottomColor: 'transparent',
+    paddingBottom: SPACING.lg,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    ...SHADOWS.sm,
   },
   backButton: {
-    padding: 8,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.backgroundSecondary,
+    ...SHADOWS.sm,
   },
   headerPlaceholder: {
-    width: 40, // เท่ากับ backButton เพื่อให้ title อยู่ตรงกลาง
+    width: 40,
   },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.fontSize.xl,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.textPrimary,
   },
   content: {
     flex: 1,
   },
   profileSection: {
-    backgroundColor: '#F5C842',
+    backgroundColor: COLORS.background,
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: SPACING.xl,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: COLORS.border,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: SPACING.lg,
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.backgroundTertiary,
   },
   defaultAvatar: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
+    backgroundColor: COLORS.primary,
   },
   avatarText: {
     fontSize: 48,
     fontWeight: '600',
-    color: '#fff',
+    color: COLORS.textInverse,
   },
   cameraIconContainer: {
     position: 'absolute',
@@ -707,91 +712,91 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: COLORS.background,
+    ...SHADOWS.md,
   },
   userName: {
-    fontSize: 24,
+    fontSize: TYPOGRAPHY.fontSize['2xl'],
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.textPrimary,
     marginBottom: 5,
   },
   username: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 10,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm + 2,
   },
   roleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fff0ff',
-    paddingHorizontal: 12,
+    backgroundColor: COLORS.accentLight,
+    paddingHorizontal: SPACING.sm + 4,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: RADIUS.lg,
   },
   roleText: {
     marginLeft: 5,
-    fontSize: 14,
-    color: '#007AFF',
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.accent,
     fontWeight: '500',
   },
   detailsSection: {
-    backgroundColor: '#F5C842',
-    marginTop: 10,
-    paddingVertical: 10,
+    backgroundColor: COLORS.background,
+    marginTop: SPACING.sm + 2,
+    paddingVertical: SPACING.sm + 2,
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-  
-    
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   detailLabel: {
     flex: 1,
-    marginLeft: 15,
-    fontSize: 16,
-    color: '#333',
+    marginLeft: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textPrimary,
   },
   detailValue: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textSecondary,
     fontWeight: '500',
   },
   actionsSection: {
-    paddingHorizontal: 40,
-    paddingVertical: 20,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.lg,
     alignItems: 'center',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-    marginBottom: 12,
+    backgroundColor: COLORS.backgroundSecondary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm + 4,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.sm + 4,
     width: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.md,
   },
   logoutActionButton: {
     backgroundColor: '#ffebee',
+    borderColor: COLORS.error,
   },
   actionIcon: {
-    fontSize: 16,
-    marginRight: 8,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    marginRight: SPACING.sm,
   },
   actionButtonText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.fontSize.md,
     color: '#333',
     fontWeight: '500',
   },

@@ -27,6 +27,7 @@ import api, { API_URL, deleteMessage } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import InlineLoadingScreen from '../../components/InlineLoadingScreen';
 import { useProgressLoading } from '../../hooks/useProgressLoading';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -1715,24 +1716,24 @@ const PrivateChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842' // สีเหลืองเหมือนในรูป
+    backgroundColor: COLORS.background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5C842'
+    backgroundColor: COLORS.background
   },
   loadingText: {
-    color: '#333',
-    fontSize: 16,
-    marginTop: 10,
+    color: COLORS.textPrimary,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    marginTop: SPACING.sm + 2,
     fontWeight: '600',
   },
   loadingSubText: {
-    color: '#666',
-    fontSize: 14,
-    marginTop: 5,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    marginTop: SPACING.xs,
   },
   scrollLoadingOverlay: {
     position: 'absolute',
@@ -1740,7 +1741,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#F5C842',
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,
@@ -1754,18 +1755,19 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
+    padding: SPACING.md,
     paddingTop: 50,
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
-    borderBottomWidth: 0, // เอาเส้นขอบล่างออก
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 0,
+    ...SHADOWS.sm,
   },
   backButton: {
-    padding: 8,
-    marginRight: 8
+    padding: SPACING.sm,
+    marginRight: SPACING.sm
   },
   backIcon: {
-    fontSize: 20,
-    color: '#007AFF',
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    color: COLORS.accent,
   },
   headerInfo: {
     flex: 1,
@@ -1776,29 +1778,29 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 12
+    marginRight: SPACING.sm + 4
   },
   defaultAvatar: {
-    backgroundColor: '#e1e1e1',
+    backgroundColor: COLORS.backgroundTertiary,
     justifyContent: 'center',
     alignItems: 'center'
   },
   headerAvatarText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: 'bold',
-    color: '#666'
+    color: COLORS.textSecondary
   },
   headerTextInfo: {
     flex: 1
   },
   headerName: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: 'bold',
-    color: '#333'
+    color: COLORS.textPrimary
   },
   headerStatus: {
-    fontSize: 12,
-    color: '#4CAF50'
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.success
   },
   headerActions: {
     width: 40
@@ -1807,13 +1809,14 @@ const styles = StyleSheet.create({
   // Messages Styles
   messagesListContainer: {
     flex: 1,
+    backgroundColor: COLORS.background
   },
   messagesList: {
     flex: 1,
     backgroundColor: 'transparent'
   },
   messagesContainer: {
-    padding: 16,
+    padding: SPACING.md,
     flexGrow: 1
   },
   emptyMessagesContainer: {
@@ -1828,20 +1831,20 @@ const styles = StyleSheet.create({
     paddingVertical: 50
   },
   emptyMessageText: {
-    fontSize: 18,
-    color: '#666',
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
     fontWeight: '500'
   },
   emptyMessageSubText: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.textTertiary,
     textAlign: 'center'
   },
   messageContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: SPACING.md,
     alignItems: 'flex-end'
   },
   myMessage: {
@@ -2049,18 +2052,20 @@ const styles = StyleSheet.create({
 
   // Input Styles
   inputContainer: {
-    padding: 16,
-    paddingTop: 8,
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
-    borderTopWidth: 0, // เอาเส้นขอบบนออก
+    padding: SPACING.md,
+    paddingTop: SPACING.sm,
+    backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    ...SHADOWS.sm
   },
   selectedFileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 8,
+    backgroundColor: COLORS.backgroundSecondary,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    marginBottom: SPACING.sm,
   },
   fileInfo: {
     flex: 1,
@@ -2068,13 +2073,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fileName: {
-    marginLeft: 8,
+    marginLeft: SPACING.sm,
     flex: 1,
-    fontSize: 14,
-    color: '#333',
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.textPrimary,
   },
   removeFileButton: {
-    padding: 4,
+    padding: SPACING.xs,
   },
   messageInputRow: {
     flexDirection: 'row',

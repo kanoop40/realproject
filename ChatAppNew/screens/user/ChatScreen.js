@@ -18,6 +18,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationService from '../../service/notificationService';
 import InlineLoadingScreen from '../../components/InlineLoadingScreen';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import useProgressLoading from '../../hooks/useProgressLoading';
 
 const ChatScreen = ({ route, navigation }) => {
@@ -1124,40 +1125,40 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffffff', // เปลี่ยนเป็นสีเหลือง
-    overflow: 'hidden', // ป้องกัน overflow
+    backgroundColor: COLORS.background,
+    overflow: 'hidden',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5C842' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: COLORS.background
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    padding: SPACING.md,
     paddingTop: 50,
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
-    borderBottomWidth: 0, // ลบเส้นขอบ
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 0,
     borderBottomColor: 'transparent'
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.fontSize.xl,
     fontWeight: 'bold',
-    color: '#333' // เปลี่ยนเป็นสีเข้ม
+    color: COLORS.textPrimary
   },
   iconButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#E6B800' // เปลี่ยนเป็นสีเหลืองเข้ม
+    padding: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.backgroundSecondary,
+    ...SHADOWS.sm
   },
-  
   // Loading Content Styles
   loadingContentContainer: {
     flex: 1,
-    backgroundColor: '#F5C842', // สีเหลืองเหมือนพื้นหลัง
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1165,24 +1166,26 @@ const styles = StyleSheet.create({
   // Chat List Styles
   chatsList: {
     flex: 1,
-    backgroundColor: '#ffffffff' // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: COLORS.background
   },
   chatsListContent: {
     flexGrow: 1,
-    paddingBottom: 90, // เพิ่มระยะห่างจากปุ่ม floating button
+    paddingBottom: 90,
   },
  chatItem: {
   flexDirection: 'row',
-  padding: 16,
-  backgroundColor: 'rgba(252, 195, 55, 0.45)' // สีเหลือง FCC337 ที่ความจาง 45%
+  padding: SPACING.md,
+  backgroundColor: COLORS.backgroundSecondary,
+  borderBottomWidth: 1,
+  borderBottomColor: COLORS.border
 },
   chatItemUnread: {
-    backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้มกว่าพื้นหลัง
+    backgroundColor: COLORS.accentLight,
     borderLeftWidth: 4,
-    borderLeftColor: '#FFA500' // เปลี่ยนเป็นสีส้ม
+    borderLeftColor: COLORS.accent
   },
   avatarContainer: {
-    marginRight: 12,
+    marginRight: SPACING.sm + 4,
     position: 'relative'
   },
   avatar: {
@@ -1191,49 +1194,45 @@ const styles = StyleSheet.create({
     borderRadius: 25
   },
   defaultAvatar: {
-    backgroundColor: '#e1e1e1',
+    backgroundColor: COLORS.backgroundTertiary,
     justifyContent: 'center',
     alignItems: 'center'
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: 'bold',
-    color: '#666'
+    color: COLORS.textSecondary
   },
   groupAvatar: {
-    backgroundColor: '#FFA500',
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center'
   },
   groupAvatarText: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: 'bold',
-    color: '#fff'
+    color: COLORS.textInverse
   },
   groupSubtitle: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.textSecondary,
     marginBottom: 2
   },
   unreadBadge: {
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: '#FF3B30', // สีแดงสดใส
-    borderRadius: 12,
+    backgroundColor: COLORS.error,
+    borderRadius: RADIUS.sm + 4,
     minWidth: 24,
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
+    ...SHADOWS.sm,
   },
   unreadText: {
-    color: '#fff',
-    fontSize: 12,
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: 'bold',
     textAlign: 'center',
     paddingHorizontal: 4,
@@ -1245,28 +1244,28 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#34c759'
+    backgroundColor: COLORS.success
   },
   chatInfo: {
     flex: 1,
     justifyContent: 'center'
   },
   chatName: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.textPrimary,
     marginBottom: 4
   },
   chatNameUnread: {
     fontWeight: 'bold',
-    color: '#000'
+    color: COLORS.textPrimary
   },
   lastMessage: {
-    fontSize: 14,
-    color: '#666'
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.textSecondary
   },
   lastMessageUnread: {
-    color: '#333',
+    color: COLORS.textPrimary,
     fontWeight: '500'
   },
   chatMeta: {
@@ -1274,11 +1273,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end'
   },
   timestamp: {
-    fontSize: 12,
-    color: '#999'
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.textTertiary
   },
   timestampUnread: {
-    color: '#007AFF',
+    color: COLORS.accent,
     fontWeight: '600'
   },
 
@@ -1348,19 +1347,15 @@ const styles = StyleSheet.create({
   // Floating Button Styles
   floatingButton: {
     position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
+    bottom: SPACING.lg,
+    right: SPACING.lg,
+    backgroundColor: COLORS.primary,
     width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    ...SHADOWS.lg,
   },
 
   // Popup Styles

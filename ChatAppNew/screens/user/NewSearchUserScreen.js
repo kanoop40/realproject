@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import api, { API_URL } from '../../service/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LoadingModal from '../../components/LoadingModal';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const NewSearchUserScreen = ({ navigation }) => {
   const { user: currentUser } = useAuth();
@@ -463,49 +464,57 @@ const NewSearchUserScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842', // สีเหลือง
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 4,
     paddingTop: 50,
-    backgroundColor: '#F5C842', // สีเหลือง
-    borderBottomWidth: 0,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    ...SHADOWS.sm,
   },
   backButton: {
-    padding: 8,
-    marginRight: 8,
+    padding: SPACING.sm,
+    marginRight: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.backgroundSecondary,
+    ...SHADOWS.sm,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.textPrimary,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E6B800', // สีเหลืองเข้ม
-    marginHorizontal: 16,
-    marginVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12, // มุมโค้งมากขึ้น
+    backgroundColor: COLORS.backgroundSecondary,
+    marginHorizontal: SPACING.md,
+    marginVertical: SPACING.sm + 4,
+    paddingHorizontal: SPACING.sm + 4,
+    borderRadius: RADIUS.sm + 4,
     height: 48,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.sm,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#333',
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textPrimary,
   },
   loadingIcon: {
-    marginLeft: 8,
+    marginLeft: SPACING.sm,
   },
   listContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.md,
   },
   emptyContainer: {
     flex: 1,
@@ -514,38 +523,33 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: SPACING.xl,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#999',
-    marginTop: 16,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.textTertiary,
+    marginTop: SPACING.md,
     textAlign: 'center',
   },
   errorText: {
-    fontSize: 16,
-    color: '#f44336',
-    marginTop: 16,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.error,
+    marginTop: SPACING.md,
     textAlign: 'center',
   },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E6B800', // สีเหลืองเข้ม
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 12, // มุมโค้งมากขึ้น
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: COLORS.backgroundSecondary,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm + 4,
+    borderRadius: RADIUS.sm + 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.md,
   },
   avatarContainer: {
-    marginRight: 16,
+    marginRight: SPACING.md,
   },
   avatar: {
     width: 50,
@@ -556,33 +560,33 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#FF6B35', // สีส้มแดง
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: '#fff',
-    fontSize: 20,
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: 'bold',
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.textPrimary,
     marginBottom: 4,
   },
   userDetails: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.textSecondary,
     marginBottom: 2,
     lineHeight: 18,
   },
   userRole: {
-    fontSize: 12,
-    color: '#007AFF',
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.accent,
     fontWeight: '600',
     backgroundColor: '#fff',
     paddingHorizontal: 8,
@@ -682,22 +686,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFA500', // สีเหลืองส้มให้เข้ากับธีม
-    paddingVertical: 16, // เพิ่ม padding ให้ปุ่มใหญ่ขึ้น
-    borderRadius: 12, // มุมมนมากขึ้น
-    marginTop: 30,
-    marginBottom: 20, // เพิ่ม margin ด้านล่าง
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.sm + 4,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.md,
   },
   chatButtonText: {
-    color: '#fff',
-    fontSize: 18, // เพิ่มขนาดตัวอักษร
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: SPACING.sm,
   },
 });
 
