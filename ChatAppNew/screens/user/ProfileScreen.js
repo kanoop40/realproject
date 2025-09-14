@@ -16,8 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import api, { API_URL } from '../../service/api';
 // เอา AvatarUnavailableNotice import ออก
 // import AvatarUnavailableNotice from '../../components/AvatarUnavailableNotice';
-import InlineLoadingScreen from '../../components/InlineLoadingScreen';
-import useProgressLoading from '../../hooks/useProgressLoading';
+// Removed loading imports - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const ProfileScreen = ({ navigation }) => {
@@ -26,7 +25,7 @@ const ProfileScreen = ({ navigation }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
+  // Removed loading hook - no longer using loading functionality
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',

@@ -1,15 +1,14 @@
 import React, { useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
-import InlineLoadingScreen from '../components/InlineLoadingScreen';
-import useProgressLoading from '../hooks/useProgressLoading';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
+// Removed loading imports - no longer using loading functionality
+// Removed styles import - now using Tailwind CSS
 
 const WelcomeScreen = ({ navigation }) => {
   const { user, loading } = useAuth();
-  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
+  // Removed loading hook - no longer using loading functionality
 
   useEffect(() => {
     checkExistingSession();
@@ -67,31 +66,44 @@ const WelcomeScreen = ({ navigation }) => {
   // }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
         {/* Logo */}
         <Image
           source={require('../assets/logo.png')}
-          style={styles.logo}
+          style={{ width: 192, height: 192, marginBottom: 48 }}
           resizeMode="contain"
         />
 
         {/* Login Button */}
         <TouchableOpacity 
-          style={styles.loginButton}
+          style={{ 
+            width: '100%', 
+            backgroundColor: '#3b82f6', 
+            paddingVertical: 16, 
+            paddingHorizontal: 24, 
+            borderRadius: 8, 
+            marginBottom: 16 
+          }}
           onPress={() => navigation.navigate('Login')}
         >
-          <Text style={styles.loginButtonText}>
+          <Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 18, fontWeight: '600' }}>
             Login
           </Text>
         </TouchableOpacity>
 
         {/* Debug: Clear Session Button */}
         <TouchableOpacity 
-          style={styles.clearButton}
+          style={{ 
+            width: '100%', 
+            backgroundColor: '#ef4444', 
+            paddingVertical: 12, 
+            paddingHorizontal: 24, 
+            borderRadius: 8 
+          }}
           onPress={clearSession}
         >
-          <Text style={styles.clearButtonText}>
+          <Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 14 }}>
             🗑️ Clear Session (Debug)
           </Text>
         </TouchableOpacity>
@@ -100,61 +112,6 @@ const WelcomeScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xl
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.lg,
-    backgroundColor: COLORS.background
-  },
-  loadingText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.textPrimary,
-    textAlign: 'center'
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    marginBottom: SPACING.lg
-  },
-  loginButton: {
-    backgroundColor: COLORS.primary,
-    width: 150,
-    paddingVertical: SPACING.sm + 4,
-    borderRadius: RADIUS.sm,
-    ...SHADOWS.md
-  },
-  loginButtonText: {
-    color: COLORS.textInverse,
-    textAlign: 'center',
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: '600'
-  },
-  clearButton: {
-    backgroundColor: COLORS.error,
-    width: 200,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.sm,
-    marginTop: SPACING.lg,
-    ...SHADOWS.sm
-  },
-  clearButtonText: {
-    color: COLORS.textInverse,
-    textAlign: 'center',
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: '500'
-  }
-});
+// Removed StyleSheet - now using Tailwind CSS classes
 
 export default WelcomeScreen;

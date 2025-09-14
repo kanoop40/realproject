@@ -17,9 +17,8 @@ import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationService from '../../service/notificationService';
-import InlineLoadingScreen from '../../components/InlineLoadingScreen';
+// Removed loading imports - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
-import useProgressLoading from '../../hooks/useProgressLoading';
 
 const ChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, reconnectSocket } = useSocket();
@@ -34,7 +33,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [showPopup, setShowPopup] = useState(false);
   const [popupAnimation] = useState(new Animated.Value(0));
   const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
-  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
+  // Removed loading hook - no longer using loading functionality
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
   const { 
@@ -949,7 +948,6 @@ const ChatScreen = ({ route, navigation }) => {
     authUser: authUser ? `${authUser.firstName} ${authUser.lastName} (${authUser._id})` : 'null',
     chatsCount: chats.length,
     recipientId,
-    isLoading,
     authLoading,
     socketConnected: socket ? 'connected' : 'disconnected',
     socketId: socket?.id || 'no-id'
@@ -968,18 +966,8 @@ const ChatScreen = ({ route, navigation }) => {
       ? "กรุณารอสักครู่ (30-60 วินาที)" 
       : "กรุณารอสักครู่";
     
-    return (
-      <View style={styles.loadingContentContainer}>
-        <InlineLoadingScreen
-          isVisible={true}
-          progress={progress}
-          title="LOADING"
-          subtitle={loadingSubtitle}
-          color="#FFFFFF"
-          backgroundColor="#F5C842"
-        />
-      </View>
-    );
+    // Removed loading screen - show chat list directly
+    return null;
   };
 
   return (
@@ -1003,7 +991,7 @@ const ChatScreen = ({ route, navigation }) => {
       </View>
 
       {/* Content Area - แสดง loading, empty state หรือ chat list */}
-      {(isLoading || authLoading) ? (
+      {authLoading ? (
         renderLoadingContent()
       ) : chats.length === 0 ? (
         <View style={styles.emptyContainer}>

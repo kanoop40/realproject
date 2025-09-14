@@ -25,14 +25,14 @@ import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
-import InlineLoadingScreen from '../../components/InlineLoadingScreen';
-import { useProgressLoading } from '../../hooks/useProgressLoading';
+// Removed InlineLoadingScreen import - no longer using loading screens
+// Removed useProgressLoading hook - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
-  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
+  // Removed loading hooks - no longer using loading functionality
   
   // เพิ่ม local loading state เป็น fallback
   const [localIsLoading, setLocalIsLoading] = useState(true);
@@ -66,13 +66,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     fromSearch = false
   } = route.params || {};
 
-  // กำหนด initial loading state ตาม parameter
-  useEffect(() => {
-    if (showInitialLoading || fromSearch) {
-      setLocalIsLoading(true);
-      startLoading();
-    }
-  }, [showInitialLoading, fromSearch]);
+  // Removed initial loading state - no longer using loading functionality
 
   // ตรวจสอบ chatroomId ตั้งแต่ต้น
   useEffect(() => {
@@ -88,10 +82,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   }, [chatroomId, navigation]);
 
   useEffect(() => {
-    startLoading(10);
-    if (!fromSearch && !showInitialLoading) {
-      setLocalIsLoading(true);
-    }
+    // Removed loading initialization - directly load user
     loadCurrentUser();
   }, []);
 
@@ -100,27 +91,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('🔄 User and chatroom ready, loading messages');
       // Reset scroll flags เมื่อเข้าแชทใหม่
       setHasScrolledToEnd(false);
-      updateProgress(75); // 75% เมื่อ user และ chatroom พร้อม
       loadMessages();
     } else if (currentUser && !chatroomId) {
-      console.log('🔄 User loaded but no chatroom, stopping loading');
-      // หากโหลด user เสร็จแล้วแต่ไม่มี chatroomId ให้หยุด loading
+      console.log('🔄 User loaded but no chatroom');
+      // หากโหลด user เสร็จแล้วแต่ไม่มี chatroomId
       setLocalIsLoading(false);
-      stopLoading();
     }
   }, [currentUser, chatroomId]);
 
-  // Force หยุด loading หลังจาก 3 วินาที เผื่อมีปัญหา (หรือ 1 วินาทีถ้าเข้าจาก search)
-  useEffect(() => {
-    const timeoutDuration = fromSearch ? 1000 : 3000; // เข้าจาก search หยุดเร็วขึ้น
-    const forceStopTimer = setTimeout(() => {
-      console.log(`🔄 Force stopping loading after ${timeoutDuration/1000} seconds as fallback`);
-      stopLoading();
-      setLocalIsLoading(false);
-    }, timeoutDuration);
-    
-    return () => clearTimeout(forceStopTimer);
-  }, [fromSearch]);
+  // Removed force stop loading timeout - no longer using loading functionality
 
   // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด)
   useEffect(() => {
@@ -143,16 +122,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [messages.length, hasScrolledToEnd]);
 
-  // Force stop loading เมื่อ messages โหลดเสร็จ (สำหรับ iOS)
-  useEffect(() => {
-    if (messages.length > 0) {
-      console.log('🔄 Messages loaded, force stopping all loading states');
-      setTimeout(() => {
-        stopLoading();
-        setLocalIsLoading(false);
-      }, 100);
-    }
-  }, [messages]);
+  // Removed force stop loading when messages loaded - no longer using loading functionality
 
   // Socket.IO listeners
   useEffect(() => {
@@ -162,7 +132,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('🔌 Socket connected:', socket.connected);
       console.log('🔌 Socket ID:', socket.id);
       
-      updateProgress(85); // 85% เมื่อ socket พร้อม
+      // Removed progress update - no longer using loading functionality
       
       // เข้าร่วมห้องแชท
       joinChatroom(chatroomId);
@@ -299,20 +269,16 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const loadCurrentUser = useCallback(async () => {
     try {
-      updateProgress(10); // เริ่มต้น 10%
       console.log('PrivateChatScreen: Loading current user...');
       
-      updateProgress(30); // 30% เมื่อเริ่มโหลด user
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         navigation.replace('Login');
         return;
       }
 
-      updateProgress(50); // 50% เมื่อได้ token
       const response = await api.get('/users/current');
       setCurrentUser(response.data);
-      updateProgress(70); // 70% เมื่อโหลด user เสร็จ
       console.log('✅ User loaded successfully, messages will load next...');
     } catch (error) {
       console.error('Error loading user:', error);
@@ -320,17 +286,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         navigation.replace('Login');
       } else {
         Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
-        stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
       }
     }
-    // ไม่ต้อง setIsLoading(false) ที่นี่ เพราะจะให้ loadMessages ทำแทน
-  }, [updateProgress, navigation, stopLoading]);
+  }, [navigation]);
 
   const loadMessages = useCallback(async () => {
     let loadedMessages = [];
     try {
-      updateProgress(80); // 80% เมื่อเริ่มโหลดข้อความ
-      
       // เพิ่ม timeout สำหรับการโหลดข้อความ
       const loadingTimeout = setTimeout(() => {
         console.warn('⚠️ Message loading timeout - taking too long');
@@ -344,8 +306,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
           setTimeout(() => reject(new Error('Message loading timeout')), 10000)
         )
       ]);
-      
-      updateProgress(90); // 90% เมื่อได้ response
       
       clearTimeout(loadingTimeout);
       loadedMessages = response.data.messages || [];
@@ -407,26 +367,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
         setMessages([]);
       }
     } finally {
-      updateProgress(100); // 100% เมื่อเสร็จสิ้น
-      console.log('🔄 Stopping loading in loadMessages finally block');
-      // หยุด loading ทันทีไม่ต้องรอ
-      stopLoading(); // หยุด loading ทันที
+      console.log('✅ Messages loading completed');
       setLocalIsLoading(false); // หยุด local loading เป็น fallback
-      console.log('✅ Loading stopped successfully');
-      
-      // Force stop loading หลัง 100ms สำหรับ iOS
-      setTimeout(() => {
-        console.log('🔄 Force stopping all loading states');
-        stopLoading();
-        setLocalIsLoading(false);
-      }, 100);
-      
-      // Fallback: หยุด loading อีกครั้งหลัง 500ms เผื่อไม่ทำงาน
-      setTimeout(() => {
-        console.log('🔄 Final fallback stopLoading after 500ms');
-        stopLoading();
-        setLocalIsLoading(false);
-      }, 500);
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -595,9 +537,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false, // ปิด editing เพื่อให้เลือกได้ทันที
         quality: 0.8,
+        allowsMultipleSelection: false, // ยังเลือกได้ทีละรูป
+        selectionLimit: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -1406,24 +1349,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
     );
   }, [currentUser, recipientAvatar, recipientName, messages, showTimeForMessages, timeAnimations]);
 
-  // ฟังก์ชันแสดง loading content ในกรอบข้อความ - ปิดใช้งานทั้งหมดสำหรับ iOS
+  // ฟังก์ชันแสดงรายการข้อความ - ลบ loading ออกแล้ว
   const renderMessageLoadingContent = () => {
-    // แสดง loading เฉพาะเมื่อ localIsLoading เป็น true
-    if (localIsLoading) {
-      return (
-        <View style={styles.messageLoadingContainer}>
-          <InlineLoadingScreen
-            isVisible={true}
-            progress={progress}
-            title="LOADING"
-            subtitle="กรุณารอสักครู่"
-            backgroundColor="#F5C842"
-          />
-        </View>
-      );
-    }
-    
-    // แสดง FlatList เมื่อไม่ loading
+    // แสดง FlatList ทันทีโดยไม่มี loading
     return (
       <FlatList
         ref={flatListRef}
@@ -1457,7 +1385,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container}
+      className="flex-1 bg-white"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Loading overlay สำหรับการ scroll - ปิดการใช้งาน */}
@@ -1468,17 +1396,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </View>
       )} */}
       {/* Header */}
-      <View style={styles.header}>
+      <View className="flex-row items-center px-4 pt-12 pb-4 bg-white border-b border-gray-100">
         <TouchableOpacity 
           onPress={() => navigation.navigate('Chat', { 
             chatId: route.params?.returnChatId || route.params?.chatroomId 
           })}
-          style={styles.backButton}
+          className="p-2 mr-2"
         >
-          <Text style={styles.backIcon}>←</Text>
+          <Text className="text-lg text-blue-500">←</Text>
         </TouchableOpacity>
         
-        <View style={styles.headerInfo}>
+        <View className="flex-1 flex-row items-center">
           {recipientAvatar ? (
             <Image
               source={{ 
@@ -1486,33 +1414,33 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   ? recipientAvatar 
                   : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
               }}
-              style={styles.headerAvatar}
+              className="w-10 h-10 rounded-full mr-3"
               defaultSource={require('../../assets/default-avatar.png')}
             />
           ) : (
-            <View style={[styles.headerAvatar, styles.defaultAvatar]}>
-              <Text style={styles.headerAvatarText}>
+            <View className="w-10 h-10 rounded-full mr-3 bg-gray-200 justify-center items-center">
+              <Text className="text-base font-bold text-gray-600">
                 {recipientName?.charAt(0)?.toUpperCase() || '?'}
               </Text>
             </View>
           )}
           
-          <View style={styles.headerTextInfo}>
-            <Text style={styles.headerName}>
+          <View className="flex-1">
+            <Text className="text-lg font-bold text-black">
               {recipientName || roomName || 'แชทส่วนตัว'}
             </Text>
-            <Text style={styles.headerStatus}>ออนไลน์</Text>
+            <Text className="text-xs text-green-500">ออนไลน์</Text>
           </View>
         </View>
         
-        <View style={styles.headerActions}>
+        <View className="w-10">
           {/* สำหรับปุ่มเพิ่มเติมในอนาคต */}
         </View>
       </View>
 
       {/* รายการข้อความ */}
       <View 
-        style={styles.messagesListContainer}
+        className="flex-1 bg-white"
         onTouchStart={() => setShowAttachmentMenu(false)}
         pointerEvents="auto"
       >
@@ -1879,20 +1807,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', // กล่องข้อความเป็นสีขาว
     flexShrink: 1, // ให้กล่องสามารถหดได้ตามเนื้อหา
     alignSelf: 'flex-start', // ให้กล่องปรับขนาดตามเนื้อหา
+    // เพิ่ม shadow สำหรับกล่องข้อความทั้งหมด
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2
   },
   myMessageBubble: {
-    backgroundColor: '#fff', // ข้อความของตัวเองก็เป็นสีขาว
+    backgroundColor: '#007AFF', // เปลี่ยนข้อความของตัวเองเป็นสีน้ำเงิน
     borderBottomRightRadius: 12, // ปรับให้สม่ำเสมอ
     alignSelf: 'flex-end', // ให้ข้อความของตัวเองชิดขวา
   },
   otherMessageBubble: {
     backgroundColor: '#fff',
     borderBottomLeftRadius: 12, // ปรับให้สม่ำเสมอ
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
+    marginLeft: 10, // เพิ่ม margin ซ้าย 10px สำหรับข้อความจากผู้อื่น
   },
   messageText: {
     fontSize: 16,
@@ -1902,7 +1832,7 @@ const styles = StyleSheet.create({
     flexShrink: 1, // ให้ข้อความปรับขนาดได้
   },
   myMessageText: {
-    color: '#333' // เปลี่ยนเป็นสีเทาเข้ม เพราะพื้นหลังเป็นสีขาว
+    color: '#fff' // เปลี่ยนเป็นสีขาว เพราะพื้นหลังเป็นสีน้ำเงิน
   },
   otherMessageText: {
     color: '#333'

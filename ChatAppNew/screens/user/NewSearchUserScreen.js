@@ -18,7 +18,7 @@ import { searchUsers, createPrivateChat } from '../../service/api';
 import { useAuth } from '../../context/AuthContext';
 import api, { API_URL } from '../../service/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import LoadingModal from '../../components/LoadingModal';
+// Removed loading import - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const NewSearchUserScreen = ({ navigation }) => {
@@ -452,11 +452,7 @@ const NewSearchUserScreen = ({ navigation }) => {
         </SafeAreaView>
       </Modal>
 
-      <LoadingModal
-        visible={chatCreationLoading}
-        message="กำลังสร้างแชท"
-        progress={chatCreationProgress}
-      />
+      {/* Removed LoadingModal - no longer using loading functionality */}
     </View>
   );
 };

@@ -12,8 +12,7 @@ import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
-import InlineLoadingScreen from '../../components/InlineLoadingScreen';
-import useProgressLoading from '../../hooks/useProgressLoading';
+// Removed loading imports - no longer using loading functionality
 import NotificationService from '../../service/notificationService';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
@@ -31,7 +30,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
-  const { isLoading, progress, startLoading, updateProgress, stopLoading } = useProgressLoading();
+  // Removed loading hook - no longer using loading functionality
   const [selectedModalImage, setSelectedModalImage] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);

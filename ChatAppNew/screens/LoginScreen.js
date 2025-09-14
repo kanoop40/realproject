@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   Alert,
   ActivityIndicator
 } from 'react-native';
@@ -12,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login } from '../service/api';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
+// Removed styles import - now using Tailwind CSS
 
 const LoginScreen = ({ navigation }) => {
   const { login: authLogin } = useAuth();
@@ -58,23 +57,29 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>เข้าสู่ระบบ</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Text style={{ fontSize: 30, fontWeight: 'bold', textAlign: 'center', color: '#000000', marginBottom: 32 }}>
+          เข้าสู่ระบบ
+        </Text>
 
-      
-       
-        
-        
         {error ? (
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
         ) : null}
 
-        <View style={styles.form}>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.label}>ชื่อผู้ใช้</Text>
+        <View style={{ gap: 16 }}>
+          <View>
+            <Text style={{ color: '#374151', fontWeight: '500', marginBottom: 8 }}>ชื่อผู้ใช้</Text>
             <TextInput
-              style={styles.input}
+              style={{ 
+                borderWidth: 1, 
+                borderColor: '#d1d5db', 
+                borderRadius: 8, 
+                paddingHorizontal: 16, 
+                paddingVertical: 12, 
+                fontSize: 16, 
+                backgroundColor: '#ffffff' 
+              }}
               placeholder="กรอกชื่อผู้ใช้"
               value={username}
               onChangeText={(text) => {
@@ -86,10 +91,18 @@ const LoginScreen = ({ navigation }) => {
             />
           </View>
 
-          <View style={styles.inputWrapper}>
-            <Text style={styles.label}>รหัสผ่าน</Text>
+          <View>
+            <Text style={{ color: '#374151', fontWeight: '500', marginBottom: 8 }}>รหัสผ่าน</Text>
             <TextInput
-              style={styles.input}
+              style={{ 
+                borderWidth: 1, 
+                borderColor: '#d1d5db', 
+                borderRadius: 8, 
+                paddingHorizontal: 16, 
+                paddingVertical: 12, 
+                fontSize: 16, 
+                backgroundColor: '#ffffff' 
+              }}
               placeholder="กรอกรหัสผ่าน"
               value={password}
               onChangeText={(text) => {
@@ -102,14 +115,21 @@ const LoginScreen = ({ navigation }) => {
           </View>
 
           <TouchableOpacity 
-            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+            style={{ 
+              paddingVertical: 16, 
+              borderRadius: 8, 
+              marginTop: 24, 
+              backgroundColor: isLoading ? '#9ca3af' : '#3b82f6' 
+            }}
             onPress={handleLogin}
             disabled={isLoading}
           >
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginButtonText}>เข้าสู่ระบบ</Text>
+              <Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 18, fontWeight: '600' }}>
+                เข้าสู่ระบบ
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -118,87 +138,6 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background
-  },
-  content: {
-    flex: 1,
-    padding: SPACING.lg,
-    justifyContent: 'center'
-  },
-  title: {
-    fontSize: TYPOGRAPHY.fontSize['2xl'],
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: SPACING.xl,
-    color: COLORS.textPrimary
-  },
-  form: {
-    width: '100%'
-  },
-  inputWrapper: {
-    marginBottom: SPACING.lg
-  },
-  label: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    marginBottom: SPACING.xs,
-    color: COLORS.textPrimary,
-    fontWeight: '500'
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
-    padding: SPACING.sm + 4,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    backgroundColor: COLORS.background,
-    color: COLORS.textPrimary
-  },
-  loginButton: {
-    backgroundColor: COLORS.primary,
-    padding: SPACING.md,
-    borderRadius: RADIUS.sm,
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-    ...SHADOWS.md
-  },
-  loginButtonDisabled: {
-    opacity: 0.6
-  },
-  loginButtonText: {
-    color: COLORS.textInverse,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: 'bold'
-  },
-  testButton: {
-    backgroundColor: COLORS.success,
-    padding: SPACING.sm + 2,
-    borderRadius: RADIUS.sm,
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-    ...SHADOWS.sm
-  },
-  testButtonText: {
-    color: COLORS.textInverse,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: 'bold'
-  },
-  debugButton: {
-    backgroundColor: COLORS.warning,
-    padding: SPACING.sm + 2,
-    borderRadius: RADIUS.sm,
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-    ...SHADOWS.sm
-  },
-  errorText: {
-    color: COLORS.error,
-    textAlign: 'center',
-    marginBottom: SPACING.sm + 2,
-    fontSize: TYPOGRAPHY.fontSize.sm
-  }
-});
+// Removed StyleSheet - now using Tailwind CSS classes
 
 export default LoginScreen;
