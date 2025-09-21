@@ -17,6 +17,7 @@ import {
   Animated,
   Dimensions
 } from 'react-native';
+import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -372,7 +373,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   }, [chatroomId, currentUser, socket]);
 
   const sendMessage = async () => {
-    if ((!newMessage.trim() && !selectedFile && !selectedImage) || !chatroomId || isSending) return;
+    if ((!newMessage.trim() && !selectedFile) || !chatroomId || isSending) return;
 
     setIsSending(true);
     const messageToSend = newMessage.trim();
@@ -382,10 +383,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     let messageType = 'text';
     let displayContent = messageToSend;
     
-    if (selectedImage) {
-      messageType = 'image';
-      displayContent = displayContent || 'รูปภาพ';
-    } else if (selectedFile) {
+    if (selectedFile) {
       messageType = 'file';
       displayContent = displayContent || 'ไฟล์แนบ';
     }
@@ -402,12 +400,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         url: selectedFile.uri,
         size: selectedFile.size || selectedFile.fileSize
       } : null,
-      image: selectedImage ? {
-        file_name: selectedImage.fileName || 'image.jpg',
-        file_path: selectedImage.uri,
-        uri: selectedImage.uri,
-        size: selectedImage.fileSize
-      } : null,
+
       user_id: currentUser,
       isOptimistic: true // ใช้เพื่อระบุว่าเป็นข้อความชั่วคราว
     };
@@ -423,23 +416,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     setNewMessage('');
     const fileToSend = selectedFile;
-    const imageToSend = selectedImage;
     setSelectedFile(null);
-    setSelectedImage(null);
 
     try {
       const formData = new FormData();
       
-      // ส่งข้อความ หรือ default text สำหรับรูป/ไฟล์
-      const contentToSend = messageToSend || (imageToSend ? 'รูปภาพ' : (fileToSend ? 'ไฟล์แนบ' : ''));
+      // ส่งข้อความ หรือ default text สำหรับไฟล์
+      const contentToSend = messageToSend || (fileToSend ? 'ไฟล์แนบ' : '');
       formData.append('content', contentToSend);
       
-      if (imageToSend) {
-        console.log('📷 Sending image:', imageToSend);
+      if (fileToSend) {
+        console.log('� Sending file:', fileToSend);
         formData.append('file', {
-          uri: imageToSend.uri,
-          type: imageToSend.mimeType || 'image/jpeg',
-          name: imageToSend.fileName || `image_${Date.now()}.jpg`
+          uri: fileToSend.uri,
+          type: fileToSend.mimeType || 'application/octet-stream',
+          name: fileToSend.name || `file_${Date.now()}.txt`
         });
       } else if (fileToSend) {
         console.log('📎 Sending file:', fileToSend);
@@ -486,7 +477,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       setMessages(prev => prev.filter(msg => msg._id !== tempId));
       setNewMessage(messageToSend); // คืนข้อความ
       setSelectedFile(fileToSend); // คืนไฟล์
-      setSelectedImage(imageToSend); // คืนรูปภาพ
+
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งข้อความได้');
     } finally {
       setIsSending(false);
@@ -543,7 +534,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setSelectedImage(result.assets[0]);
+        // ส่งรูปภาพทันทีโดยไม่ต้องแสดงตัวอย่าง
+        await sendImageDirectly(result.assets[0]);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -553,6 +545,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const removeSelectedImage = () => {
     setSelectedImage(null);
+  };
+
+  // ฟังก์ชันส่งรูปภาพทันที
+  const sendImageDirectly = async (imageAsset) => {
+    if (!chatroomId || isSending) return;
+    
+    try {
+      setIsSending(true);
+      
+      const formData = new FormData();
+      formData.append('chatroomId', chatroomId);
+      formData.append('senderId', currentUser._id);
+      formData.append('messageType', 'image');
+      formData.append('message', ''); // ข้อความว่าง
+      
+      formData.append('image', {
+        uri: imageAsset.uri,
+        type: imageAsset.mimeType || 'image/jpeg',
+        name: imageAsset.fileName || 'image.jpg',
+      });
+
+      const response = await api.post('/chatrooms/send-message', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data && response.data.success) {
+        // ปิดเมนูแนบไฟล์
+        setShowAttachmentMenu(false);
+      }
+    } catch (error) {
+      console.error('Error sending image:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งรูปภาพได้');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const formatTime = (timestamp) => {
@@ -1517,61 +1546,150 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       {/* Input สำหรับพิมพ์ข้อความ */}
       <View style={styles.inputContainer}>
-        {/* แสดงรูปภาพที่เลือก */}
-        {selectedImage && (
-          <View style={styles.selectedImageContainer}>
-            <View style={styles.imagePreview}>
-              <Image
-                source={{ uri: selectedImage.uri }}
-                style={styles.previewImage}
-                resizeMode="cover"
-              />
-            </View>
-            <TouchableOpacity 
-              onPress={removeSelectedImage}
-              style={styles.removeImageButton}
-            >
-              <Text style={styles.removeImageText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* แสดงไฟล์ที่เลือก */}
+        {/* แสดงไฟล์/รูปภาพที่เลือก แบบ Telegram */}
         {selectedFile && (
-          <View style={styles.selectedFileContainer}>
-            <View style={styles.fileInfo}>
-              <Text style={styles.attachIcon}>📎</Text>
-              <Text style={styles.fileName} numberOfLines={1}>
-                {selectedFile.name || selectedFile.fileName || 'ไฟล์ที่เลือก'}
-              </Text>
+          <View style={{
+            backgroundColor: '#f8f9fa',
+            borderRadius: 12,
+            margin: 12,
+            padding: 12,
+            borderLeftWidth: 3,
+            borderLeftColor: '#3b82f6',
+            ...SHADOWS.small
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <>
+                    <View style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 8,
+                      backgroundColor: '#e2e8f0',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12
+                    }}>
+                      <Text style={{ fontSize: 24 }}>📎</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        fontSize: 16,
+                        fontWeight: '600',
+                        color: '#1e293b',
+                        marginBottom: 2
+                      }}>
+                        � ไฟล์แนบ
+                      </Text>
+                      <Text style={{
+                        fontSize: 14,
+                        color: '#64748b'
+                      }} numberOfLines={1}>
+                        {selectedFile.name || selectedFile.fileName || 'ไฟล์ที่เลือก'} • {selectedFile.size ? Math.round(selectedFile.size / 1024) + ' KB' : ''}
+                      </Text>
+                    </View>
+                  </>
+
+              </View>
+              
+              <TouchableOpacity 
+                onPress={removeSelectedFile}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: '#ef4444',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>×</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              onPress={removeSelectedFile}
-              style={styles.removeFileButton}
-            >
-              <Text style={styles.closeIcon}>✕</Text>
-            </TouchableOpacity>
           </View>
         )}
         
-        {/* Attachment Menu */}
+        {/* Attachment Menu - Telegram Style */}
         {showAttachmentMenu && (
-          <View style={styles.attachmentMenu}>
-            <TouchableOpacity
-              style={styles.attachmentMenuItem}
-              onPress={pickImage}
-            >
-              <Text style={styles.attachmentMenuIcon}>🖼️</Text>
-              <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.attachmentMenuItem}
-              onPress={pickFile}
-            >
-              <Text style={styles.attachmentMenuIcon}>📎</Text>
-              <Text style={styles.attachmentMenuText}>ไฟล์</Text>
-            </TouchableOpacity>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            marginHorizontal: 12,
+            marginBottom: 8,
+            paddingVertical: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 8,
+            borderWidth: 1,
+            borderColor: '#e2e8f0'
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+              <TouchableOpacity
+                style={{
+                  alignItems: 'center',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: '#f1f5f9',
+                  minWidth: 80
+                }}
+                onPress={pickImage}
+              >
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#10b981',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8
+                }}>
+                  <Text style={{ fontSize: 24 }}>🖼️</Text>
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  textAlign: 'center'
+                }}>รูปภาพ</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{
+                  alignItems: 'center',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: '#f1f5f9',
+                  minWidth: 80
+                }}
+                onPress={pickFile}
+              >
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#3b82f6',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8
+                }}>
+                  <Text style={{ fontSize: 24 }}>📎</Text>
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  textAlign: 'center'
+                }}>ไฟล์</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         
@@ -1601,50 +1719,72 @@ const PrivateChatScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={styles.sendTextButton}
             onPress={sendMessage}
-            disabled={(!newMessage.trim() && !selectedFile && !selectedImage) || isSending}
+            disabled={(!newMessage.trim() && !selectedFile) || isSending}
           >
             <Text style={styles.sendTextLabel}>ส่ง</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Image Modal */}
+      {/* Image Zoom Modal */}
       <Modal
         visible={imageModalVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setImageModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <TouchableOpacity 
-            style={styles.modalCloseArea}
-            onPress={() => setImageModalVisible(false)}
-          >
-            <View style={styles.modalContent}>
+        <ImageViewer
+          imageUrls={selectedModalImage ? [{ url: selectedModalImage }] : []}
+          index={0}
+          onCancel={() => setImageModalVisible(false)}
+          enableSwipeDown={true}
+          renderHeader={() => (
+            <View style={{
+              position: 'absolute',
+              top: 50,
+              left: 0,
+              right: 0,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              zIndex: 999
+            }}>
               <TouchableOpacity 
-                style={styles.modalCloseButton}
-                onPress={() => setImageModalVisible(false)}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-              
-              {selectedModalImage && (
-                <Image
-                  source={{ uri: selectedModalImage }}
-                  style={styles.modalImage}
-                  resizeMode="contain"
-                />
-              )}
-              
-              <TouchableOpacity 
-                style={styles.modalDownloadButton}
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center'
+                }}
                 onPress={downloadImageFromModal}
               >
-                <Text style={styles.modalDownloadText}>📥 ดาวน์โหลด</Text>
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>📥 ดาวน์โหลด</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={() => setImageModalVisible(false)}
+                style={{
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 20,
+                  padding: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>✕</Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </View>
+          )}
+          renderFooter={() => null}
+          backgroundColor="rgba(0,0,0,0.9)"
+          enablePreload={true}
+          saveToLocalByLongPress={false}
+          menuContext={{
+            saveToLocal: 'บันทึกรูปภาพ',
+            cancel: 'ยกเลิก'
+          }}
+        />
       </Modal>
 
       {/* Modal แก้ไขข้อความ */}

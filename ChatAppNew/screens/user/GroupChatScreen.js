@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
   Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated
 } from 'react-native';
+import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -569,11 +570,12 @@ const GroupChatScreen = ({ route, navigation }) => {
         }
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
+          allowsEditing: false,
           quality: 0.8,
         });
         if (!result.canceled && result.assets[0]) {
-          setSelectedImage(result.assets[0]);
+          // ส่งรูปภาพทันทีโดยไม่ต้องแสดงตัวอย่าง
+          await sendImageDirectly(result.assets[0]);
         }
       } else {
         const result = await DocumentPicker.getDocumentAsync({
@@ -589,6 +591,44 @@ const GroupChatScreen = ({ route, navigation }) => {
     } catch (error) {
       console.error('Error picking file:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเลือกไฟล์ได้');
+    }
+  };
+
+  // ฟังก์ชันส่งรูปภาพทันที
+  const sendImageDirectly = async (imageAsset) => {
+    if (!groupData?._id || isSending) return;
+    
+    try {
+      setIsSending(true);
+      
+      const formData = new FormData();
+      formData.append('groupId', groupData._id);
+      formData.append('senderId', authUser._id);
+      formData.append('content', ''); // ข้อความว่าง
+      formData.append('messageType', 'image');
+      
+      formData.append('file', {
+        uri: imageAsset.uri,
+        type: imageAsset.mimeType || 'image/jpeg',
+        name: imageAsset.fileName || 'image.jpg',
+      });
+
+      const response = await api.post('/groups/send-message', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data && response.data.success) {
+        console.log('✅ Image sent successfully');
+        // ปิดเมนูแนบไฟล์
+        setShowAttachmentMenu(false);
+      }
+    } catch (error) {
+      console.error('Error sending image:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งรูปภาพได้');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -1798,101 +1838,152 @@ const GroupChatScreen = ({ route, navigation }) => {
         shadowRadius: 3,
         elevation: 2
       }}>
-        {/* Attachment Menu */}
+        {/* Attachment Menu - Telegram Style */}
         {showAttachmentMenu && (
           <View style={{
             position: 'absolute',
             bottom: 80,
             left: 20,
-            backgroundColor: '#ffffff',
+            right: 20,
+            backgroundColor: 'white',
             borderRadius: 16,
-            padding: 8,
+            paddingVertical: 12,
             shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
+            shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.15,
             shadowRadius: 8,
-            elevation: 6,
+            elevation: 8,
             zIndex: 1000,
             borderWidth: 1,
-            borderColor: '#f1f5f9'
+            borderColor: '#e2e8f0'
           }}>
-            <TouchableOpacity 
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 14,
-                paddingHorizontal: 18,
-                minWidth: 140,
-                borderRadius: 12,
-                marginVertical: 2
-              }} 
-              onPress={() => pickFile(true)}
-            >
-              <Text style={{
-                fontSize: 20,
-                marginRight: 14,
-              }}>🖼️</Text>
-              <Text style={{
-                fontSize: 16,
-                color: '#1f2937',
-                fontWeight: '500'
-              }}>รูปภาพ</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 14,
-                paddingHorizontal: 18,
-                minWidth: 140,
-                borderRadius: 12,
-                marginVertical: 2
-              }} 
-              onPress={() => pickFile(false)}
-            >
-              <Text style={{
-                fontSize: 20,
-                marginRight: 14,
-              }}>📄</Text>
-              <Text style={{
-                fontSize: 16,
-                color: '#1f2937',
-                fontWeight: '500'
-              }}>ไฟล์</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+              <TouchableOpacity
+                style={{
+                  alignItems: 'center',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: '#f1f5f9',
+                  minWidth: 80
+                }}
+                onPress={() => pickFile(true)}
+              >
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#10b981',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8
+                }}>
+                  <Text style={{ fontSize: 24 }}>🖼️</Text>
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  textAlign: 'center'
+                }}>รูปภาพ</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{
+                  alignItems: 'center',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: '#f1f5f9',
+                  minWidth: 80
+                }}
+                onPress={() => pickFile(false)}
+              >
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#3b82f6',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8
+                }}>
+                  <Text style={{ fontSize: 24 }}>�</Text>
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  textAlign: 'center'
+                }}>ไฟล์</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         
         {/* Selected File/Image Preview */}
-        {(selectedFile || selectedImage) && (
+        {selectedFile && (
           <View style={{
-            backgroundColor: '#f1f5f9',
-            padding: 12,
+            backgroundColor: '#f8f9fa',
             borderRadius: 12,
-            marginBottom: 12,
-            borderWidth: 1,
-            borderColor: '#e2e8f0'
+            margin: 12,
+            padding: 12,
+            borderLeftWidth: 3,
+            borderLeftColor: '#3b82f6',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+            elevation: 2
           }}>
-            <View style={styles.selectedFile}>
-              {selectedImage && (
-                <Image source={{ uri: selectedImage.uri }} style={styles.selectedImagePreview} />
-              )}
-              <View style={styles.selectedFileIcon}>
-                <Text style={styles.selectedFileIconText}>{selectedImage ? '🖼️' : '📄'}</Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <View style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: 8,
+                  backgroundColor: '#e2e8f0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12
+                }}>
+                  <Text style={{ fontSize: 24 }}>📎</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#1e293b',
+                    marginBottom: 2
+                  }}>
+                    📄 ไฟล์แนบ
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    color: '#64748b'
+                  }} numberOfLines={1}>
+                    {selectedFile.name || selectedFile.fileName || 'ไฟล์ที่เลือก'} • {selectedFile.size ? Math.round(selectedFile.size / 1024) + ' KB' : ''}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.selectedFileInfo}>
-                <Text style={styles.selectedFileName} numberOfLines={1}>
-                  {selectedImage?.fileName || selectedFile?.name || selectedFile?.fileName || 'ไฟล์ที่เลือก'}
-                </Text>
-                <Text style={styles.selectedFileSize}>
-                  {formatFileSize(selectedImage?.fileSize || selectedFile?.size)}
-                </Text>
-              </View>
+              
               <TouchableOpacity 
-                style={styles.removeSelectedFile}
-                onPress={() => { setSelectedFile(null); setSelectedImage(null); }}
+                onPress={() => { setSelectedFile(null); }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: '#ef4444',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: 8
+                }}
               >
-                <Text style={styles.removeSelectedFileText}>✕</Text>
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>×</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2029,36 +2120,65 @@ const GroupChatScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Image Modal */}
-      <Modal visible={imageModalVisible} transparent>
-        <View style={styles.imageModalContainer}>
-          <TouchableOpacity 
-            style={styles.imageModalBackground}
-            onPress={() => setImageModalVisible(false)}
-          >
-            <View style={styles.imageModalContent}>
-              <Image
-                source={{ uri: selectedModalImage }}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-              <View style={styles.imageModalButtons}>
-                <TouchableOpacity
-                  style={styles.downloadButton}
-                  onPress={() => downloadFile(selectedModalImage, `image_${Date.now()}.jpg`)}
-                >
-                  <Text style={styles.downloadButtonText}>💾 บันทึก</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.closeImageModalButton}
-                  onPress={() => setImageModalVisible(false)}
-                >
-                  <Text style={styles.closeImageModalButtonText}>✕ ปิด</Text>
-                </TouchableOpacity>
-              </View>
+      {/* Image Zoom Modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <ImageViewer
+          imageUrls={selectedModalImage ? [{ url: selectedModalImage }] : []}
+          index={0}
+          onCancel={() => setImageModalVisible(false)}
+          enableSwipeDown={true}
+          renderHeader={() => (
+            <View style={{
+              position: 'absolute',
+              top: 50,
+              left: 0,
+              right: 0,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              zIndex: 999
+            }}>
+              <TouchableOpacity 
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center'
+                }}
+                onPress={() => downloadFile(selectedModalImage, `image_${Date.now()}.jpg`)}
+              >
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>📥 ดาวน์โหลด</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={() => setImageModalVisible(false)}
+                style={{
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 20,
+                  padding: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>✕</Text>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </View>
+          )}
+          renderFooter={() => null}
+          backgroundColor="rgba(0,0,0,0.9)"
+          enablePreload={true}
+          saveToLocalByLongPress={false}
+          menuContext={{
+            saveToLocal: 'บันทึกรูปภาพ',
+            cancel: 'ยกเลิก'
+          }}
+        />
       </Modal>
 
       {/* Modal แก้ไขข้อความ */}
