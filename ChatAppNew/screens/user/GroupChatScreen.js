@@ -57,7 +57,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (showInitialLoading || fromCreate) {
       console.log('🔄 Starting initial loading for iOS from group creation');
-      startLoading();
+      // Loading functionality removed
     }
   }, [showInitialLoading, fromCreate]);
 
@@ -173,7 +173,7 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   // เพิ่ม useEffect เพื่อ force scroll หลังจาก component mount และมีข้อความ
   useEffect(() => {
-    if (messages.length > 0 && !isLoading) {
+    if (messages.length > 0) {
       // รอ 1 วินาทีแล้วลอง scroll อีกครั้ง ในกรณีที่ useEffect อื่นไม่ทำงาน
       const finalScrollTimeout = setTimeout(() => {
         console.log('🎯 Final attempt to scroll to end:', messages.length);
@@ -190,7 +190,7 @@ const GroupChatScreen = ({ route, navigation }) => {
       
       return () => clearTimeout(finalScrollTimeout);
     }
-  }, [messages.length, isLoading]);
+  }, [messages.length]);
 
   useEffect(() => {
     console.log('🔍 Socket useEffect triggered');
@@ -373,24 +373,18 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   const loadGroupData = async () => {
     try {
-      startLoading();
       // setIsScrollingToEnd(true);
-      updateProgress(10); // เริ่มต้น 10%
       
-      updateProgress(30); // 30% เมื่อเริ่มโหลด
       const [messagesRes, groupRes] = await Promise.all([
         api.get(`/groups/${groupId}/messages`),
         api.get(`/groups/${groupId}`)
       ]);
       
-      updateProgress(70); // 70% เมื่อได้ข้อมูล
       console.log('📨 Group messages loaded:', messagesRes.data);
       console.log('👥 Group info loaded:', groupRes.data);
       
       const loadedMessages = messagesRes.data.data || messagesRes.data.messages || [];
       const groupData = groupRes.data.data || groupRes.data;
-      
-      updateProgress(85); // 85% เมื่อประมวลผลข้อมูล
       
       if (loadedMessages.length === 0) {
         console.log('📨 No messages found - this is a new group chat');
@@ -412,8 +406,6 @@ const GroupChatScreen = ({ route, navigation }) => {
       }
       console.log('📨 Messages set, total:', loadedMessages.length);
       setGroupInfo(groupData);
-      
-      updateProgress(95); // 95% เมื่อเซ็ตข้อมูลเสร็จ
       
       // แปลงข้อมูลสมาชิกให้ถูกต้อง
       const members = groupData.members || [];
@@ -437,10 +429,6 @@ const GroupChatScreen = ({ route, navigation }) => {
     } catch (error) {
       console.error('Error loading group data:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลกลุ่มได้');
-      stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
-    } finally {
-      updateProgress(100); // 100% เมื่อเสร็จสิ้น
-      stopLoading(500); // หยุด loading หลัง 500ms
     }
   };
 
@@ -1030,9 +1018,32 @@ const GroupChatScreen = ({ route, navigation }) => {
     // ข้อความระบบ (เช่น การเข้าร่วมกลุ่ม)
     if (item.messageType === 'system') {
       return (
-        <View style={styles.systemMessageContainer}>
-          <Text style={styles.systemMessageText}>{item.content}</Text>
-          <Text style={styles.systemMessageTime}>{formatDateTime(item.timestamp || item.time)}</Text>
+        <View style={{
+          backgroundColor: '#f1f5f9',
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          marginVertical: 8,
+          marginHorizontal: 40,
+          borderRadius: 16,
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 2,
+          elevation: 1,
+        }}>
+          <Text style={{
+            fontSize: 13,
+            color: '#64748b',
+            textAlign: 'center',
+            fontWeight: '500',
+          }}>{item.content}</Text>
+          <Text style={{
+            fontSize: 11,
+            color: '#94a3b8',
+            textAlign: 'center',
+            marginTop: 2,
+          }}>{formatDateTime(item.timestamp || item.time)}</Text>
         </View>
       );
     }
@@ -1060,14 +1071,30 @@ const GroupChatScreen = ({ route, navigation }) => {
     return (
       <View>
         {showDate && (
-          <View style={styles.dateContainer}>
-            <Text style={styles.dateText}>{formatDate(item.timestamp)}</Text>
+          <View style={{
+            alignItems: 'center',
+            marginVertical: 10,
+          }}>
+            <Text style={{
+              fontSize: 12,
+              color: '#64748b',
+              backgroundColor: '#f1f5f9',
+              paddingVertical: 4,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              overflow: 'hidden',
+            }}>{formatDate(item.timestamp)}</Text>
           </View>
         )}
         
-        <View style={[styles.messageContainer, isMyMessage ? styles.myMessage : styles.otherMessage]}>
+        <View style={{
+          flexDirection: 'row',
+          marginBottom: 16,
+          alignItems: 'flex-end',
+          justifyContent: isMyMessage ? 'flex-end' : 'flex-start',
+        }}>
           {!isMyMessage && (
-            <View style={styles.messageAvatarContainer}>
+            <View style={{ marginRight: 8 }}>
               <Image
                 source={{
                   uri: item.sender?.avatar?.startsWith('http') 
@@ -1076,15 +1103,24 @@ const GroupChatScreen = ({ route, navigation }) => {
                       ? `${API_URL}${item.sender.avatar}`
                       : 'https://via.placeholder.com/32'
                 }}
-                style={styles.messageAvatar}
+                style={{ width: 32, height: 32, borderRadius: 16 }}
                 defaultSource={require('../../assets/default-avatar.png')}
               />
             </View>
           )}
           
-          <View style={[styles.messageContentContainer, isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
+          <View style={{
+            maxWidth: '85%',
+            alignItems: isMyMessage ? 'flex-end' : 'flex-start',
+          }}>
             {!isMyMessage && (
-              <Text style={styles.senderName}>
+              <Text style={{
+                fontSize: 12,
+                color: '#666',
+                fontWeight: '500',
+                marginBottom: 2,
+                marginLeft: 4,
+              }}>
                 {item.sender?.firstName} {item.sender?.lastName}
               </Text>
             )}
@@ -1093,7 +1129,13 @@ const GroupChatScreen = ({ route, navigation }) => {
             {(item.messageType === 'image' || item.fileUrl?.match(/\.(jpg|jpeg|png|gif)$/i)) && (
               <View>
                 <TouchableOpacity
-                  style={[styles.imageMessageBubble, isMyMessage ? styles.myImageBubble : styles.otherImageBubble]}
+                  style={{
+                    padding: 4,
+                    borderRadius: 18,
+                    marginBottom: 4,
+                    backgroundColor: 'transparent',
+                    alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+                  }}
                   onPress={() => {
                     const imageUri = item.fileUrl;
                     setSelectedModalImage(imageUri?.startsWith('http') ? imageUri : `${API_URL}${imageUri}`);
@@ -1107,14 +1149,24 @@ const GroupChatScreen = ({ route, navigation }) => {
                         return imageUri?.startsWith('http') ? imageUri : `${API_URL}${imageUri}`;
                       })()
                     }}
-                    style={styles.messageImage}
+                    style={{ width: 200, height: 150, borderRadius: 8, marginBottom: 5 }}
                     resizeMode="cover"
                   />
                   
                   {/* ปุ่มลบรูปภาพ - แสดงเฉพาะผู้ส่ง */}
                   {isMyMessage && (
                     <TouchableOpacity
-                      style={styles.deleteImageButton}
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 12,
+                        width: 24,
+                        height: 24,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
                       onPress={() => {
                         Alert.alert(
                           'ลบรูปภาพ',
@@ -1130,7 +1182,12 @@ const GroupChatScreen = ({ route, navigation }) => {
                         );
                       }}
                     >
-                      <Text style={styles.deleteButtonText}>×</Text>
+                      <Text style={{
+                        color: 'white',
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        lineHeight: 16,
+                      }}>×</Text>
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
@@ -1138,38 +1195,44 @@ const GroupChatScreen = ({ route, navigation }) => {
                 {/* วันเวลาอยู่ข้างล่างรูปภาพ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
                 {(showTime || showTimeForMessages.has(item._id)) && (
                   <Animated.View
-                    style={[
-                      styles.messageTimeBottomContainer,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
-                      {
-                        opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-                        maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
-                          (timeAnimations[item._id]).interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 30]
-                          }) : 0)
-                      }
-                    ]}
+                    style={{
+                      alignItems: 'flex-start',
+                      marginTop: 4,
+                      paddingHorizontal: 5,
+                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
+                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+                        (timeAnimations[item._id]).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 30]
+                        }) : 0)
+                    }}
                   >
-                    <Text style={[
-                      styles.messageTimeBottom,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
-                    ]}>
+                    <Text style={{
+                      fontSize: 10,
+                      color: '#666',
+                      lineHeight: 12,
+                      textAlign: 'left',
+                    }}>
                       {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
                     </Text>
                     {/* สถานะอ่าน/ไม่อ่าน สำหรับข้อความของตัวเอง - รูปภาพ */}
                     {isMyMessage && !item.isTemporary && (
-                      <View style={styles.readStatusContainer}>
-                        <Text style={[
-                          styles.readStatusIcon,
-                          getGroupReadStatus(item).isRead ? styles.readStatusIconRead : styles.readStatusIconSent
-                        ]}>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginTop: 2,
+                      }}>
+                        <Text style={{
+                          fontSize: 10,
+                          color: getGroupReadStatus(item).isRead ? '#10b981' : '#64748b',
+                          marginRight: 4,
+                        }}>
                           {getGroupReadStatus(item).isRead ? '✓✓' : '✓'}
                         </Text>
-                        <Text style={[
-                          styles.readStatusBottom,
-                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
-                        ]}>
+                        <Text style={{
+                          fontSize: 9,
+                          color: '#666',
+                        }}>
                           {getGroupReadStatus(item).text}
                         </Text>
                       </View>
@@ -1183,18 +1246,50 @@ const GroupChatScreen = ({ route, navigation }) => {
             {item.messageType === 'file' && !item.fileUrl?.match(/\.(jpg|jpeg|png|gif)$/i) && (
               <View>
                 <TouchableOpacity
-                  style={[styles.fileMessageBubble, isMyMessage ? styles.myFileBubble : styles.otherFileBubble]}
+                  style={{
+                    padding: 8,
+                    borderRadius: 18,
+                    marginBottom: 4,
+                    maxWidth: 250,
+                    backgroundColor: isMyMessage ? '#007AFF' : '#f1f5f9',
+                    alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+                  }}
                   onPress={() => downloadFile(item.fileUrl, item.fileName)}
                 >
-                  <View style={styles.fileAttachment}>
-                    <View style={styles.fileIcon}>
-                      <Text style={styles.fileIconText}>📄</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: 'transparent',
+                  }}>
+                    <View style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 8,
+                      backgroundColor: isMyMessage ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Text style={{
+                        fontSize: 16,
+                      }}>📄</Text>
                     </View>
-                    <View style={styles.fileInfo}>
-                      <Text style={[styles.fileName, { color: isMyMessage ? "#fff" : "#333" }]} numberOfLines={1}>
+                    <View style={{
+                      flex: 1,
+                      justifyContent: 'center',
+                    }}>
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '500',
+                        color: isMyMessage ? "#fff" : "#333",
+                        marginBottom: 2,
+                      }} numberOfLines={1}>
                         {item.fileName || 'ไฟล์แนบ'}
                       </Text>
-                      <Text style={[styles.fileSize, { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }]}>
+                      <Text style={{
+                        fontSize: 12,
+                        color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666",
+                      }}>
                         {formatFileSize(item.fileSize)}
                       </Text>
                     </View>
@@ -1202,7 +1297,17 @@ const GroupChatScreen = ({ route, navigation }) => {
                     {/* ปุ่มลบไฟล์ - แสดงเฉพาะผู้ส่ง */}
                     {isMyMessage && (
                       <TouchableOpacity
-                        style={styles.deleteFileButton}
+                        style={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          backgroundColor: '#ef4444',
+                          borderRadius: 12,
+                          width: 24,
+                          height: 24,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
                         onPress={() => {
                           Alert.alert(
                             'ลบไฟล์',
@@ -1218,7 +1323,12 @@ const GroupChatScreen = ({ route, navigation }) => {
                           );
                         }}
                       >
-                        <Text style={styles.deleteButtonText}>×</Text>
+                        <Text style={{
+                          color: 'white',
+                          fontSize: 14,
+                          fontWeight: 'bold',
+                          lineHeight: 14,
+                        }}>×</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1227,38 +1337,44 @@ const GroupChatScreen = ({ route, navigation }) => {
                 {/* วันเวลาอยู่ข้างล่างไฟล์ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
                 {(showTime || showTimeForMessages.has(item._id)) && (
                   <Animated.View
-                    style={[
-                      styles.messageTimeBottomContainer,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
-                      {
-                        opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-                        maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
-                          (timeAnimations[item._id]).interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 30]
-                          }) : 0)
-                      }
-                    ]}
+                    style={{
+                      alignItems: 'flex-start',
+                      marginTop: 4,
+                      paddingHorizontal: 5,
+                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
+                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+                        (timeAnimations[item._id]).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 30]
+                        }) : 0)
+                    }}
                   >
-                    <Text style={[
-                      styles.messageTimeBottom,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
-                    ]}>
+                    <Text style={{
+                      fontSize: 10,
+                      color: '#666',
+                      lineHeight: 12,
+                      textAlign: 'left',
+                    }}>
                       {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
                     </Text>
                     {/* สถานะอ่าน/ไม่อ่าน สำหรับข้อความของตัวเอง - ไฟล์ */}
                     {isMyMessage && !item.isTemporary && (
-                      <View style={styles.readStatusContainer}>
-                        <Text style={[
-                          styles.readStatusIcon,
-                          getGroupReadStatus(item).isRead ? styles.readStatusIconRead : styles.readStatusIconSent
-                        ]}>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginTop: 2,
+                      }}>
+                        <Text style={{
+                          fontSize: 10,
+                          color: getGroupReadStatus(item).isRead ? '#10b981' : '#64748b',
+                          marginRight: 4,
+                        }}>
                           {getGroupReadStatus(item).isRead ? '✓✓' : '✓'}
                         </Text>
-                        <Text style={[
-                          styles.readStatusBottom,
-                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
-                        ]}>
+                        <Text style={{
+                          fontSize: 9,
+                          color: '#666',
+                        }}>
                           {getGroupReadStatus(item).text}
                         </Text>
                       </View>
@@ -1272,16 +1388,44 @@ const GroupChatScreen = ({ route, navigation }) => {
             {(item.messageType === 'text' || (item.content && item.content.trim() !== '' && item.content !== '📷 รูปภาพ' && item.content !== '📎 ไฟล์แนบ')) && (
               <View>
                 <TouchableOpacity
-                  style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble, item.isTemporary && styles.optimisticMessage]}
+                  style={{
+                    maxWidth: '85%',
+                    minWidth: 'auto',
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: isMyMessage ? '#007AFF' : '#f1f5f9',
+                    flexShrink: 1,
+                    alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+                    borderBottomRightRadius: isMyMessage ? 12 : 12,
+                    borderBottomLeftRadius: isMyMessage ? 12 : 12,
+                    shadowColor: isMyMessage ? 'transparent' : '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: isMyMessage ? 0 : 0.1,
+                    shadowRadius: 2,
+                    elevation: isMyMessage ? 0 : 2,
+                    opacity: item.isTemporary ? 0.7 : 1,
+                  }}
                   onLongPress={() => isMyMessage && deleteMessage(item._id)}
                   onPress={handleMessagePress}
                   delayLongPress={800}
                 >
-                  <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
+                  <Text style={{
+                    fontSize: 16,
+                    lineHeight: 22,
+                    textAlign: 'left',
+                    flexWrap: 'wrap',
+                    flexShrink: 1,
+                    color: isMyMessage ? '#ffffff' : '#1f2937',
+                  }}>
                     {item.content}
                   </Text>
                   {item.editedAt && (
-                    <Text style={[styles.editedText, isMyMessage ? styles.myEditedText : styles.otherEditedText]}>
+                    <Text style={{
+                      fontSize: 11,
+                      fontStyle: 'italic',
+                      marginTop: 4,
+                      color: isMyMessage ? 'rgba(255,255,255,0.7)' : '#64748b',
+                    }}>
                       แก้ไขแล้ว
                     </Text>
                   )}
@@ -1289,7 +1433,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                     <ActivityIndicator 
                       size="small" 
                       color={isMyMessage ? "#FFA500" : "#666"} 
-                      style={styles.sendingIndicator}
+                      style={{ marginLeft: 8 }}
                     />
                   )}
                 </TouchableOpacity>
@@ -1297,38 +1441,44 @@ const GroupChatScreen = ({ route, navigation }) => {
                 {/* วันเวลาอยู่ข้างล่างข้อความ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
                 {(showTime || showTimeForMessages.has(item._id)) && (
                   <Animated.View
-                    style={[
-                      styles.messageTimeBottomContainer,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
-                      {
-                        opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-                        maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
-                          (timeAnimations[item._id]).interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 30]
-                          }) : 0)
-                      }
-                    ]}
+                    style={{
+                      alignItems: 'flex-start',
+                      marginTop: 4,
+                      paddingHorizontal: 5,
+                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
+                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+                        (timeAnimations[item._id]).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 30]
+                        }) : 0)
+                    }}
                   >
-                    <Text style={[
-                      styles.messageTimeBottom,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
-                    ]}>
+                    <Text style={{
+                      fontSize: 10,
+                      color: '#666',
+                      lineHeight: 12,
+                      textAlign: 'left',
+                    }}>
                       {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
                     </Text>
                     {/* สถานะอ่าน/ไม่อ่าน สำหรับข้อความของตัวเอง - ข้อความธรรมดา */}
                     {isMyMessage && !item.isTemporary && (
-                      <View style={styles.readStatusContainer}>
-                        <Text style={[
-                          styles.readStatusIcon,
-                          getGroupReadStatus(item).isRead ? styles.readStatusIconRead : styles.readStatusIconSent
-                        ]}>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginTop: 2,
+                      }}>
+                        <Text style={{
+                          fontSize: 10,
+                          color: getGroupReadStatus(item).isRead ? '#10b981' : '#64748b',
+                          marginRight: 4,
+                        }}>
                           {getGroupReadStatus(item).isRead ? '✓✓' : '✓'}
                         </Text>
-                        <Text style={[
-                          styles.readStatusBottom,
-                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
-                        ]}>
+                        <Text style={{
+                          fontSize: 9,
+                          color: '#666',
+                        }}>
                           {getGroupReadStatus(item).text}
                         </Text>
                       </View>
@@ -1392,43 +1542,58 @@ const GroupChatScreen = ({ route, navigation }) => {
   const renderMessageLoadingContent = () => {
     return (
       <View style={styles.messageLoadingContainer}>
-        <InlineLoadingScreen
-          isVisible={true}
-          progress={progress}
-          title="LOADING"
-          subtitle="กรุณารอสักครู่"
-          backgroundColor="#F5C842"
-        />
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ marginTop: 10, color: '#6B7280' }}>กำลังโหลด...</Text>
       </View>
     );
   };
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container} 
+      style={{
+        flex: 1,
+        backgroundColor: '#ffffff'
+      }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Loading overlay สำหรับการ scroll - ปิดการใช้งาน */}
-      {/* {isScrollingToEnd && (
-        <View style={styles.scrollLoadingOverlay}>
-          <ActivityIndicator size="large" color="#FFA500" />
-          <Text style={styles.scrollLoadingText}>กำลังไปที่ข้อความล่าสุด...</Text>
-        </View>
-      )} */}
-
       {/* Header */}
-      <View style={styles.header}>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 48,
+        paddingBottom: 16,
+        backgroundColor: '#ffffff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2
+      }}>
         <TouchableOpacity 
           onPress={() => navigation.navigate('Chat', { 
             chatId: route.params?.returnChatId || route.params?.groupId 
           })} 
-          style={styles.backButton}
+          style={{
+            padding: 8,
+            marginRight: 8
+          }}
         >
-          <Text style={styles.backButtonText}>←</Text>
+          <Text style={{
+            fontSize: 18,
+            color: '#3b82f6',
+            fontWeight: 'bold'
+          }}>←</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={styles.groupInfoContainer}
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center'
+          }}
           onPress={() => {
             console.log('� Opening members modal...');
             setShowMembersModal(true);
@@ -1442,18 +1607,41 @@ const GroupChatScreen = ({ route, navigation }) => {
                   ? `${API_URL}${groupInfo?.groupAvatar || groupAvatar}`
                   : 'https://via.placeholder.com/40'
             }}
-            style={styles.headerAvatar}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              marginRight: 12
+            }}
           />
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>{groupInfo?.name || groupName}</Text>
-            <View style={styles.headerSubtitle}>
-              <Text style={styles.memberCount}>{groupMembers.length} สมาชิก</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: '#000000'
+            }}>{groupInfo?.name || groupName}</Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center'
+            }}>
+              <Text style={{
+                fontSize: 12,
+                color: '#10b981'
+              }}>{groupMembers.length} สมาชิก</Text>
               {(groupInfo?.admin || groupInfo?.creator) ? (
-                <Text style={styles.adminIndicator}>
+                <Text style={{
+                  fontSize: 12,
+                  color: '#6b7280',
+                  marginLeft: 4
+                }}>
                   • สร้างโดย {getAdminName()}
                 </Text>
               ) : (
-                <Text style={styles.adminIndicator}>
+                <Text style={{
+                  fontSize: 12,
+                  color: '#6b7280',
+                  marginLeft: 4
+                }}>
                   • กำลังโหลดข้อมูล...
                 </Text>
               )}
@@ -1462,32 +1650,55 @@ const GroupChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
 
         {/* ปุ่มจัดการกลุ่ม (แสดงเฉพาะผู้สร้างกลุ่ม) */}
-        {(() => {
-          const isAdmin = isGroupAdmin();
-          console.log('🔧 Showing manage button:', isAdmin);
-          return isAdmin;
-        })() && (
-          <TouchableOpacity onPress={openEditGroupScreen} style={styles.manageButton}>
-            <Text style={styles.manageButtonText}>⚙️</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: 'row' }}>
+          {(() => {
+            const isAdmin = isGroupAdmin();
+            console.log('🔧 Showing manage button:', isAdmin);
+            return isAdmin;
+          })() && (
+            <TouchableOpacity 
+              onPress={openEditGroupScreen} 
+              style={{
+                padding: 8,
+                marginRight: 8
+              }}
+            >
+              <Text style={{
+                fontSize: 18,
+                color: '#6b7280'
+              }}>⚙️</Text>
+            </TouchableOpacity>
+          )}
 
-        <TouchableOpacity onPress={leaveGroup} style={styles.leaveButton}>
-          <Text style={styles.leaveButtonText}>ออก</Text>
-        </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={leaveGroup} 
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              backgroundColor: '#ef4444',
+              borderRadius: 12
+            }}
+          >
+            <Text style={{
+              fontSize: 12,
+              color: '#ffffff',
+              fontWeight: '500'
+            }}>ออก</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Messages */}
       <TouchableOpacity 
-        style={styles.messagesListContainer}
+        style={{
+          flex: 1,
+          backgroundColor: '#ffffff'
+        }}
         activeOpacity={1}
         onPress={() => setShowAttachmentMenu(false)}
       >
-        {/* แสดง loading หรือรายการข้อความ */}
-        {isLoading ? (
-          renderMessageLoadingContent()
-        ) : (
-          <FlatList
+        {/* แสดงรายการข้อความโดยตรง */}
+        <FlatList
             ref={flatListRef}
             data={messages}
             keyExtractor={(item, index) => item._id?.toString() || `message_${index}_${item.timestamp}`}
@@ -1555,7 +1766,6 @@ const GroupChatScreen = ({ route, navigation }) => {
           }}
           scrollEventThrottle={16}
         />
-        )}
       </TouchableOpacity>
 
       {/* Scroll to Bottom Button */}
@@ -1576,24 +1786,93 @@ const GroupChatScreen = ({ route, navigation }) => {
       )}
 
       {/* Input Area */}
-      <View style={styles.inputContainer}>
+      <View style={{
+        padding: 16,
+        paddingTop: 12,
+        backgroundColor: '#ffffff',
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2
+      }}>
         {/* Attachment Menu */}
         {showAttachmentMenu && (
-          <View style={styles.attachmentMenu}>
-            <TouchableOpacity style={styles.attachmentMenuItem} onPress={() => pickFile(true)}>
-              <Text style={styles.attachmentMenuIcon}>🖼️</Text>
-              <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
+          <View style={{
+            position: 'absolute',
+            bottom: 80,
+            left: 20,
+            backgroundColor: '#ffffff',
+            borderRadius: 16,
+            padding: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 6,
+            zIndex: 1000,
+            borderWidth: 1,
+            borderColor: '#f1f5f9'
+          }}>
+            <TouchableOpacity 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+                paddingHorizontal: 18,
+                minWidth: 140,
+                borderRadius: 12,
+                marginVertical: 2
+              }} 
+              onPress={() => pickFile(true)}
+            >
+              <Text style={{
+                fontSize: 20,
+                marginRight: 14,
+              }}>🖼️</Text>
+              <Text style={{
+                fontSize: 16,
+                color: '#1f2937',
+                fontWeight: '500'
+              }}>รูปภาพ</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.attachmentMenuItem} onPress={() => pickFile(false)}>
-              <Text style={styles.attachmentMenuIcon}>📄</Text>
-              <Text style={styles.attachmentMenuText}>ไฟล์</Text>
+            <TouchableOpacity 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+                paddingHorizontal: 18,
+                minWidth: 140,
+                borderRadius: 12,
+                marginVertical: 2
+              }} 
+              onPress={() => pickFile(false)}
+            >
+              <Text style={{
+                fontSize: 20,
+                marginRight: 14,
+              }}>📄</Text>
+              <Text style={{
+                fontSize: 16,
+                color: '#1f2937',
+                fontWeight: '500'
+              }}>ไฟล์</Text>
             </TouchableOpacity>
           </View>
         )}
         
         {/* Selected File/Image Preview */}
         {(selectedFile || selectedImage) && (
-          <View style={styles.selectedFileContainer}>
+          <View style={{
+            backgroundColor: '#f1f5f9',
+            padding: 12,
+            borderRadius: 12,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: '#e2e8f0'
+          }}>
             <View style={styles.selectedFile}>
               {selectedImage && (
                 <Image source={{ uri: selectedImage.uri }} style={styles.selectedImagePreview} />
@@ -1619,16 +1898,53 @@ const GroupChatScreen = ({ route, navigation }) => {
           </View>
         )}
         
-        <View style={styles.messageInputRow}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+          backgroundColor: '#f8fafc',
+          borderRadius: 24,
+          paddingHorizontal: 6,
+          paddingVertical: 6,
+          borderWidth: 1,
+          borderColor: '#e2e8f0',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 1
+        }}>
           <TouchableOpacity
-            style={styles.plusButton}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: '#3b82f6',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginRight: 8,
+            }}
             onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
           >
-            <Text style={styles.plusIcon}>+</Text>
+            <Text style={{
+              fontSize: 18,
+              color: '#ffffff',
+              fontWeight: 'bold',
+            }}>+</Text>
           </TouchableOpacity>
           
           <TextInput
-            style={styles.textInput}
+            style={{
+              flex: 1,
+              borderWidth: 0,
+              borderRadius: 18,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              marginRight: 8,
+              maxHeight: 100,
+              fontSize: 16,
+              backgroundColor: 'transparent',
+              color: '#1f2937'
+            }}
             value={inputText}
             onChangeText={setInputText}
             placeholder="พิมพ์ข้อความ..."
@@ -1649,14 +1965,31 @@ const GroupChatScreen = ({ route, navigation }) => {
           />
           
           <TouchableOpacity
-            style={styles.sendTextButton}
+            style={{
+              backgroundColor: (!inputText.trim() && !selectedFile && !selectedImage) || isSending ? '#9ca3af' : '#3b82f6',
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+              borderRadius: 20,
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
+              minWidth: 60,
+            }}
             onPress={sendMessage}
             disabled={(!inputText.trim() && !selectedFile && !selectedImage) || isSending}
           >
             {isSending ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.sendTextLabel}>ส่ง</Text>
+              <Text style={{
+                color: '#ffffff',
+                fontWeight: '600',
+                fontSize: 14,
+              }}>ส่ง</Text>
             )}
           </TouchableOpacity>
         </View>

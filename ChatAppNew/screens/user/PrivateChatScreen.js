@@ -73,7 +73,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
     if (!chatroomId) {
       console.error('❌ No chatroomId provided in route params');
       setLocalIsLoading(false);
-      stopLoading();
       Alert.alert('ข้อผิดพลาด', 'ไม่พบข้อมูลห้องแชท', [
         { text: 'ตกลง', onPress: () => navigation.goBack() }
       ]);
@@ -1385,7 +1384,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   return (
     <KeyboardAvoidingView 
-      className="flex-1 bg-white"
+      style={{
+        flex: 1,
+        backgroundColor: '#ffffff'
+      }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Loading overlay สำหรับการ scroll - ปิดการใช้งาน */}
@@ -1396,17 +1398,42 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </View>
       )} */}
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-12 pb-4 bg-white border-b border-gray-100">
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 48,
+        paddingBottom: 16,
+        backgroundColor: '#ffffff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2
+      }}>
         <TouchableOpacity 
           onPress={() => navigation.navigate('Chat', { 
             chatId: route.params?.returnChatId || route.params?.chatroomId 
           })}
-          className="p-2 mr-2"
+          style={{
+            padding: 8,
+            marginRight: 8
+          }}
         >
-          <Text className="text-lg text-blue-500">←</Text>
+          <Text style={{
+            fontSize: 18,
+            color: '#3b82f6',
+            fontWeight: 'bold'
+          }}>←</Text>
         </TouchableOpacity>
         
-        <View className="flex-1 flex-row items-center">
+        <View style={{
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center'
+        }}>
           {recipientAvatar ? (
             <Image
               source={{ 
@@ -1414,33 +1441,60 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   ? recipientAvatar 
                   : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
               }}
-              className="w-10 h-10 rounded-full mr-3"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                marginRight: 12
+              }}
               defaultSource={require('../../assets/default-avatar.png')}
             />
           ) : (
-            <View className="w-10 h-10 rounded-full mr-3 bg-gray-200 justify-center items-center">
-              <Text className="text-base font-bold text-gray-600">
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              marginRight: 12,
+              backgroundColor: '#e5e7eb',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <Text style={{
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#6b7280'
+              }}>
                 {recipientName?.charAt(0)?.toUpperCase() || '?'}
               </Text>
             </View>
           )}
           
-          <View className="flex-1">
-            <Text className="text-lg font-bold text-black">
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: '#000000'
+            }}>
               {recipientName || roomName || 'แชทส่วนตัว'}
             </Text>
-            <Text className="text-xs text-green-500">ออนไลน์</Text>
+            <Text style={{
+              fontSize: 12,
+              color: '#10b981'
+            }}>ออนไลน์</Text>
           </View>
         </View>
         
-        <View className="w-10">
+        <View style={{ width: 40 }}>
           {/* สำหรับปุ่มเพิ่มเติมในอนาคต */}
         </View>
       </View>
 
       {/* รายการข้อความ */}
       <View 
-        className="flex-1 bg-white"
+        style={{
+          flex: 1,
+          backgroundColor: '#ffffff'
+        }}
         onTouchStart={() => setShowAttachmentMenu(false)}
         pointerEvents="auto"
       >
@@ -1533,7 +1587,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
             style={styles.textInput}
             value={newMessage}
             onChangeText={setNewMessage}
-            placeholder="แนบไฟล์"
+            placeholder="พิมพ์ข้อความ..."
             placeholderTextColor="#999"
             multiline
             maxLength={1000}
@@ -1772,8 +1826,9 @@ const styles = StyleSheet.create({
   },
   messageContainer: {
     flexDirection: 'row',
-    marginBottom: SPACING.md,
-    alignItems: 'flex-end'
+    marginBottom: 12,
+    alignItems: 'flex-end',
+    paddingHorizontal: 8
   },
   myMessage: {
     justifyContent: 'flex-end'
@@ -1785,57 +1840,55 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16
+    width: 36,
+    height: 36,
+    borderRadius: 18
   },
   defaultMessageAvatar: {
-    backgroundColor: '#e1e1e1',
+    backgroundColor: '#e5e7eb',
     justifyContent: 'center',
     alignItems: 'center'
   },
   messageAvatarText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#666'
+    color: '#6b7280'
   },
   messageBubble: {
-    maxWidth: '85%', // เพิ่มความกว้างสำหรับข้อความยาว
-    minWidth: 'auto', // ให้กล่องปรับขนาดตามเนื้อหา
-    padding: 12,
-    borderRadius: 12, // เปลี่ยนจาก 18 เป็น 12 เพื่อให้เป็นสี่เหลี่ยมมนๆ
-    backgroundColor: '#fff', // กล่องข้อความเป็นสีขาว
-    flexShrink: 1, // ให้กล่องสามารถหดได้ตามเนื้อหา
-    alignSelf: 'flex-start', // ให้กล่องปรับขนาดตามเนื้อหา
-    // เพิ่ม shadow สำหรับกล่องข้อความทั้งหมด
+    maxWidth: '80%',
+    minWidth: 60,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    marginBottom: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1
   },
   myMessageBubble: {
-    backgroundColor: '#007AFF', // เปลี่ยนข้อความของตัวเองเป็นสีน้ำเงิน
-    borderBottomRightRadius: 12, // ปรับให้สม่ำเสมอ
-    alignSelf: 'flex-end', // ให้ข้อความของตัวเองชิดขวา
+    backgroundColor: '#007AFF',
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+    marginRight: 8
   },
   otherMessageBubble: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 12, // ปรับให้สม่ำเสมอ
-    marginLeft: 10, // เพิ่ม margin ซ้าย 10px สำหรับข้อความจากผู้อื่น
+    backgroundColor: '#f1f5f9',
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+    marginLeft: 8
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
-    textAlign: 'left',
-    flexWrap: 'wrap', // ให้ข้อความขึ้นบรรทัดใหม่เมื่อยาวเกินไป
-    flexShrink: 1, // ให้ข้อความปรับขนาดได้
+    lineHeight: 20,
+    fontWeight: '400'
   },
   myMessageText: {
-    color: '#fff' // เปลี่ยนเป็นสีขาว เพราะพื้นหลังเป็นสีน้ำเงิน
+    color: '#ffffff'
   },
   otherMessageText: {
-    color: '#333'
+    color: '#1f2937'
   },
   messageTime: {
     fontSize: 11,
@@ -1982,20 +2035,26 @@ const styles = StyleSheet.create({
 
   // Input Styles
   inputContainer: {
-    padding: SPACING.md,
-    paddingTop: SPACING.sm,
-    backgroundColor: COLORS.background,
+    padding: 16,
+    paddingTop: 12,
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    ...SHADOWS.sm
+    borderTopColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
   },
   selectedFileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundSecondary,
-    padding: SPACING.sm,
-    borderRadius: RADIUS.sm,
-    marginBottom: SPACING.sm,
+    backgroundColor: '#f1f5f9',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   fileInfo: {
     flex: 1,
@@ -2014,23 +2073,30 @@ const styles = StyleSheet.create({
   messageInputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#fff', // เปลี่ยนเป็นสีขาว
-    borderRadius: 25,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    backgroundColor: '#f8fafc',
+    borderRadius: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1
   },
   plusButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFA500',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
   },
   plusIcon: {
-    fontSize: 20,
-    color: '#fff',
+    fontSize: 18,
+    color: '#ffffff',
     fontWeight: 'bold',
   },
   attachmentButton: {
@@ -2040,24 +2106,30 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     borderWidth: 0,
-    borderRadius: 20,
+    borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginRight: 8,
     maxHeight: 100,
     fontSize: 16,
     backgroundColor: 'transparent',
+    color: '#1f2937'
   },
   sendTextButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#FFA500',
+    borderRadius: 18,
+    backgroundColor: '#10b981',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1
   },
   sendTextLabel: {
     fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
+    color: '#ffffff',
+    fontWeight: '600',
   },
   sendButton: {
     backgroundColor: '#007AFF',
@@ -2074,32 +2146,37 @@ const styles = StyleSheet.create({
   // Attachment Menu Styles
   attachmentMenu: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 80,
     left: 20,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     padding: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
     zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#f1f5f9'
   },
   attachmentMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    minWidth: 120,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    minWidth: 140,
+    borderRadius: 12,
+    marginVertical: 2
   },
   attachmentMenuIcon: {
-    fontSize: 18,
-    marginRight: 12,
+    fontSize: 20,
+    marginRight: 14,
   },
   attachmentMenuText: {
     fontSize: 16,
-    color: '#333',
+    color: '#1f2937',
+    fontWeight: '500'
   },
 
   // File attachment styles
@@ -2174,57 +2251,64 @@ const styles = StyleSheet.create({
   // Scroll to Bottom Button
   scrollToBottomButton: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 100,
     right: 20,
-    backgroundColor: 'rgba(0, 122, 255, 0.9)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: '#3b82f6',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
   scrollToBottomIcon: {
-    fontSize: 18,
-    color: '#fff',
+    fontSize: 20,
+    color: '#ffffff',
     fontWeight: 'bold',
   },
   
   // Image Styles
   selectedImageContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 8,
-    marginVertical: 4,
+    backgroundColor: '#f1f5f9',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   imagePreview: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
   },
   previewImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+    width: 100,
+    height: 100,
+    borderRadius: 12,
   },
   removeImageButton: {
-    padding: 4,
-    backgroundColor: '#ff3b30',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    padding: 6,
+    backgroundColor: '#ef4444',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1
   },
   removeImageText: {
-    color: 'white',
-    fontSize: 12,
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: 'bold',
   },
   imageContainer: {
@@ -2232,23 +2316,32 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   messageImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 8,
-    marginTop: 4,
+    width: 220,
+    height: 220,
+    borderRadius: 12,
+  },
+  imageContainer: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden'
   },
   
   // Separate Message Containers
   messageContentContainer: {
-    flex: 1, // ให้ใช้พื้นที่เต็มที่
-    maxWidth: '85%', // กำหนดความกว้างสูงสุด
+    flex: 1,
+    maxWidth: '80%',
   },
   
   // Image Message Bubble
   imageMessageBubble: {
     padding: 4,
-    borderRadius: 18,
-    marginBottom: 4,
+    borderRadius: 16,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1
   },
   myImageBubble: {
     backgroundColor: 'transparent',
@@ -2420,25 +2513,24 @@ const styles = StyleSheet.create({
   // Delete button styles for images and files
   deleteImageButton: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(255, 0, 0, 0.8)',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   deleteImageButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: 'bold',
-    lineHeight: 20,
   },
   fileAttachmentContainer: {
     flexDirection: 'row',

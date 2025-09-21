@@ -338,30 +338,23 @@ const ChatScreen = ({ route, navigation }) => {
 
   const loadCurrentUser = async (retryCount = 0) => {
     try {
-      startLoading();
-      updateProgress(10); // เริ่มต้น
-      
       console.log('ChatScreen: Loading current user...');
       console.log('ChatScreen: AuthUser from context:', authUser);
       
       // ตรวจสอบ token ก่อน
       const token = await AsyncStorage.getItem('userToken');
-      updateProgress(20); // ได้ token
       console.log('ChatScreen: Token from storage:', token ? 'exists' : 'not found');
       
       if (!token) {
         console.log('ChatScreen: No token found, redirecting to login');
         navigation.replace('Login');
-        stopLoading();
         return;
       }
 
       // ดึงข้อมูลจาก API เสมอ เพื่อให้แน่ใจว่าได้ข้อมูลที่ถูกต้องตาม token
       console.log('ChatScreen: Fetching current user from API...');
-      updateProgress(40); // เริ่มเรียก API
       
       const response = await api.get('/users/current');
-      updateProgress(60); // ได้ข้อมูลผู้ใช้
       console.log('ChatScreen: User data received from API:', response.data);
       
       // Server พร้อมใช้งาน
@@ -378,11 +371,9 @@ const ChatScreen = ({ route, navigation }) => {
       if (response.data.role === 'admin') {
         console.log('ChatScreen: User is admin, redirecting to admin screen');
         navigation.replace('Admin');
-        stopLoading();
         return;
       }
 
-      updateProgress(80); // กำลังตั้งค่าผู้ใช้
       console.log('ChatScreen: Setting current user from API');
       setCurrentUser(response.data);
       
@@ -398,7 +389,6 @@ const ChatScreen = ({ route, navigation }) => {
         await login(response.data, token);
       }
       
-      updateProgress(100); // เสร็จสิ้น
     } catch (error) {
       console.error('ChatScreen: Error loading user:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
@@ -438,10 +428,8 @@ const ChatScreen = ({ route, navigation }) => {
         // ไม่แสดง alert ถ้าเป็น timeout เพราะระบบกำลัง retry อยู่
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
-      stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
     } finally {
       console.log('ChatScreen: Loading complete');
-      stopLoading(500); // หยุด loading หลัง 500ms
     }
   };
 

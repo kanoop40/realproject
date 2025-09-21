@@ -46,24 +46,17 @@ const ProfileScreen = ({ navigation }) => {
 
   const fetchCurrentUser = async () => {
     try {
-      startLoading();
-      updateProgress(10); // เริ่มต้น
-      
       const token = await AsyncStorage.getItem('userToken');
-      updateProgress(30); // ได้ token
       
       if (!token) {
         console.log('No token found, redirecting to login');
         navigation.replace('Login');
-        stopLoading();
         return;
       }
 
       console.log('Fetching current user with token:', token?.substring(0, 20) + '...');
-      updateProgress(50); // เริ่มเรียก API
       
       const response = await api.get('/users/current');
-      updateProgress(80); // ได้ข้อมูลผู้ใช้
       
       console.log('Current user response:', response.data);
       console.log('User avatar from API:', response.data.avatar);
@@ -80,7 +73,6 @@ const ProfileScreen = ({ navigation }) => {
         groupCode: response.data.groupCode || '',
       });
       
-      updateProgress(100); // เสร็จสิ้น
     } catch (error) {
       console.error('Error fetching current user:', error);
       console.error('Error response:', error.response?.data);
@@ -93,9 +85,6 @@ const ProfileScreen = ({ navigation }) => {
       } else {
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
-      stopLoading(); // หยุด loading เมื่อเกิดข้อผิดพลาด
-    } finally {
-      stopLoading(500); // หยุด loading หลัง 500ms
     }
   };
 
@@ -291,17 +280,7 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <InlineLoadingScreen
-        isVisible={isLoading}
-        progress={progress}
-        title="LOADING"
-        subtitle="กรุณารอสักครู่"
-        backgroundColor="#F5C842"
-      />
-    );
-  }
+  // Loading screen removed - show content directly
 
   return (
     <View style={styles.container}>
