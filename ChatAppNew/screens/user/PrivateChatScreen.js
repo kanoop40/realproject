@@ -18,6 +18,8 @@ import {
   Dimensions
 } from 'react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import FileIcon from 'react-native-vector-icons/FontAwesome5';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -48,6 +50,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [scrollToBottomOnLoad, setScrollToBottomOnLoad] = useState(true);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
+  const [canLoadMore, setCanLoadMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedModalImage, setSelectedModalImage] = useState(null);
@@ -101,35 +106,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [currentUser, chatroomId]);
 
-  // ตั้งค่า header กับปุ่มเลือกแชท
+  // ตั้งค่า header
   useEffect(() => {
+    console.log('🔧 Setting up header');
     navigation.setOptions({
       headerTitle: recipientName || roomName || 'แชท',
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={() => {
-            if (selectionMode) {
-              // ออกจากโหมดเลือก
-              setSelectionMode(false);
-              setSelectedMessages([]);
-            } else {
-              // เข้าโหมดเลือก
-              setSelectionMode(true);
-            }
-          }}
-          style={{ marginRight: 10 }}
-        >
-          <Text style={{ 
-            color: selectionMode ? '#FF3B30' : '#007AFF', 
-            fontSize: 16,
-            fontWeight: '600'
-          }}>
-            {selectionMode ? 'ยกเลิก' : 'เลือก'}
-          </Text>
-        </TouchableOpacity>
-      )
+      headerRight: null // ใช้ปุ่มใน body แทน
     });
-  }, [navigation, recipientName, roomName, selectionMode]);
+  }, [navigation, recipientName, roomName]);
 
   // Removed force stop loading timeout - no longer using loading functionality
 
@@ -459,17 +443,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       if (fileToSend) {
         console.log('� Sending file:', fileToSend);
+        // ใช้ชื่อไฟล์จริงจาก file picker
+        const originalFileName = fileToSend.name || fileToSend.fileName || 'unknown_file';
+        console.log('📎 Original file name:', originalFileName);
+        
         formData.append('file', {
           uri: fileToSend.uri,
           type: fileToSend.mimeType || 'application/octet-stream',
-          name: fileToSend.name || `file_${Date.now()}.txt`
-        });
-      } else if (fileToSend) {
-        console.log('📎 Sending file:', fileToSend);
-        formData.append('file', {
-          uri: fileToSend.uri,
-          type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
-          name: fileToSend.name || fileToSend.fileName || `file_${Date.now()}`
+          name: originalFileName
         });
       }
 
@@ -654,50 +635,78 @@ const PrivateChatScreen = ({ route, navigation }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // ฟังก์ชันแก้ไขชื่อไฟล์ที่เป็น URL encoding
+  const decodeFileName = (fileName) => {
+    if (!fileName) return 'ไฟล์แนบ';
+    
+    try {
+      // ลองแก้ไข URL encoding
+      const decoded = decodeURIComponent(fileName);
+      return decoded;
+    } catch (error) {
+      // ถ้าแก้ไขไม่ได้ ใช้ชื่อเดิม
+      return fileName;
+    }
+  };
+
   // ฟังก์ชันเลือกไอคอนตามประเภทไฟล์
   const getFileIcon = (fileName) => {
-    if (!fileName) return '📎';
+    if (!fileName) {
+      return <Icon name="attach-file" size={20} color="#666" />;
+    }
     
-    const extension = fileName.split('.').pop()?.toLowerCase();
+    const decodedName = decodeFileName(fileName);
+    const extension = decodedName.split('.').pop()?.toLowerCase();
     
     switch (extension) {
       case 'pdf':
-        return '📄';
+        return <FileIcon name="file-pdf" size={20} color="#E53E3E" />;
       case 'doc':
       case 'docx':
-        return '📝';
+        return <FileIcon name="file-word" size={20} color="#2B6CB0" />;
       case 'xls':
       case 'xlsx':
-        return '📊';
+        return <FileIcon name="file-excel" size={20} color="#38A169" />;
       case 'ppt':
       case 'pptx':
-        return '📋';
+        return <FileIcon name="file-powerpoint" size={20} color="#D69E2E" />;
       case 'jpg':
       case 'jpeg':
       case 'png':
       case 'gif':
       case 'webp':
       case 'bmp':
-        return '🖼️';
+        return <FileIcon name="file-image" size={20} color="#9F7AEA" />;
       case 'mp4':
       case 'avi':
       case 'mov':
       case 'wmv':
       case 'flv':
-        return '🎬';
+        return <FileIcon name="file-video" size={20} color="#E53E3E" />;
       case 'mp3':
       case 'wav':
       case 'aac':
       case 'flac':
-        return '🎵';
+        return <FileIcon name="file-audio" size={20} color="#38B2AC" />;
       case 'zip':
       case 'rar':
       case '7z':
-        return '🗜️';
+        return <FileIcon name="file-archive" size={20} color="#805AD5" />;
       case 'txt':
-        return '📋';
+        return <FileIcon name="file-alt" size={20} color="#4A5568" />;
+      case 'js':
+      case 'jsx':
+      case 'ts':
+      case 'tsx':
+        return <FileIcon name="file-code" size={20} color="#F6AD55" />;
+      case 'css':
+      case 'scss':
+      case 'less':
+        return <FileIcon name="file-code" size={20} color="#4299E1" />;
+      case 'html':
+        return <FileIcon name="file-code" size={20} color="#E53E3E" />;
       default:
-        return '📎';
+        return <Icon name="attach-file" size={20} color="#666" />;
     }
   };
 
@@ -1000,6 +1009,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
     setShowEditModal(true);
   };
 
+  // ฟังก์ชันจัดการการเลือกข้อความ
+  const handleMessageSelect = (messageId) => {
+    if (!selectionMode) return;
+    
+    setSelectedMessages(prev => {
+      if (prev.includes(messageId)) {
+        return prev.filter(id => id !== messageId);
+      } else {
+        return [...prev, messageId];
+      }
+    });
+  };
+
+  // ฟังก์ชันลบข้อความที่เลือก
+  const deleteSelectedMessages = () => {
+    if (selectedMessages.length === 0) return;
+    
+    Alert.alert(
+      'ลบข้อความ',
+      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ลบ',
+          style: 'destructive',
+          onPress: async () => {
+            for (const messageId of selectedMessages) {
+              await handleDeleteMessage(messageId);
+            }
+            setSelectedMessages([]);
+            setSelectionMode(false);
+          }
+        }
+      ]
+    );
+  };
+
   const saveEditMessage = async () => {
     if (!editText.trim() || !editingMessage) return;
 
@@ -1030,6 +1076,69 @@ const PrivateChatScreen = ({ route, navigation }) => {
     setShowEditModal(false);
     setEditingMessage(null);
     setEditText('');
+  };
+
+  // ฟังก์ชันโหลดแชทเก่า
+  const loadOlderMessages = async () => {
+    if (isLoadingMore || !canLoadMore || messages.length === 0) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const oldestMessage = messages[0];
+      console.log('🔄 Loading older messages before:', oldestMessage.createdAt);
+      
+      // ใช้ API endpoint ที่ถูกต้อง
+      const response = await api.get(`/chats/${chatroomId}/messages`, {
+        params: {
+          before: oldestMessage.createdAt,
+          limit: 30
+        }
+      });
+
+      console.log('📥 Older messages response:', response.data);
+
+      if (response.data && response.data.messages) {
+        const olderMessages = response.data.messages;
+        
+        if (olderMessages.length === 0) {
+          console.log('📭 No more older messages');
+          setCanLoadMore(false);
+        } else {
+          console.log(`📬 Loaded ${olderMessages.length} older messages`);
+          setMessages(prev => [...olderMessages, ...prev]);
+        }
+      } else {
+        // ลองใช้ API format อื่น
+        const altResponse = await api.get(`/chats/${chatroomId}`, {
+          params: {
+            page: Math.floor(messages.length / 30) + 1,
+            limit: 30
+          }
+        });
+        
+        if (altResponse.data && altResponse.data.messages) {
+          const olderMessages = altResponse.data.messages;
+          if (olderMessages.length === 0) {
+            setCanLoadMore(false);
+          } else {
+            // กรองข้อความที่ไม่ซ้ำ
+            const newMessages = olderMessages.filter(msg => 
+              !messages.some(existingMsg => existingMsg._id === msg._id)
+            );
+            if (newMessages.length > 0) {
+              setMessages(prev => [...newMessages, ...prev]);
+            } else {
+              setCanLoadMore(false);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading older messages:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อความเก่าได้');
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   const handleMessageDoublePress = (message) => {
@@ -1118,6 +1227,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
     };
     
     const handleMessagePress = () => {
+      if (selectionMode) {
+        // ในโหมดเลือก ให้เลือก/ยกเลิกเลือกข้อความ
+        handleMessageSelect(item._id);
+        return;
+      }
+      
       const now = Date.now();
       const DOUBLE_PRESS_DELAY = 300;
       
@@ -1135,7 +1250,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
       <TouchableOpacity
         style={[
           styles.messageContainer,
-          isMyMessage ? styles.myMessage : styles.otherMessage
+          isMyMessage ? styles.myMessage : styles.otherMessage,
+          selectedMessages.includes(item._id) && styles.selectedMessage
         ]}
         onLongPress={isMyMessage ? handleDeleteMessageConfirm : null}
         onPress={handleMessagePress}
@@ -1197,10 +1313,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
                     style={styles.messageImage}
                     resizeMode="cover"
                     onError={(error) => {
-                      console.log('❌ Error loading image:', item.file?.url || item.image?.file_path, error.nativeEvent.error);
-                      // ลองใช้ default image หรือซ่อนรูป
+                      console.log('❌ Error loading image:', error.nativeEvent.error);
+                      console.log('🔍 Image data:', {
+                        file_path: item.image?.file_path,
+                        uri: item.image?.uri,
+                        file_url: item.file?.url,
+                        file_path_alt: item.file?.file_path
+                      });
                     }}
-                    defaultSource={require('../../assets/default-avatar.png')}
+                    onLoad={() => {
+                      console.log('✅ Image loaded successfully');
+                    }}
                   />
                   
                   {/* ปุ่มลบรูปภาพ (แสดงเฉพาะข้อความของตัวเอง) */}
@@ -1293,7 +1416,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   isMyMessage ? styles.myMessageText : styles.otherMessageText,
                   item.isOptimistic && styles.optimisticMessageText
                 ]}>
-                  {item.content}
+                  {item.content && item.content.trim() !== '' ? item.content : 'ข้อความ'}
                 </Text>
                 {item.editedAt && (
                   <Text style={[styles.editedText, isMyMessage ? styles.myEditedText : styles.otherEditedText]}>
@@ -1364,14 +1487,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
                     onPress={() => showFileOptions(item.file)}
                   >
                     <View style={styles.fileIcon}>
-                      <Text style={styles.attachIcon}>{getFileIcon(item.file.file_name)}</Text>
+                      {getFileIcon(decodeFileName(item.file.file_name))}
                     </View>
                     <View style={styles.fileDetails}>
                       <Text style={[
                         styles.fileName,
                         { color: isMyMessage ? "#fff" : "#333" }
                       ]} numberOfLines={2}>
-                        {item.file.file_name || 'ไฟล์แนบ'}
+                        {decodeFileName(item.file.file_name)}
                       </Text>
                       <Text style={[
                         styles.fileSize,
@@ -1476,6 +1599,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
             }, 100);
           }
         }}
+        ListHeaderComponent={() =>
+          canLoadMore && messages.length > 0 ? (
+            <View style={styles.loadMoreContainer}>
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={loadOlderMessages}
+                disabled={isLoadingMore}
+              >
+                <Text style={styles.loadMoreText}>
+                  {isLoadingMore ? 'กำลังโหลด...' : 'โหลดข้อความเก่า'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
         ListEmptyComponent={() => (
           <View style={styles.emptyMessageContainer}>
             <Text style={styles.emptyMessageText}>
@@ -1593,7 +1731,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </View>
         
         <View style={{ width: 40 }}>
-          {/* สำหรับปุ่มเพิ่มเติมในอนาคต */}
+          {/* จุดสามจุดมุมขวาบน */}
+          <TouchableOpacity
+            onPress={() => {
+              console.log('📱 Three dots menu pressed');
+              setShowHeaderMenu(!showHeaderMenu);
+            }}
+            style={{ 
+              padding: 8,
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Icon name="more-vert" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          
+          {/* Header Menu Dropdown */}
+          {showHeaderMenu && (
+            <View style={styles.headerMenuDropdown}>
+              <TouchableOpacity
+                style={styles.headerMenuItem}
+                onPress={() => {
+                  console.log('📋 Manage chat pressed');
+                  setShowHeaderMenu(false);
+                  if (selectionMode) {
+                    setSelectionMode(false);
+                    setSelectedMessages([]);
+                  } else {
+                    setSelectionMode(true);
+                  }
+                }}
+              >
+                <Text style={styles.headerMenuText}>
+                  {selectionMode ? 'ยกเลิกการเลือก' : 'จัดการแชท'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
 
@@ -1611,7 +1785,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       </View>
 
       {/* Scroll to Bottom Button */}
-      {showScrollToBottom && (
+      {showScrollToBottom && !selectionMode && (
         <TouchableOpacity
           style={styles.scrollToBottomButton}
           onPress={() => {
@@ -1620,6 +1794,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
           }}
         >
           <Text style={styles.scrollToBottomIcon}>↓</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Delete Selected Messages Button */}
+      {selectionMode && selectedMessages.length > 0 && (
+        <TouchableOpacity
+          style={styles.deleteSelectedButton}
+          onPress={deleteSelectedMessages}
+        >
+          <Text style={styles.deleteSelectedText}>
+            ลบ {selectedMessages.length} ข้อความ
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -1652,7 +1838,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       justifyContent: 'center',
                       marginRight: 12
                     }}>
-                      <Text style={{ fontSize: 24 }}>📎</Text>
+                      {getFileIcon(selectedFile.name || selectedFile.fileName)}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{
@@ -1692,94 +1878,31 @@ const PrivateChatScreen = ({ route, navigation }) => {
           </View>
         )}
         
-        {/* Attachment Menu - Telegram Style */}
+        {/* Attachment Menu - Vertical Style */}
         {showAttachmentMenu && (
-          <View style={{
-            backgroundColor: 'white',
-            borderRadius: 16,
-            marginHorizontal: 12,
-            marginBottom: 8,
-            paddingVertical: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 8,
-            borderWidth: 1,
-            borderColor: '#e2e8f0'
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-              <TouchableOpacity
-                style={{
-                  alignItems: 'center',
-                  paddingVertical: 12,
-                  paddingHorizontal: 20,
-                  borderRadius: 12,
-                  backgroundColor: '#f1f5f9',
-                  minWidth: 80
-                }}
-                onPress={pickImage}
-              >
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#10b981',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 8
-                }}>
-                  <Text style={{ fontSize: 24 }}>🖼️</Text>
-                </View>
-                <Text style={{
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  textAlign: 'center'
-                }}>รูปภาพ</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={{
-                  alignItems: 'center',
-                  paddingVertical: 12,
-                  paddingHorizontal: 20,
-                  borderRadius: 12,
-                  backgroundColor: '#f1f5f9',
-                  minWidth: 80
-                }}
-                onPress={pickFile}
-              >
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#3b82f6',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 8
-                }}>
-                  <Text style={{ fontSize: 24 }}>📎</Text>
-                </View>
-                <Text style={{
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  textAlign: 'center'
-                }}>ไฟล์</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.verticalAttachmentMenu}>
+            
+            <TouchableOpacity
+              style={styles.verticalAttachmentItem}
+              onPress={() => {
+                pickImage();
+                setShowAttachmentMenu(false);
+              }}
+            >
+              <Icon name="photo" size={24} color="#10b981" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.verticalAttachmentItem}
+              onPress={() => {
+                pickFile();
+                setShowAttachmentMenu(false);
+              }}
+            >
+              <Icon name="attach-file" size={24} color="#3b82f6" />
+            </TouchableOpacity>
           </View>
-        )}
-        
-        <View style={styles.messageInputRow}>
-          <TouchableOpacity
-            style={styles.plusButton}
-            onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
-          >
-            <Text style={styles.plusIcon}>+</Text>
-          </TouchableOpacity>
-          
+        )}        <View style={styles.messageInputRow}>
           <TextInput
             style={styles.textInput}
             value={newMessage}
@@ -1796,11 +1919,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
           />
           
           <TouchableOpacity
-            style={styles.sendTextButton}
+            style={styles.floatingPlusButton}
+            onPress={() => {
+              console.log('📎 Plus button pressed');
+              setShowAttachmentMenu(!showAttachmentMenu);
+            }}
+          >
+            <Icon name="add" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.floatingSendButton}
             onPress={sendMessage}
             disabled={(!newMessage.trim() && !selectedFile) || isSending}
           >
-            <Text style={styles.sendTextLabel}>ส่ง</Text>
+            <Icon name="send" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -2419,6 +2552,10 @@ const styles = StyleSheet.create({
   },
   fileIcon: {
     marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 28,
+    height: 28,
   },
   fileDetails: {
     flex: 1,
@@ -2776,6 +2913,125 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+  },
+  selectedMessage: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  loadMoreContainer: {
+    padding: 15,
+    alignItems: 'center',
+  },
+  loadMoreButton: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  loadMoreText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  deleteSelectedButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 15,
+    borderRadius: 25,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  deleteSelectedText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  headerMenuDropdown: {
+    position: 'absolute',
+    top: 40,
+    right: -10,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 8,
+    minWidth: 150,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  headerMenuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerMenuText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  floatingPlusButton: {
+    position: 'absolute',
+    right: 60,
+    top: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  floatingSendButton: {
+    position: 'absolute',
+    right: 15,
+    top: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  verticalAttachmentMenu: {
+    position: 'absolute',
+    bottom: 70,
+    left: 20,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 8,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    zIndex: 1000,
+  },
+  verticalAttachmentItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    marginVertical: 2,
   },
 });
 
