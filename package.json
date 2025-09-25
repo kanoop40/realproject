@@ -3,7 +3,9 @@
     "@expo/metro-runtime": "~5.0.4",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-picker/picker": "^2.11.1",
+    "expo-updates": "~29.0.11",
     "react-dom": "^19.0.0",
+    "react-native-sse": "^1.2.1",
     "react-native-web": "^0.20.0"
   }
 }

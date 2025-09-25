@@ -470,38 +470,40 @@ const sendMessage = asyncHandler(async (req, res) => {
             // ไม่ให้ error ของ notification มากระทบการส่งข้อความ
         }
 
-        // ส่งข้อความแบบ real-time ผ่าน Socket.IO
+        // ส่งข้อความแบบ real-time ผ่าน SSE
         try {
-            const io = req.app.get('io') || req.io;
-            if (io) {
-                // Populate sender data สำหรับ socket broadcast
+            const sseManager = req.app.get('sseManager') || req.sseManager;
+            if (sseManager) {
+                // Populate sender data สำหรับ SSE broadcast
                 const populatedMessage = await Messages.findById(message._id)
                     .populate('user_id', 'firstName lastName username avatar role')
                     .populate('file_id');
                 
-                io.to(id).emit('newMessage', {
-                    message: {
-                        _id: populatedMessage._id,
-                        content: populatedMessage.content,
-                        sender: populatedMessage.user_id,
-                        timestamp: populatedMessage.time,
-                        messageType: populatedMessage.messageType,
-                        fileUrl: populatedMessage.fileUrl,
-                        fileName: populatedMessage.fileName,
-                        fileSize: populatedMessage.fileSize,
-                        mimeType: populatedMessage.mimeType,
-                        file: populatedMessage.file_id || null,
-                        user_id: populatedMessage.user_id // เพิ่มเพื่อ backward compatibility
-                    },
-                    chatroomId: id
-                });
-                console.log('📡 Message broadcasted via Socket.IO to room:', id);
+                const messageData = {
+                    _id: populatedMessage._id,
+                    content: populatedMessage.content,
+                    sender: populatedMessage.user_id,
+                    timestamp: populatedMessage.time,
+                    messageType: populatedMessage.messageType,
+                    fileUrl: populatedMessage.fileUrl,
+                    fileName: populatedMessage.fileName,
+                    fileSize: populatedMessage.fileSize,
+                    mimeType: populatedMessage.mimeType,
+                    file: populatedMessage.file_id || null,
+                    user_id: populatedMessage.user_id // เพิ่มเพื่อ backward compatibility
+                };
+
+                // ส่งผ่าน SSE
+                const sentCount = sseManager.sendNewMessage(id, messageData, req.user.userId);
+                
+                console.log('📡 Message broadcasted via SSE to room:', id);
+                console.log('📡 Sent to', sentCount, 'users in room');
                 console.log('📡 Broadcasted message sender:', populatedMessage.user_id.firstName, populatedMessage.user_id.lastName);
             } else {
-                console.warn('⚠️ Socket.IO instance not found');
+                console.warn('⚠️ SSE Manager instance not found');
             }
-        } catch (socketError) {
-            console.error('Error broadcasting via Socket.IO:', socketError);
+        } catch (sseError) {
+            console.error('Error broadcasting via SSE:', sseError);
         }
 
         res.status(201).json({

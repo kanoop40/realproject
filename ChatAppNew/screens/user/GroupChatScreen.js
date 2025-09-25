@@ -11,7 +11,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL } from '../../service/api';
-import { useSocket } from '../../context/SocketContext';
+import { useSocket } from '../../context/SocketContext_Mock';
 import { useAuth } from '../../context/AuthContext';
 // Removed loading imports - no longer using loading functionality
 import NotificationService from '../../service/notificationService';

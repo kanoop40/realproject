@@ -25,13 +25,13 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
-import { useSocket } from '../../context/SocketContext_Mock';
+import { useChat } from '../../context/ChatContext';
 // Removed InlineLoadingScreen import - no longer using loading screens
 // Removed useProgressLoading hook - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 
 const PrivateChatScreen = ({ route, navigation }) => {
-  const { socket, joinChatroom, leaveChatroom } = useSocket();
+  const { joinChatroom, leaveChatroom, setCurrentChatroom, clearCurrentChatroom, sendTyping } = useChat();
   const [currentUser, setCurrentUser] = useState(null);
   // Removed loading hooks - no longer using loading functionality
   
@@ -46,8 +46,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [scrollToBottomOnLoad, setScrollToBottomOnLoad] = useState(true);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedMessages, setSelectedMessages] = useState([]);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedModalImage, setSelectedModalImage] = useState(null);
@@ -100,36 +98,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
       setLocalIsLoading(false);
     }
   }, [currentUser, chatroomId]);
-
-  // ตั้งค่า header กับปุ่มเลือกแชท
-  useEffect(() => {
-    navigation.setOptions({
-      headerTitle: recipientName || roomName || 'แชท',
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={() => {
-            if (selectionMode) {
-              // ออกจากโหมดเลือก
-              setSelectionMode(false);
-              setSelectedMessages([]);
-            } else {
-              // เข้าโหมดเลือก
-              setSelectionMode(true);
-            }
-          }}
-          style={{ marginRight: 10 }}
-        >
-          <Text style={{ 
-            color: selectionMode ? '#FF3B30' : '#007AFF', 
-            fontSize: 16,
-            fontWeight: '600'
-          }}>
-            {selectionMode ? 'ยกเลิก' : 'เลือก'}
-          </Text>
-        </TouchableOpacity>
-      )
-    });
-  }, [navigation, recipientName, roomName, selectionMode]);
 
   // Removed force stop loading timeout - no longer using loading functionality
 
@@ -652,53 +620,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // ฟังก์ชันเลือกไอคอนตามประเภทไฟล์
-  const getFileIcon = (fileName) => {
-    if (!fileName) return '📎';
-    
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    
-    switch (extension) {
-      case 'pdf':
-        return '📄';
-      case 'doc':
-      case 'docx':
-        return '📝';
-      case 'xls':
-      case 'xlsx':
-        return '📊';
-      case 'ppt':
-      case 'pptx':
-        return '📋';
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'webp':
-      case 'bmp':
-        return '🖼️';
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-      case 'wmv':
-      case 'flv':
-        return '🎬';
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-      case 'flac':
-        return '🎵';
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return '🗜️';
-      case 'txt':
-        return '📋';
-      default:
-        return '📎';
-    }
   };
 
   // ฟังก์ชันเปิดรูปภาพในโหมดเต็มจอ
@@ -1364,7 +1285,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                     onPress={() => showFileOptions(item.file)}
                   >
                     <View style={styles.fileIcon}>
-                      <Text style={styles.attachIcon}>{getFileIcon(item.file.file_name)}</Text>
+                      <Text style={styles.attachIcon}>📎</Text>
                     </View>
                     <View style={styles.fileDetails}>
                       <Text style={[

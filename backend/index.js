@@ -6,7 +6,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const http = require('http');
-const socketIo = require('socket.io');
+// const socketIo = require('socket.io'); // ลบ Socket.io
+const { sseManager, setupSSERoutes } = require('./sse'); // เพิ่ม SSE
 
 // Load environment variables
 dotenv.config();
@@ -63,49 +64,7 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ?
         'https://realproject-mg25.onrender.com'
     ];
 
-// Socket.IO configuration with environment-based CORS
-const io = socketIo(server, {
-    cors: {
-        origin: function(origin, callback) {
-            console.log('🔌 Socket.IO CORS request from:', origin);
-            
-            // อนุญาตทุกคำขอใน development
-            if (NODE_ENV === 'development') {
-                return callback(null, true);
-            }
-            
-            // ใน production ตรวจสอบเหมือน HTTP CORS
-            if (!origin) {
-                return callback(null, true);
-            }
-            
-            const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
-                return origin === allowedOrigin || 
-                       origin.includes('exp://') || 
-                       origin.includes('.exp.direct') ||
-                       /^https?:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin) ||
-                       /^https?:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) ||
-                       /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/.test(origin) ||
-                       /^https?:\/\/.*\.onrender\.com$/.test(origin); // รองรับ Render domains
-            });
-            
-            if (isAllowed) {
-                console.log('✅ Socket.IO origin allowed:', origin);
-                return callback(null, true);
-            }
-            
-            console.log('❌ Socket.IO origin not allowed:', origin);
-            return callback(null, false);
-        },
-        methods: ["GET", "POST"],
-        credentials: true
-    },
-    // เพิ่มการตั้งค่าสำหรับ production
-    transports: ['websocket', 'polling'],
-    allowEIO3: true,
-    pingTimeout: 60000,
-    pingInterval: 25000
-});
+// ลบ Socket.IO configuration - ใช้ SSE แทน
 
 // Security middleware
 app.use(helmet({
@@ -211,83 +170,8 @@ mongoose.connect(MONGO_URI, {
         process.exit(1);
     });
 
-// Socket.IO connection handling
-const activeUsers = new Map();
-const jwt = require('jsonwebtoken');
-
-io.on('connection', async (socket) => {
-    console.log('👤 User connected:', socket.id);
-    
-    // Authenticate socket connection
-    try {
-        const token = socket.handshake.auth.token;
-        const userId = socket.handshake.auth.userId;
-        
-        if (token) {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            socket.userId = decoded.userId || userId;
-            activeUsers.set(socket.userId, socket.id);
-            
-            // อัพเดทสถานะออนไลน์
-            const User = require('./models/UserModel');
-            await User.findByIdAndUpdate(socket.userId, {
-                isOnline: true,
-                lastSeen: new Date()
-            });
-            
-            console.log(`✅ User ${socket.userId} authenticated and connected`);
-            
-            // แจ้งผู้ใช้อื่นว่าผู้ใช้นี้ออนไลน์
-            socket.broadcast.emit('user_online', socket.userId);
-        }
-    } catch (error) {
-        console.error('❌ Socket authentication error:', error);
-        socket.disconnect();
-        return;
-    }
-
-    // เมื่อผู้ใช้เข้าร่วม
-    socket.on('join', async (userId) => {
-        try {
-            socket.userId = userId;
-            activeUsers.set(userId, socket.id);
-            
-            // อัพเดทสถานะออนไลน์
-            const User = require('./models/UserModel');
-            await User.findByIdAndUpdate(userId, {
-                isOnline: true,
-                lastSeen: new Date()
-            });
-
-            console.log(`✅ User ${userId} joined and is now online`);
-            
-            // แจ้งผู้ใช้อื่นว่าผู้ใช้นี้ออนไลน์
-            socket.broadcast.emit('user_online', userId);
-        } catch (error) {
-            console.error('❌ Error in join event:', error);
-        }
-    });
-
-    // เข้าร่วมห้องแชท
-    socket.on('joinRoom', (chatroomId) => {
-        socket.join(chatroomId);
-        console.log(`👥 User ${socket.userId} joined chat room: ${chatroomId}`);
-    });
-
-    // ออกจากห้องแชท
-    socket.on('leaveRoom', (chatroomId) => {
-        socket.leave(chatroomId);
-        console.log(`👋 User ${socket.userId} left chat room: ${chatroomId}`);
-    });
-
-    // ส่งข้อความแบบ real-time
-    socket.on('sendMessage', (data) => {
-        console.log('📨 Broadcasting message to chat:', data.chatroomId);
-        socket.to(data.chatroomId).emit('newMessage', {
-            message: data.message,
-            chatroomId: data.chatroomId
-        });
-    });
+// SSE Setup - แทนที่ Socket.IO
+setupSSERoutes(app);
 
     // การพิมพ์
     socket.on('typing', (data) => {
@@ -363,25 +247,14 @@ io.on('connection', async (socket) => {
                     lastSeen: new Date()
                 });
 
-                console.log(`❌ User ${socket.userId} is now offline`);
-                
-                // แจ้งผู้ใช้อื่นว่าผู้ใช้นี้ออฟไลน์
-                socket.broadcast.emit('user_offline', socket.userId);
-            } catch (error) {
-                console.error('❌ Error updating user offline status:', error);
-            }
-        }
-    });
-});
-
-// เพิ่ม socket.io instance ให้ routes สามารถใช้ได้
+// เพิ่ม SSE manager ให้ routes สามารถใช้ได้
 app.use((req, res, next) => {
-    req.io = io;
+    req.sseManager = sseManager;
     next();
 });
 
-// ทำให้ io instance เข้าถึงได้จาก app
-app.set('io', io);
+// ทำให้ SSE manager เข้าถึงได้จาก app
+app.set('sseManager', sseManager);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -429,7 +302,7 @@ app.use('*', (req, res) => {
 
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 Socket.IO server running`);
+    console.log(`📡 SSE server running`);
     console.log(`🌐 Environment: ${NODE_ENV}`);
     console.log(`🔗 CORS Origins: ${ALLOWED_ORIGINS.join(', ')}`);
     console.log(`📱 Expo Development Support: ${NODE_ENV === 'development' ? 'Enabled' : 'Limited'}`);

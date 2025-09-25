@@ -14,7 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createPrivateChat } from '../../service/api';
 import api, { API_URL } from '../../service/api';
-import { useSocket } from '../../context/SocketContext';
+import { useSocket } from '../../context/SocketContext_Mock';
 import { useAuth } from '../../context/AuthContext';
 import NotificationService from '../../service/notificationService';
 // Removed loading imports - no longer using loading functionality
