@@ -18,8 +18,6 @@ import {
   Dimensions
 } from 'react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import FileIcon from 'react-native-vector-icons/FontAwesome5';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -117,26 +115,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // Removed force stop loading timeout - no longer using loading functionality
 
-  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด)
+  // Auto-scroll ไปข้อความล่าสุดเมื่อเข้าแชทครั้งแรก
   useEffect(() => {
-    if (messages.length > 0 && !hasScrolledToEnd) {
-      console.log('📍 Auto-scrolling to end on messages change (background):', messages.length);
+    if (messages.length > 0 && !hasScrolledToEnd && !isLoadingMore) {
+      console.log('📍 Auto-scrolling to latest message on first load:', messages.length);
       
-      // ใช้ timeout เดียวเพื่อลด multiple scroll attempts
+      // ใช้ timeout เพื่อให้ FlatList render เสร็จก่อน
       const scrollTimeoutId = setTimeout(() => {
         try {
           if (messages.length > 0 && flatListRef.current) {
-            flatListRef.current.scrollToEnd({ animated: false });
+            flatListRef.current.scrollToEnd({ animated: true });
             setHasScrolledToEnd(true);
+            console.log('✅ Scrolled to latest message');
           }
         } catch (error) {
-          console.log('Scroll failed:', error);
+          console.log('⚠️ Initial scroll failed:', error);
         }
-      }, Platform.OS === 'ios' ? 200 : 100); // iOS ใช้เวลานานขึ้น
+      }, Platform.OS === 'ios' ? 300 : 200);
       
       return () => clearTimeout(scrollTimeoutId);
     }
-  }, [messages.length, hasScrolledToEnd]);
+  }, [messages.length, hasScrolledToEnd, isLoadingMore]);
 
   // Removed force stop loading when messages loaded - no longer using loading functionality
 
@@ -566,31 +565,75 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     try {
       setIsSending(true);
+      const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
+      
+      // Optimistic UI - เพิ่มข้อความทันทีก่อนส่งไปเซิร์ฟเวอร์
+      const optimisticMessage = {
+        _id: tempId,
+        content: 'รูปภาพ',
+        sender: currentUser,
+        timestamp: new Date().toISOString(),
+        messageType: 'image',
+        image: {
+          uri: imageAsset.uri,
+          file_path: imageAsset.uri
+        },
+        user_id: currentUser,
+        isOptimistic: true,
+        isRead: false
+      };
+
+      // เพิ่มข้อความลงใน UI ทันที
+      setMessages(prev => {
+        const newMessages = [...prev, optimisticMessage];
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return newMessages;
+      });
       
       const formData = new FormData();
-      formData.append('chatroomId', chatroomId);
-      formData.append('senderId', currentUser._id);
-      formData.append('messageType', 'image');
-      formData.append('message', ''); // ข้อความว่าง
+      formData.append('content', 'รูปภาพ');
       
-      formData.append('image', {
+      formData.append('file', {
         uri: imageAsset.uri,
         type: imageAsset.mimeType || 'image/jpeg',
         name: imageAsset.fileName || 'image.jpg',
       });
 
-      const response = await api.post('/chatrooms/send-message', formData, {
+      const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      if (response.data && response.data.success) {
-        // ปิดเมนูแนบไฟล์
-        setShowAttachmentMenu(false);
-      }
+      // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
+      setMessages(prev => {
+        const filteredMessages = prev.filter(msg => msg._id !== tempId);
+        
+        // ตรวจสอบว่ามีข้อความนี้อยู่แล้วหรือไม่
+        const messageExists = filteredMessages.some(msg => msg._id === response.data._id);
+        if (messageExists) {
+          return filteredMessages;
+        }
+        
+        const serverMessage = { ...response.data, isOptimistic: false };
+        const updatedMessages = [...filteredMessages, serverMessage];
+        
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        
+        return updatedMessages;
+      });
+
+      console.log('✅ Image sent successfully');
     } catch (error) {
       console.error('Error sending image:', error);
+      
+      // ลบข้อความชั่วคราวถ้าส่งไม่สำเร็จ
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
+      
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งรูปภาพได้');
     } finally {
       setIsSending(false);
@@ -649,10 +692,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันเลือกไอคอนตามประเภทไฟล์
+  // ฟังก์ชันเลือกข้อความตามประเภทไฟล์
   const getFileIcon = (fileName) => {
     if (!fileName) {
-      return <Icon name="attach-file" size={20} color="#666" />;
+      return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
     }
     
     const decodedName = decodeFileName(fileName);
@@ -660,53 +703,53 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     switch (extension) {
       case 'pdf':
-        return <FileIcon name="file-pdf" size={20} color="#E53E3E" />;
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>PDF</Text>;
       case 'doc':
       case 'docx':
-        return <FileIcon name="file-word" size={20} color="#2B6CB0" />;
+        return <Text style={{ fontSize: 12, color: "#2B6CB0", fontWeight: 'bold' }}>DOC</Text>;
       case 'xls':
       case 'xlsx':
-        return <FileIcon name="file-excel" size={20} color="#38A169" />;
+        return <Text style={{ fontSize: 12, color: "#38A169", fontWeight: 'bold' }}>XLS</Text>;
       case 'ppt':
       case 'pptx':
-        return <FileIcon name="file-powerpoint" size={20} color="#D69E2E" />;
+        return <Text style={{ fontSize: 12, color: "#D69E2E", fontWeight: 'bold' }}>PPT</Text>;
       case 'jpg':
       case 'jpeg':
       case 'png':
       case 'gif':
       case 'webp':
       case 'bmp':
-        return <FileIcon name="file-image" size={20} color="#9F7AEA" />;
+        return <Text style={{ fontSize: 12, color: "#9F7AEA", fontWeight: 'bold' }}>IMG</Text>;
       case 'mp4':
       case 'avi':
       case 'mov':
       case 'wmv':
       case 'flv':
-        return <FileIcon name="file-video" size={20} color="#E53E3E" />;
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>VID</Text>;
       case 'mp3':
       case 'wav':
       case 'aac':
       case 'flac':
-        return <FileIcon name="file-audio" size={20} color="#38B2AC" />;
+        return <Text style={{ fontSize: 12, color: "#38B2AC", fontWeight: 'bold' }}>AUD</Text>;
       case 'zip':
       case 'rar':
       case '7z':
-        return <FileIcon name="file-archive" size={20} color="#805AD5" />;
+        return <Text style={{ fontSize: 12, color: "#805AD5", fontWeight: 'bold' }}>ZIP</Text>;
       case 'txt':
-        return <FileIcon name="file-alt" size={20} color="#4A5568" />;
+        return <Text style={{ fontSize: 12, color: "#4A5568", fontWeight: 'bold' }}>TXT</Text>;
       case 'js':
       case 'jsx':
       case 'ts':
       case 'tsx':
-        return <FileIcon name="file-code" size={20} color="#F6AD55" />;
+        return <Text style={{ fontSize: 12, color: "#F6AD55", fontWeight: 'bold' }}>JS</Text>;
       case 'css':
       case 'scss':
       case 'less':
-        return <FileIcon name="file-code" size={20} color="#4299E1" />;
+        return <Text style={{ fontSize: 12, color: "#4299E1", fontWeight: 'bold' }}>CSS</Text>;
       case 'html':
-        return <FileIcon name="file-code" size={20} color="#E53E3E" />;
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>HTML</Text>;
       default:
-        return <Icon name="attach-file" size={20} color="#666" />;
+        return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
     }
   };
 
@@ -1011,35 +1054,41 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันจัดการการเลือกข้อความ
   const handleMessageSelect = (messageId) => {
-    if (!selectionMode) return;
+    console.log('🔄 handleMessageSelect called:', { messageId, selectionMode, selectedMessages });
+    if (!selectionMode) {
+      console.log('❌ Not in selection mode');
+      return;
+    }
     
     setSelectedMessages(prev => {
-      if (prev.includes(messageId)) {
-        return prev.filter(id => id !== messageId);
-      } else {
-        return [...prev, messageId];
-      }
+      const newSelection = prev.includes(messageId) 
+        ? prev.filter(id => id !== messageId)
+        : [...prev, messageId];
+      console.log('✅ Updated selectedMessages:', newSelection);
+      return newSelection;
     });
   };
 
-  // ฟังก์ชันลบข้อความที่เลือก
+  // ฟังก์ชันลบข้อความที่เลือก (เฉพาะในเครื่อง)
   const deleteSelectedMessages = () => {
     if (selectedMessages.length === 0) return;
     
     Alert.alert(
       'ลบข้อความ',
-      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?`,
+      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?\n(ลบเฉพาะในเครื่องของคุณ ไม่ลบจากเซิร์ฟเวอร์)`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
           text: 'ลบ',
           style: 'destructive',
-          onPress: async () => {
-            for (const messageId of selectedMessages) {
-              await handleDeleteMessage(messageId);
-            }
+          onPress: () => {
+            // ลบข้อความเฉพาะในเครื่อง (ไม่ส่งไปเซิร์ฟเวอร์)
+            setMessages(prevMessages => 
+              prevMessages.filter(msg => !selectedMessages.includes(msg._id))
+            );
             setSelectedMessages([]);
             setSelectionMode(false);
+            console.log(`✅ Deleted ${selectedMessages.length} messages locally`);
           }
         }
       ]
@@ -1078,64 +1127,68 @@ const PrivateChatScreen = ({ route, navigation }) => {
     setEditText('');
   };
 
-  // ฟังก์ชันโหลดแชทเก่า
+  // ฟังก์ชันโหลดข้อความเก่า (ปรับปรุงให้เร็วขึ้น)
   const loadOlderMessages = async () => {
-    if (isLoadingMore || !canLoadMore || messages.length === 0) return;
+    if (isLoadingMore || !canLoadMore || !chatroomId) return;
     
     setIsLoadingMore(true);
+    
     try {
-      const oldestMessage = messages[0];
-      console.log('🔄 Loading older messages before:', oldestMessage.createdAt);
+      // คำนวณหน้าถัดไปจากจำนวนข้อความปัจจุบัน
+      const currentPage = Math.floor(messages.length / 30) + 1;
       
-      // ใช้ API endpoint ที่ถูกต้อง
-      const response = await api.get(`/chats/${chatroomId}/messages`, {
-        params: {
-          before: oldestMessage.createdAt,
-          limit: 30
-        }
-      });
-
-      console.log('📥 Older messages response:', response.data);
-
-      if (response.data && response.data.messages) {
-        const olderMessages = response.data.messages;
-        
-        if (olderMessages.length === 0) {
-          console.log('📭 No more older messages');
-          setCanLoadMore(false);
-        } else {
-          console.log(`📬 Loaded ${olderMessages.length} older messages`);
-          setMessages(prev => [...olderMessages, ...prev]);
-        }
-      } else {
-        // ลองใช้ API format อื่น
-        const altResponse = await api.get(`/chats/${chatroomId}`, {
-          params: {
-            page: Math.floor(messages.length / 30) + 1,
-            limit: 30
-          }
-        });
-        
-        if (altResponse.data && altResponse.data.messages) {
-          const olderMessages = altResponse.data.messages;
-          if (olderMessages.length === 0) {
-            setCanLoadMore(false);
-          } else {
-            // กรองข้อความที่ไม่ซ้ำ
-            const newMessages = olderMessages.filter(msg => 
-              !messages.some(existingMsg => existingMsg._id === msg._id)
-            );
-            if (newMessages.length > 0) {
-              setMessages(prev => [...newMessages, ...prev]);
-            } else {
-              setCanLoadMore(false);
-            }
-          }
-        }
+      console.log(`🔄 Loading older messages - page ${currentPage + 1}`);
+      
+      // เพิ่ม timeout เพื่อป้องกันการรอนาน
+      const response = await Promise.race([
+        api.get(`/chats/${chatroomId}/messages?limit=30&page=${currentPage + 1}`),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Load timeout')), 10000)
+        )
+      ]);
+      
+      const olderMessages = response.data.messages || [];
+      
+      if (olderMessages.length === 0) {
+        console.log('📭 No more older messages');
+        setCanLoadMore(false);
+        return;
       }
+      
+      // เพิ่มข้อความเก่าที่ด้านบนอย่างรวดเร็ว
+      setMessages(prevMessages => [
+        ...olderMessages.map(msg => ({
+          ...msg,
+          isRead: msg.isRead !== undefined ? msg.isRead : false
+        })),
+        ...prevMessages
+      ]);
+      
+      console.log(`✅ Loaded ${olderMessages.length} older messages`);
+      
+      // รักษาตำแหน่งการเลื่อนอย่างง่าย
+      setTimeout(() => {
+        if (flatListRef.current) {
+          const estimatedHeight = olderMessages.length * 80;
+          flatListRef.current.scrollToOffset({
+            offset: estimatedHeight,
+            animated: false
+          });
+        }
+      }, 50); // ลดเวลารอ
+      
+      // ตัดสินใจว่าสามารถโหลดต่อได้หรือไม่
+      if (olderMessages.length < 30) {
+        setCanLoadMore(false);
+      }
+      
     } catch (error) {
       console.error('❌ Error loading older messages:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อความเก่าได้');
+      if (error.message === 'Load timeout') {
+        Alert.alert('การโหลดช้า', 'การโหลดข้อความใช้เวลานานกว่าปกติ กรุณาลองใหม่');
+      } else {
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อความเก่าได้');
+      }
     } finally {
       setIsLoadingMore(false);
     }
@@ -1227,8 +1280,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
     };
     
     const handleMessagePress = () => {
+      console.log('👆 handleMessagePress called:', { selectionMode, messageId: item._id });
       if (selectionMode) {
         // ในโหมดเลือก ให้เลือก/ยกเลิกเลือกข้อความ
+        console.log('🎯 In selection mode, calling handleMessageSelect');
         handleMessageSelect(item._id);
         return;
       }
@@ -1294,12 +1349,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 <TouchableOpacity 
                   style={styles.imageContainer}
                   onPress={() => {
-                    const imageUri = item.image?.file_path || 
-                                    item.image?.uri ||
-                                    (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                                      item.file.url : 
-                                      (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
-                    openImageModal(imageUri);
+                    if (selectionMode) {
+                      // ในโหมดเลือก ให้เลือกข้อความแทนการเปิดรูป
+                      handleMessageSelect(item._id);
+                    } else {
+                      // โหมดปกติ เปิดรูปภาพ
+                      const imageUri = item.image?.file_path || 
+                                      item.image?.uri ||
+                                      (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                                        item.file.url : 
+                                        (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+                      openImageModal(imageUri);
+                    }
                   }}
                 >
                   <Image
@@ -1484,7 +1545,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.fileAttachment,
                       isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
                     ]}
-                    onPress={() => showFileOptions(item.file)}
+                    onPress={() => {
+                      if (selectionMode) {
+                        // ในโหมดเลือก ให้เลือกข้อความแทนการเปิดไฟล์
+                        handleMessageSelect(item._id);
+                      } else {
+                        // โหมดปกติ เปิดตัวเลือกไฟล์
+                        showFileOptions(item.file);
+                      }
+                    }}
                   >
                     <View style={styles.fileIcon}>
                       {getFileIcon(decodeFileName(item.file.file_name))}
@@ -1730,46 +1799,59 @@ const PrivateChatScreen = ({ route, navigation }) => {
           </View>
         </View>
         
-        <View style={{ width: 40 }}>
-          {/* จุดสามจุดมุมขวาบน */}
+        {/* ปุ่มขวาบน - จัดการแชท */}
+        <View style={{ minWidth: 48, alignItems: 'center' }}>
           <TouchableOpacity
             onPress={() => {
-              console.log('📱 Three dots menu pressed');
-              setShowHeaderMenu(!showHeaderMenu);
+              console.log('📱 Menu button pressed, current selectionMode:', selectionMode);
+              if (selectionMode) {
+                // ยกเลิกโหมดเลือก
+                console.log('🔄 Turning OFF selection mode');
+                setSelectionMode(false);
+                setSelectedMessages([]);
+              } else {
+                // เข้าสู่โหมดเลือก
+                console.log('🔄 Turning ON selection mode');
+                setSelectionMode(true);
+              }
             }}
             style={{ 
-              padding: 8,
+              padding: 12,
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              backgroundColor: selectionMode ? '#FF3B30' : '#007AFF',
+              borderRadius: 8,
+              minWidth: 40,
+              minHeight: 40
             }}
           >
-            <Icon name="more-vert" size={24} color="#007AFF" />
+            <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>
+              {selectionMode ? 'ยกเลิก' : 'เมนู'}
+            </Text>
           </TouchableOpacity>
           
-          {/* Header Menu Dropdown */}
-          {showHeaderMenu && (
-            <View style={styles.headerMenuDropdown}>
-              <TouchableOpacity
-                style={styles.headerMenuItem}
-                onPress={() => {
-                  console.log('📋 Manage chat pressed');
-                  setShowHeaderMenu(false);
-                  if (selectionMode) {
-                    setSelectionMode(false);
-                    setSelectedMessages([]);
-                  } else {
-                    setSelectionMode(true);
-                  }
-                }}
-              >
-                <Text style={styles.headerMenuText}>
-                  {selectionMode ? 'ยกเลิกการเลือก' : 'จัดการแชท'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+
         </View>
+
       </View>
+
+      {/* Selection Mode Banner */}
+      {selectionMode && (
+        <View style={{
+          backgroundColor: '#FF3B30',
+          paddingVertical: 8,
+          paddingHorizontal: 16,
+          alignItems: 'center'
+        }}>
+          <Text style={{
+            color: 'white',
+            fontSize: 14,
+            fontWeight: 'bold'
+          }}>
+            โหมดเลือกข้อความ - กดที่ข้อความเพื่อเลือก ({selectedMessages.length} เลือกแล้ว)
+          </Text>
+        </View>
+      )}
 
       {/* รายการข้อความ */}
       <View 
@@ -1859,21 +1941,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   </>
 
               </View>
-              
-              <TouchableOpacity 
-                onPress={removeSelectedFile}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: '#ef4444',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: 8
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>×</Text>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1889,7 +1956,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 setShowAttachmentMenu(false);
               }}
             >
-              <Icon name="photo" size={24} color="#10b981" />
+              <Text style={{ fontSize: 16, color: "#10b981", fontWeight: 'bold' }}>IMG</Text>
+              <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
@@ -1899,10 +1967,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 setShowAttachmentMenu(false);
               }}
             >
-              <Icon name="attach-file" size={24} color="#3b82f6" />
+              <Text style={{ fontSize: 16, color: "#3b82f6", fontWeight: 'bold' }}>FILE</Text>
+              <Text style={styles.attachmentMenuText}>ไฟล์</Text>
             </TouchableOpacity>
           </View>
         )}        <View style={styles.messageInputRow}>
+          <TouchableOpacity
+            style={styles.leftAttachmentButton}
+            onPress={() => {
+              console.log('📎 Plus button pressed');
+              setShowAttachmentMenu(!showAttachmentMenu);
+            }}
+          >
+            <Text style={{ fontSize: 28, color: "#007AFF", fontWeight: 'bold' }}>+</Text>
+          </TouchableOpacity>
+          
           <TextInput
             style={styles.textInput}
             value={newMessage}
@@ -1919,21 +1998,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
           />
           
           <TouchableOpacity
-            style={styles.floatingPlusButton}
-            onPress={() => {
-              console.log('📎 Plus button pressed');
-              setShowAttachmentMenu(!showAttachmentMenu);
-            }}
-          >
-            <Icon name="add" size={24} color="#007AFF" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
             style={styles.floatingSendButton}
             onPress={sendMessage}
             disabled={(!newMessage.trim() && !selectedFile) || isSending}
           >
-            <Icon name="send" size={20} color="#fff" />
+            <Text style={styles.sendButtonText}>ส่ง</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2043,6 +2112,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+
     </KeyboardAvoidingView>
   );
 };
@@ -2668,18 +2739,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   imageContainer: {
-    marginTop: 4,
     position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'transparent'
   },
   messageImage: {
     width: 220,
     height: 220,
     borderRadius: 12,
-  },
-  imageContainer: {
-    position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden'
+    backgroundColor: 'transparent'
   },
   
   // Separate Message Containers
@@ -2690,14 +2759,8 @@ const styles = StyleSheet.create({
   
   // Image Message Bubble
   imageMessageBubble: {
-    padding: 4,
-    borderRadius: 16,
     marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1
+    backgroundColor: 'transparent',
   },
   myImageBubble: {
     backgroundColor: 'transparent',
@@ -2993,21 +3056,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
   },
-  floatingSendButton: {
-    position: 'absolute',
-    right: 15,
-    top: 8,
+  leftAttachmentButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+  },
+  floatingSendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   verticalAttachmentMenu: {
     position: 'absolute',
@@ -3026,12 +3107,20 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   verticalAttachmentItem: {
+    flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 15,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     borderRadius: 8,
     marginVertical: 2,
+    minWidth: 120,
+  },
+  attachmentMenuText: {
+    fontSize: 16,
+    color: '#1f2937',
+    fontWeight: '500',
+    marginLeft: 12,
   },
 });
 

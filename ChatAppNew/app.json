@@ -27,7 +27,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.kanoop60.chatappnew"
     },
     "web": {
       "favicon": "./assets/favicon.png"
