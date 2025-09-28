@@ -72,6 +72,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
     fromSearch = false
   } = route.params || {};
 
+  // Debug useEffect for selectionMode
+  useEffect(() => {
+    console.log('👀 selectionMode changed:', { selectionMode, selectedCount: selectedMessages.length });
+  }, [selectionMode, selectedMessages]);
+
   // Removed initial loading state - no longer using loading functionality
 
   // ตรวจสอบ chatroomId ตั้งแต่ต้น
@@ -1280,22 +1285,44 @@ const PrivateChatScreen = ({ route, navigation }) => {
     };
     
     const handleMessagePress = () => {
-      console.log('👆 handleMessagePress called:', { selectionMode, messageId: item._id });
+      console.log('👆 handleMessagePress called:', { 
+        selectionMode, 
+        messageId: item._id,
+        selectedMessages: selectedMessages.length 
+      });
+      
+      // Force selection mode to work - direct call
       if (selectionMode) {
-        // ในโหมดเลือก ให้เลือก/ยกเลิกเลือกข้อความ
         console.log('🎯 In selection mode, calling handleMessageSelect');
-        handleMessageSelect(item._id);
+        console.log('🔍 Current selectedMessages before:', selectedMessages);
+        
+        // Direct state update instead of calling function
+        setSelectedMessages(prev => {
+          const isSelected = prev.includes(item._id);
+          const newSelection = isSelected 
+            ? prev.filter(id => id !== item._id)
+            : [...prev, item._id];
+          console.log('✅ Direct update selectedMessages:', { 
+            was: prev, 
+            now: newSelection,
+            action: isSelected ? 'removed' : 'added' 
+          });
+          return newSelection;
+        });
         return;
       }
       
+      // In normal mode - handle double press and time toggle
       const now = Date.now();
       const DOUBLE_PRESS_DELAY = 300;
       
       if (item.lastPress && (now - item.lastPress) < DOUBLE_PRESS_DELAY) {
         // Double press detected - แก้ไขข้อความ
+        console.log('🔄 Double press - edit message');
         handleMessageDoublePress(item);
       } else {
         // Single press - แสดง/ซ่อนเวลา (สำหรับทุกข้อความ)
+        console.log('🔄 Single press - toggle time');
         toggleShowTime(item._id);
         item.lastPress = now;
       }
@@ -1305,13 +1332,42 @@ const PrivateChatScreen = ({ route, navigation }) => {
       <TouchableOpacity
         style={[
           styles.messageContainer,
-          isMyMessage ? styles.myMessage : styles.otherMessage,
-          selectedMessages.includes(item._id) && styles.selectedMessage
+          isMyMessage ? styles.myMessage : styles.otherMessage
         ]}
         onLongPress={isMyMessage ? handleDeleteMessageConfirm : null}
-        onPress={handleMessagePress}
+        onPress={() => {
+          console.log('🚀 TouchableOpacity onPress fired!');
+          handleMessagePress();
+        }}
         delayLongPress={500}
+        activeOpacity={0.7}
       >
+        {/* Checkbox สำหรับ Selection Mode - แสดงเฉพาะข้อความที่ถูกเลือก */}
+        {selectionMode && selectedMessages.includes(item._id) && (
+          <View 
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 10,
+              left: isMyMessage ? 10 : 50,
+              zIndex: 10,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              borderWidth: 2,
+              borderColor: '#007AFF',
+              backgroundColor: '#007AFF',
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.2,
+              shadowRadius: 2,
+              elevation: 2
+            }}>
+            <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>✓</Text>
+          </View>
+        )}
         {!isMyMessage && (
           <View style={styles.messageAvatarContainer}>
             {recipientAvatar ? (
@@ -1344,7 +1400,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
               <View style={[
                 styles.imageMessageBubble,
                 isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
-                item.isOptimistic && styles.optimisticMessage
+                item.isOptimistic && styles.optimisticMessage,
+                selectedMessages.includes(item._id) && styles.selectedMessage
               ]}>
                 <TouchableOpacity 
                   style={styles.imageContainer}
@@ -1386,29 +1443,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       console.log('✅ Image loaded successfully');
                     }}
                   />
-                  
-                  {/* ปุ่มลบรูปภาพ (แสดงเฉพาะข้อความของตัวเอง) */}
-                  {isMyMessage && (
-                    <TouchableOpacity 
-                      style={styles.deleteImageButton}
-                      onPress={() => {
-                        Alert.alert(
-                          'ลบรูปภาพ',
-                          'คุณต้องการลบรูปภาพนี้หรือไม่?',
-                          [
-                            { text: 'ยกเลิก', style: 'cancel' },
-                            { 
-                              text: 'ลบ', 
-                              style: 'destructive',
-                              onPress: () => handleDeleteMessage(item._id)
-                            }
-                          ]
-                        );
-                      }}
-                    >
-                      <Text style={styles.deleteImageButtonText}>×</Text>
-                    </TouchableOpacity>
-                  )}
+
                 </TouchableOpacity>
               </View>
               
@@ -1470,7 +1505,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 styles.messageBubble,
                 isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
                 item.isOptimistic && styles.optimisticMessage,
-                (item.image || (item.file && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && styles.messageWithMedia
+                (item.image || (item.file && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && styles.messageWithMedia,
+                selectedMessages.includes(item._id) && styles.selectedMessage
               ]}>
                 <Text style={[
                   styles.messageText,
@@ -1537,7 +1573,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
               <View style={[
                 styles.fileMessageBubble,
                 isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
-                item.isOptimistic && styles.optimisticMessage
+                item.isOptimistic && styles.optimisticMessage,
+                selectedMessages.includes(item._id) && styles.selectedMessage
               ]}>
                 <View style={styles.fileAttachmentContainer}>
                   <TouchableOpacity 
@@ -1573,29 +1610,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       </Text>
                     </View>
                   </TouchableOpacity>
-                  
-                  {/* ปุ่มลบไฟล์ (แสดงเฉพาะข้อความของตัวเอง) */}
-                  {isMyMessage && (
-                    <TouchableOpacity 
-                      style={styles.deleteFileButton}
-                      onPress={() => {
-                        Alert.alert(
-                          'ลบไฟล์',
-                          `คุณต้องการลบไฟล์ "${item.file.file_name || 'ไฟล์แนบ'}" หรือไม่?`,
-                          [
-                            { text: 'ยกเลิก', style: 'cancel' },
-                            { 
-                              text: 'ลบ', 
-                              style: 'destructive',
-                              onPress: () => handleDeleteMessage(item._id)
-                            }
-                          ]
-                        );
-                      }}
-                    >
-                      <Text style={styles.deleteFileButtonText}>×</Text>
-                    </TouchableOpacity>
-                  )}
+
                 </View>
               </View>
               
@@ -1646,7 +1661,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </View>
       </TouchableOpacity>
     );
-  }, [currentUser, recipientAvatar, recipientName, messages, showTimeForMessages, timeAnimations]);
+  }, [currentUser, recipientAvatar, recipientName, messages, showTimeForMessages, timeAnimations, selectionMode, selectedMessages]);
 
   // ฟังก์ชันแสดงรายการข้อความ - ลบ loading ออกแล้ว
   const renderMessageLoadingContent = () => {
@@ -1799,40 +1814,92 @@ const PrivateChatScreen = ({ route, navigation }) => {
           </View>
         </View>
         
-        {/* ปุ่มขวาบน - จัดการแชท */}
-        <View style={{ minWidth: 48, alignItems: 'center' }}>
-          <TouchableOpacity
-            onPress={() => {
-              console.log('📱 Menu button pressed, current selectionMode:', selectionMode);
-              if (selectionMode) {
-                // ยกเลิกโหมดเลือก
-                console.log('🔄 Turning OFF selection mode');
-                setSelectionMode(false);
-                setSelectedMessages([]);
-              } else {
-                // เข้าสู่โหมดเลือก
-                console.log('🔄 Turning ON selection mode');
+        {/* ปุ่มขวาบน */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {selectionMode ? (
+            <>
+              {/* ปุ่มยกเลิก - ซ้าย */}
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('� Cancel selection mode');
+                  setSelectionMode(false);
+                  setSelectedMessages([]);
+                }}
+                style={{ 
+                  padding: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#6B7280',
+                  borderRadius: 8,
+                  minWidth: 60,
+                  minHeight: 32,
+                  marginRight: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+                  ยกเลิก
+                </Text>
+              </TouchableOpacity>
+              
+              {/* ปุ่มลบ - ขวา */}
+              <TouchableOpacity
+                onPress={deleteSelectedMessages}
+                disabled={selectedMessages.length === 0}
+                style={{ 
+                  padding: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: selectedMessages.length > 0 ? '#FF3B30' : '#9CA3AF',
+                  borderRadius: 8,
+                  minWidth: 50,
+                  minHeight: 32
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+                  ลบ ({selectedMessages.length})
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              onPress={() => {
+                console.log('🔄 Turning ON selection mode - BEFORE:', { selectionMode });
                 setSelectionMode(true);
-              }
-            }}
-            style={{ 
-              padding: 12,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: selectionMode ? '#FF3B30' : '#007AFF',
-              borderRadius: 8,
-              minWidth: 40,
-              minHeight: 40
-            }}
-          >
-            <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>
-              {selectionMode ? 'ยกเลิก' : 'เมนู'}
-            </Text>
-          </TouchableOpacity>
-          
-
+                console.log('🔄 Turning ON selection mode - AFTER set to true');
+              }}
+              style={{ 
+                padding: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#007AFF',
+                borderRadius: 8,
+                minWidth: 50,
+                minHeight: 40
+              }}
+            >
+              <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>
+                เมนู
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
+      </View>
+
+      {/* Debug Banner - Always Show */}
+      <View style={{
+        backgroundColor: selectionMode ? '#FF3B30' : '#6B7280',
+        paddingVertical: 4,
+        paddingHorizontal: 16,
+        alignItems: 'center'
+      }}>
+        <Text style={{
+          color: 'white',
+          fontSize: 12,
+          fontWeight: 'bold'
+        }}>
+          DEBUG: {selectionMode ? 'โหมดเลือกข้อความ' : 'โหมดปกติ'} - เลือกแล้ว: {selectedMessages.length}
+        </Text>
       </View>
 
       {/* Selection Mode Banner */}
@@ -1879,17 +1946,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       )}
 
-      {/* Delete Selected Messages Button */}
-      {selectionMode && selectedMessages.length > 0 && (
-        <TouchableOpacity
-          style={styles.deleteSelectedButton}
-          onPress={deleteSelectedMessages}
-        >
-          <Text style={styles.deleteSelectedText}>
-            ลบ {selectedMessages.length} ข้อความ
-          </Text>
-        </TouchableOpacity>
-      )}
+
 
       {/* Input สำหรับพิมพ์ข้อความ */}
       <View style={styles.inputContainer}>
@@ -2978,9 +3035,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   selectedMessage: {
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-    borderWidth: 2,
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+    borderWidth: 3,
     borderColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
   },
   loadMoreContainer: {
     padding: 15,
