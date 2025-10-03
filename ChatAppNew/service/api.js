@@ -251,5 +251,15 @@ export const getGroupDetails = (groupId) => {
   return api.get(`/groups/${groupId}`);
 };
 
+export const removeGroupMember = (groupId, userId) => {
+  console.log('🦵 Removing member from group:', groupId, userId);
+  return api.delete(`/groups/${groupId}/members/${userId}`);
+};
+
+export const deleteGroup = (groupId) => {
+  console.log('🗑️ Deleting group:', groupId);
+  return api.delete(`/groups/${groupId}`);
+};
+
 export { API_URL };
 export default api;

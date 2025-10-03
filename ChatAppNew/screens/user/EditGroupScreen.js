@@ -265,15 +265,38 @@ const EditGroupScreen = ({ route, navigation }) => {
         }
       }
 
-      // อัปเดตสมาชิก (เพิ่มสมาชิกใหม่)
+      // อัปเดตสมาชิก (เพิ่มสมาชิกใหม่ และลบสมาชิกที่ไม่ได้เลือก)
       const currentMemberIds = currentMembers.map(member => member._id);
       const selectedUserIds = selectedUsers.map(user => user._id);
       const newMemberIds = selectedUserIds.filter(id => !currentMemberIds.includes(id));
+      const removedMemberIds = currentMemberIds.filter(id => !selectedUserIds.includes(id) && id !== authUser._id);
 
+      console.log('🔍 Member comparison:');
+      console.log('Current members:', currentMemberIds);
+      console.log('Selected users:', selectedUserIds);
+      console.log('New members to add:', newMemberIds);
+      console.log('Members to remove:', removedMemberIds);
+
+      // เพิ่มสมาชิกใหม่
       if (newMemberIds.length > 0) {
         console.log('🔄 Adding new members:', newMemberIds);
         const addMembersResponse = await addGroupMembers(groupId, newMemberIds);
         console.log('✅ New members added:', addMembersResponse.data);
+      }
+
+      // ลบสมาชิกที่ไม่ได้เลือก (ยกเว้นตัวเอง)
+      if (removedMemberIds.length > 0) {
+        console.log('🔄 Removing members:', removedMemberIds);
+        const { removeGroupMember } = await import('../../service/api');
+        
+        for (const memberId of removedMemberIds) {
+          try {
+            await removeGroupMember(groupId, memberId);
+            console.log('✅ Member removed:', memberId);
+          } catch (error) {
+            console.error('❌ Error removing member:', memberId, error);
+          }
+        }
       }
 
       // โหลดข้อมูลกลุ่มใหม่หลังจากอัปเดต
@@ -287,7 +310,8 @@ const EditGroupScreen = ({ route, navigation }) => {
             navigation.navigate('GroupChat', { 
               groupId, 
               refresh: true,
-              updatedMembers: selectedUsers.length 
+              updatedMembers: selectedUsers.length,
+              forceRefresh: Date.now() // เพิ่ม timestamp เพื่อบังคับ refresh
             });
           }
         }
@@ -673,7 +697,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 8,
     right: 8,
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
     borderRadius: 12,
     width: 24,
     height: 24,
@@ -769,7 +793,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   updateButton: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -822,11 +846,11 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 16,
-    color: '#FFA500',
+    color: '#333',
     fontWeight: '600',
   },
   searchInput: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#f0f0f0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -850,7 +874,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   selectedUserItem: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#f0f0f0',
   },
   userAvatar: {
     width: 40,

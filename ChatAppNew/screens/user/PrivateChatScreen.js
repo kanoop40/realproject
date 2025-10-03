@@ -1349,7 +1349,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
             style={{
               position: 'absolute',
               top: 10,
-              left: isMyMessage ? 10 : 50,
+              right: isMyMessage ? 10 : 'auto',
+              left: isMyMessage ? 'auto' : 50,
               zIndex: 10,
               width: 24,
               height: 24,

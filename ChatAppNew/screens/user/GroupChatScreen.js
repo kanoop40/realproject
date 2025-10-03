@@ -42,6 +42,12 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [showTimeForMessages, setShowTimeForMessages] = useState(new Set()); // เก็บ ID ของข้อความที่จะแสดงเวลา
   const [timeAnimations, setTimeAnimations] = useState({}); // เก็บ Animated.Value สำหรับแต่ละข้อความ
   const [messageReadCount, setMessageReadCount] = useState({}); // เก็บจำนวนคนที่อ่านข้อความแต่ละข้อความ
+  const [selectionMode, setSelectionMode] = useState(false); // โหมดเลือกข้อความ
+  const [selectedMessages, setSelectedMessages] = useState([]); // ข้อความที่เลือก
+  const [showMenuModal, setShowMenuModal] = useState(false); // Modal สำหรับเมนูตัวเลือก
+  const [isLoadingMore, setIsLoadingMore] = useState(false); // สำหรับโหลดข้อความเก่า
+  const [hasMoreMessages, setHasMoreMessages] = useState(true); // มีข้อความเก่าเหลืออยู่หรือไม่
+  const [currentPage, setCurrentPage] = useState(1); // หน้าปัจจุบัน
   const flatListRef = useRef(null);
 
   const { 
@@ -50,6 +56,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     groupAvatar, 
     refresh, 
     updatedMembers,
+    forceRefresh,
     showInitialLoading = false,
     fromCreate = false
   } = route.params || {};
@@ -68,9 +75,14 @@ const GroupChatScreen = ({ route, navigation }) => {
       console.log('🔄 Refreshing group data from EditGroupScreen with updated members:', updatedMembers);
       loadGroupData();
       // Reset navigation params หลังจาก refresh
-      navigation.setParams({ refresh: false, updatedMembers: undefined });
+      navigation.setParams({ refresh: false, updatedMembers: undefined, forceRefresh: undefined });
     }
-  }, [refresh, updatedMembers]);
+  }, [refresh, updatedMembers, forceRefresh]);
+
+  // Debug selection mode
+  useEffect(() => {
+    console.log('👀 selectionMode changed:', { selectionMode, selectedCount: selectedMessages.length });
+  }, [selectionMode, selectedMessages]);
 
   useEffect(() => {
     loadGroupData();
@@ -372,28 +384,48 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   }, [socket, groupId, authUser]);
 
-  const loadGroupData = async () => {
+  const loadGroupData = async (page = 1, append = false) => {
     try {
-      // setIsScrollingToEnd(true);
+      if (page === 1) {
+        // setIsScrollingToEnd(true);
+      } else {
+        setIsLoadingMore(true);
+      }
       
       const [messagesRes, groupRes] = await Promise.all([
-        api.get(`/groups/${groupId}/messages`),
-        api.get(`/groups/${groupId}`)
+        api.get(`/groups/${groupId}/messages?page=${page}&limit=30`),
+        page === 1 ? api.get(`/groups/${groupId}`) : Promise.resolve({ data: groupInfo })
       ]);
       
-      console.log('📨 Group messages loaded:', messagesRes.data);
-      console.log('👥 Group info loaded:', groupRes.data);
+      console.log('📨 Group messages loaded (page ' + page + '):', messagesRes.data);
+      if (page === 1) {
+        console.log('👥 Group info loaded:', groupRes.data);
+      }
       
       const loadedMessages = messagesRes.data.data || messagesRes.data.messages || [];
       const groupData = groupRes.data.data || groupRes.data;
       
       if (loadedMessages.length === 0) {
-        console.log('📨 No messages found - this is a new group chat');
-        setMessages([]); // ตั้งค่าเป็น array ว่าง
-        setHasScrolledToEnd(true);
+        if (page === 1) {
+          console.log('📨 No messages found - this is a new group chat');
+          setMessages([]); // ตั้งค่าเป็น array ว่าง
+          setHasScrolledToEnd(true);
+        }
+        setHasMoreMessages(false);
         // setIsScrollingToEnd(false);
       } else {
-        setMessages(loadedMessages);
+        if (append && page > 1) {
+          // เพิ่มข้อความเก่าเข้าไปด้านหน้า
+          setMessages(prevMessages => [...loadedMessages, ...prevMessages]);
+        } else {
+          // โหลดข้อความใหม่ทั้งหมด
+          setMessages(loadedMessages);
+        }
+        
+        // เช็คว่ามีข้อความเก่าเหลืออยู่อีกหรือไม่
+        if (loadedMessages.length < 30) {
+          setHasMoreMessages(false);
+        }
         
         // เริ่มต้นข้อมูล messageReadCount สำหรับข้อความที่โหลดมา
         const initialReadCount = {};
@@ -403,13 +435,19 @@ const GroupChatScreen = ({ route, navigation }) => {
             initialReadCount[message._id] = message.readCount || 0;
           }
         });
-        setMessageReadCount(initialReadCount);
+        
+        if (append) {
+          setMessageReadCount(prev => ({ ...initialReadCount, ...prev }));
+        } else {
+          setMessageReadCount(initialReadCount);
+        }
       }
-      console.log('📨 Messages set, total:', loadedMessages.length);
-      setGroupInfo(groupData);
-      
-      // แปลงข้อมูลสมาชิกให้ถูกต้อง
-      const members = groupData.members || [];
+      console.log('📨 Messages set, total:', append ? `${messages.length} + ${loadedMessages.length}` : loadedMessages.length);
+      if (page === 1) {
+        setGroupInfo(groupData);
+        
+        // แปลงข้อมูลสมาชิกให้ถูกต้อง
+        const members = groupData.members || [];
       const transformedMembers = members.map(member => ({
         _id: member.user?._id || member._id,
         firstName: member.user?.firstName || member.firstName,
@@ -420,17 +458,73 @@ const GroupChatScreen = ({ route, navigation }) => {
         role: member.role || member.user?.role || 'member'
       }));
       
-      setGroupMembers(transformedMembers);
-      console.log('👥 Transformed members:', transformedMembers);
-      console.log('👑 Group admin ID:', groupData.admin);
-      console.log('� Group creator ID:', groupData.creator);
-      console.log('�🔍 Admin member found:', transformedMembers.find(m => m._id === (groupData.admin || groupData.creator)));
-      console.log('👤 Current user ID:', authUser?._id);
+        setGroupMembers(transformedMembers);
+        console.log('👥 Transformed members:', transformedMembers);
+        console.log('👑 Group admin ID:', groupData.admin);
+        console.log('🎯 Group creator ID:', groupData.creator);
+        console.log('🔍 Admin member found:', transformedMembers.find(m => m._id === (groupData.admin || groupData.creator)));
+        console.log('👤 Current user ID:', authUser?._id);
+      }
+      
+      setCurrentPage(page);
       
     } catch (error) {
       console.error('Error loading group data:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลกลุ่มได้');
+    } finally {
+      if (page === 1) {
+        // setIsScrollingToEnd(false);
+      } else {
+        setIsLoadingMore(false);
+      }
     }
+  };
+
+  const loadMoreMessages = async () => {
+    if (isLoadingMore || !hasMoreMessages) return;
+    
+    console.log('📥 Loading more messages... Current page:', currentPage);
+    const nextPage = currentPage + 1;
+    await loadGroupData(nextPage, true);
+  };
+
+  const removeMember = async (memberId) => {
+    try {
+      const { removeGroupMember } = await import('../../service/api');
+      await removeGroupMember(groupId, memberId);
+      
+      // อัปเดตข้อมูลสมาชิกใหม่
+      await loadGroupData();
+      
+      Alert.alert('สำเร็จ', 'ลบสมาชิกออกจากกลุ่มแล้ว');
+    } catch (error) {
+      console.error('Error removing member:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบสมาชิกออกจากกลุ่มได้');
+    }
+  };
+
+  const deleteSelectedMessages = () => {
+    if (selectedMessages.length === 0) return;
+    
+    Alert.alert(
+      'ลบข้อความ',
+      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?\n(ลบเฉพาะในเครื่องของคุณ ไม่ลบจากเซิร์ฟเวอร์)`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ลบ',
+          style: 'destructive',
+          onPress: () => {
+            setMessages(prevMessages => 
+              prevMessages.filter(msg => !selectedMessages.includes(msg._id))
+            );
+            setSelectedMessages([]);
+            setSelectionMode(false);
+            console.log(`✅ Deleted ${selectedMessages.length} messages locally`);
+          }
+        }
+      ]
+    );
   };
 
   const sendMessage = async () => {
@@ -630,6 +724,12 @@ const GroupChatScreen = ({ route, navigation }) => {
     } finally {
       setIsSending(false);
     }
+  };
+
+  // ฟังก์ชันเปิดรูปภาพในโหมดเต็มจอ
+  const openImageModal = (imageUri) => {
+    setSelectedModalImage(imageUri);
+    setImageModalVisible(true);
   };
 
   const downloadFile = async (fileUrl, fileName) => {
@@ -851,23 +951,53 @@ const GroupChatScreen = ({ route, navigation }) => {
   };
 
   const leaveGroup = async () => {
-    Alert.alert('ออกจากกลุ่ม', 'คุณต้องการออกจากกลุ่มนี้หรือไม่?', [
-      { text: 'ยกเลิก', style: 'cancel' },
-      {
-        text: 'ออกจากกลุ่ม', style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.post(`/groups/${groupId}/leave`);
-            Alert.alert('สำเร็จ', 'ออกจากกลุ่มแล้ว', [
-              { text: 'ตกลง', onPress: () => navigation.goBack() }
-            ]);
-          } catch (error) {
-            console.error('Leave group error:', error.response?.data || error.message);
-            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถออกจากกลุ่มได้');
+    const isAdmin = isGroupAdmin();
+    
+    if (isAdmin) {
+      // หัวหน้ากลุ่มต้องลบกลุ่ม
+      Alert.alert(
+        'ลบกลุ่ม', 
+        'คุณเป็นหัวหน้ากลุ่ม การออกจากกลุ่มจะทำให้กลุ่มนี้ถูกลบถาวร\nคุณต้องการลบกลุ่มนี้หรือไม่?', 
+        [
+          { text: 'ยกเลิก', style: 'cancel' },
+          {
+            text: 'ลบกลุ่ม', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { deleteGroup } = await import('../../service/api');
+                await deleteGroup(groupId);
+                Alert.alert('สำเร็จ', 'ลบกลุ่มแล้ว', [
+                  { text: 'ตกลง', onPress: () => navigation.goBack() }
+                ]);
+              } catch (error) {
+                console.error('Delete group error:', error.response?.data || error.message);
+                Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบกลุ่มได้');
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      // สมาชิกทั่วไปออกจากกลุ่ม
+      Alert.alert('ออกจากกลุ่ม', 'คุณต้องการออกจากกลุ่มนี้หรือไม่?', [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ออกจากกลุ่ม', style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/groups/${groupId}/leave`);
+              Alert.alert('สำเร็จ', 'ออกจากกลุ่มแล้ว', [
+                { text: 'ตกลง', onPress: () => navigation.goBack() }
+              ]);
+            } catch (error) {
+              console.error('Leave group error:', error.response?.data || error.message);
+              Alert.alert('ข้อผิดพลาด', 'ไม่สามารถออกจากกลุ่มได้');
+            }
           }
         }
-      }
-    ]);
+      ]);
+    }
   };
 
   // ฟังก์ชันการจัดการกลุ่ม
@@ -974,6 +1104,81 @@ const GroupChatScreen = ({ route, navigation }) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // ฟังก์ชันแก้ไขชื่อไฟล์ที่เป็น URL encoding
+  const decodeFileName = (fileName) => {
+    if (!fileName) return 'ไฟล์แนบ';
+    
+    try {
+      // ลองแก้ไข URL encoding
+      const decoded = decodeURIComponent(fileName);
+      return decoded;
+    } catch (error) {
+      // ถ้าแก้ไขไม่ได้ ใช้ชื่อเดิม
+      return fileName;
+    }
+  };
+
+  // ฟังก์ชันเลือกข้อความตามประเภทไฟล์
+  const getFileIcon = (fileName) => {
+    if (!fileName) {
+      return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
+    }
+    
+    const decodedName = decodeFileName(fileName);
+    const extension = decodedName.split('.').pop()?.toLowerCase();
+    
+    switch (extension) {
+      case 'pdf':
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>PDF</Text>;
+      case 'doc':
+      case 'docx':
+        return <Text style={{ fontSize: 12, color: "#2B6CB0", fontWeight: 'bold' }}>DOC</Text>;
+      case 'xls':
+      case 'xlsx':
+        return <Text style={{ fontSize: 12, color: "#38A169", fontWeight: 'bold' }}>XLS</Text>;
+      case 'ppt':
+      case 'pptx':
+        return <Text style={{ fontSize: 12, color: "#D69E2E", fontWeight: 'bold' }}>PPT</Text>;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+      case 'bmp':
+        return <Text style={{ fontSize: 12, color: "#9F7AEA", fontWeight: 'bold' }}>IMG</Text>;
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+      case 'wmv':
+      case 'flv':
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>VID</Text>;
+      case 'mp3':
+      case 'wav':
+      case 'aac':
+      case 'flac':
+        return <Text style={{ fontSize: 12, color: "#38B2AC", fontWeight: 'bold' }}>AUD</Text>;
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return <Text style={{ fontSize: 12, color: "#805AD5", fontWeight: 'bold' }}>ZIP</Text>;
+      case 'txt':
+        return <Text style={{ fontSize: 12, color: "#4A5568", fontWeight: 'bold' }}>TXT</Text>;
+      case 'js':
+      case 'jsx':
+      case 'ts':
+      case 'tsx':
+        return <Text style={{ fontSize: 12, color: "#F6AD55", fontWeight: 'bold' }}>JS</Text>;
+      case 'css':
+      case 'scss':
+      case 'less':
+        return <Text style={{ fontSize: 12, color: "#4299E1", fontWeight: 'bold' }}>CSS</Text>;
+      case 'html':
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>HTML</Text>;
+      default:
+        return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
+    }
   };
 
   // ฟังก์ชันสำหรับแสดง/ซ่อนเวลาของข้อความ
@@ -1095,14 +1300,44 @@ const GroupChatScreen = ({ route, navigation }) => {
     const showTime = shouldShowTime(item, index);
 
     const handleMessagePress = () => {
+      console.log('👆 GROUP handleMessagePress called:', { 
+        selectionMode, 
+        messageId: item._id,
+        selectedMessages: selectedMessages.length 
+      });
+      
+      // Force selection mode to work - direct call
+      if (selectionMode) {
+        console.log('🎯 In selection mode, calling handleMessageSelect');
+        console.log('🔍 Current selectedMessages before:', selectedMessages);
+        
+        // Direct state update instead of calling function
+        setSelectedMessages(prev => {
+          const isSelected = prev.includes(item._id);
+          const newSelection = isSelected 
+            ? prev.filter(id => id !== item._id)
+            : [...prev, item._id];
+          console.log('✅ Direct update selectedMessages:', { 
+            was: prev, 
+            now: newSelection,
+            action: isSelected ? 'removed' : 'added' 
+          });
+          return newSelection;
+        });
+        return;
+      }
+      
+      // In normal mode - handle double press and time toggle
       const now = Date.now();
       const DOUBLE_PRESS_DELAY = 300;
       
       if (item.lastPress && (now - item.lastPress) < DOUBLE_PRESS_DELAY) {
         // Double press detected - แก้ไขข้อความ
+        console.log('🔄 Double press - edit message');
         handleMessageDoublePress(item);
       } else {
         // Single press - แสดง/ซ่อนเวลา (สำหรับทุกข้อความ)
+        console.log('🔄 Single press - toggle time');
         toggleShowTime(item._id);
         item.lastPress = now;
       }
@@ -1151,7 +1386,7 @@ const GroupChatScreen = ({ route, navigation }) => {
           
           <View style={{
             maxWidth: '85%',
-            alignItems: isMyMessage ? 'flex-end' : 'flex-start',
+            alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
           }}>
             {!isMyMessage && (
               <Text style={{
@@ -1165,23 +1400,73 @@ const GroupChatScreen = ({ route, navigation }) => {
               </Text>
             )}
             
-            {/* รูปภาพ */}
+            {/* รูปภาพ - ใช้รูปแบบเดียวกับแชทส่วนตัว */}
             {(item.messageType === 'image' || item.fileUrl?.match(/\.(jpg|jpeg|png|gif)$/i)) && (
               <View>
-                <TouchableOpacity
-                  style={{
-                    padding: 4,
-                    borderRadius: 18,
+                <View style={[
+                  {
+                    backgroundColor: isMyMessage ? '#007AFF' : '#ffffff',
+                    borderRadius: 16,
                     marginBottom: 4,
-                    backgroundColor: 'transparent',
                     alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
-                  }}
-                  onPress={() => {
-                    const imageUri = item.fileUrl;
-                    setSelectedModalImage(imageUri?.startsWith('http') ? imageUri : `${API_URL}${imageUri}`);
-                    setImageModalVisible(true);
-                  }}
-                >
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                    overflow: 'hidden'
+                  },
+                  selectedMessages.includes(item._id) && {
+                    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+                    borderWidth: 3,
+                    borderColor: '#007AFF',
+                    shadowColor: '#007AFF',
+                    shadowOffset: {
+                      width: 0,
+                      height: 0,
+                    },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }
+                ]}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('🚀 GROUP Image TouchableOpacity onPress fired!');
+                      if (selectionMode) {
+                        handleMessagePress();
+                      } else {
+                        openImageModal(item.fileUrl);
+                      }
+                    }}
+                  >
+                  {/* Checkbox สำหรับ Selection Mode - รูปภาพ */}
+                  {selectionMode && selectedMessages.includes(item._id) && (
+                    <View 
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        top: 15,
+                        left: isMyMessage ? 15 : 55,
+                        zIndex: 10,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        borderWidth: 2,
+                        borderColor: '#007AFF',
+                        backgroundColor: '#007AFF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 2,
+                        elevation: 2
+                      }}>
+                      <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>✓</Text>
+                    </View>
+                  )}
+                  
                   <Image
                     source={{
                       uri: (() => {
@@ -1279,60 +1564,124 @@ const GroupChatScreen = ({ route, navigation }) => {
                     )}
                   </Animated.View>
                 )}
+                </View>
               </View>
             )}
 
-            {/* ไฟล์ */}
+            {/* ไฟล์ - ใช้รูปแบบเดียวกับแชทส่วนตัว */}
             {item.messageType === 'file' && !item.fileUrl?.match(/\.(jpg|jpeg|png|gif)$/i) && (
               <View>
-                <TouchableOpacity
-                  style={{
-                    padding: 8,
+                <View style={[
+                  {
+                    padding: 4,
                     borderRadius: 18,
                     marginBottom: 4,
-                    maxWidth: 250,
-                    backgroundColor: isMyMessage ? '#007AFF' : '#f1f5f9',
+                    backgroundColor: 'transparent',
                     alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
-                  }}
-                  onPress={() => downloadFile(item.fileUrl, item.fileName)}
-                >
+                  },
+                  selectedMessages.includes(item._id) && {
+                    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+                    borderWidth: 3,
+                    borderColor: '#007AFF',
+                    shadowColor: '#007AFF',
+                    shadowOffset: {
+                      width: 0,
+                      height: 0,
+                    },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }
+                ]}>
+                  <TouchableOpacity
+                    style={[
+                      {
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 12,
+                        borderRadius: 12,
+                        minWidth: 200,
+                      },
+                      isMyMessage ? {
+                        backgroundColor: '#007AFF',
+                      } : {
+                        backgroundColor: '#fff',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }
+                    ]}
+                  onPress={() => {
+                      console.log('🚀 GROUP File TouchableOpacity onPress fired!');
+                      if (selectionMode) {
+                        handleMessagePress();
+                      } else {
+                        downloadFile(item.fileUrl, item.fileName || 'downloaded_file');
+                      }
+                    }}
+                  >
+                  {/* Checkbox สำหรับ Selection Mode - ไฟล์ */}
+                  {selectionMode && selectedMessages.includes(item._id) && (
+                    <View 
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: isMyMessage ? 10 : 50,
+                        zIndex: 10,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        borderWidth: 2,
+                        borderColor: '#007AFF',
+                        backgroundColor: '#007AFF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 2,
+                        elevation: 2
+                      }}>
+                      <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>✓</Text>
+                    </View>
+                  )}
+                  
                   <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: 'transparent',
+                    position: 'relative',
                   }}>
                     <View style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 8,
-                      backgroundColor: isMyMessage ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
+                      marginRight: 12,
                       justifyContent: 'center',
                       alignItems: 'center',
-                      marginRight: 12,
+                      width: 28,
+                      height: 28,
                     }}>
-                      <Text style={{
-                        fontSize: 16,
-                      }}>📄</Text>
+                      {getFileIcon(item.fileName)}
                     </View>
                     <View style={{
                       flex: 1,
-                      justifyContent: 'center',
                     }}>
                       <Text style={{
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: '500',
                         color: isMyMessage ? "#fff" : "#333",
                         marginBottom: 2,
-                      }} numberOfLines={1}>
-                        {item.fileName || 'ไฟล์แนบ'}
+                      }} numberOfLines={2}>
+                        {decodeFileName(item.fileName)}
                       </Text>
                       <Text style={{
                         fontSize: 12,
                         color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666",
                       }}>
-                        {formatFileSize(item.fileSize)}
+                        {item.fileSize ? formatFileSize(item.fileSize) : 'ขนาดไม่ทราบ'}
                       </Text>
                     </View>
+                  </View>
                     
                     {/* ปุ่มลบไฟล์ - แสดงเฉพาะผู้ส่ง */}
                     {isMyMessage && (
@@ -1371,7 +1720,6 @@ const GroupChatScreen = ({ route, navigation }) => {
                         }}>×</Text>
                       </TouchableOpacity>
                     )}
-                  </View>
                 </TouchableOpacity>
                 
                 {/* วันเวลาอยู่ข้างล่างไฟล์ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
@@ -1421,6 +1769,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                     )}
                   </Animated.View>
                 )}
+                </View>
               </View>
             )}
 
@@ -1428,27 +1777,73 @@ const GroupChatScreen = ({ route, navigation }) => {
             {(item.messageType === 'text' || (item.content && item.content.trim() !== '' && item.content !== '📷 รูปภาพ' && item.content !== '📎 ไฟล์แนบ')) && (
               <View>
                 <TouchableOpacity
-                  style={{
-                    maxWidth: '85%',
-                    minWidth: 'auto',
-                    padding: 12,
-                    borderRadius: 12,
-                    backgroundColor: isMyMessage ? '#007AFF' : '#f1f5f9',
-                    flexShrink: 1,
-                    alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
-                    borderBottomRightRadius: isMyMessage ? 12 : 12,
-                    borderBottomLeftRadius: isMyMessage ? 12 : 12,
-                    shadowColor: isMyMessage ? 'transparent' : '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: isMyMessage ? 0 : 0.1,
-                    shadowRadius: 2,
-                    elevation: isMyMessage ? 0 : 2,
-                    opacity: item.isTemporary ? 0.7 : 1,
-                  }}
+                  style={[
+                    {
+                      maxWidth: '85%',
+                      minWidth: 'auto',
+                      padding: 12,
+                      borderRadius: 12,
+                      backgroundColor: isMyMessage ? '#007AFF' : '#f1f5f9',
+                      flexShrink: 1,
+                      alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+                      borderBottomRightRadius: isMyMessage ? 12 : 12,
+                      borderBottomLeftRadius: isMyMessage ? 12 : 12,
+                      shadowColor: isMyMessage ? 'transparent' : '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: isMyMessage ? 0 : 0.1,
+                      shadowRadius: 2,
+                      elevation: isMyMessage ? 0 : 2,
+                      opacity: item.isTemporary ? 0.7 : 1,
+                    },
+                    selectedMessages.includes(item._id) && {
+                      backgroundColor: 'rgba(0, 122, 255, 0.2)',
+                      borderWidth: 3,
+                      borderColor: '#007AFF',
+                      shadowColor: '#007AFF',
+                      shadowOffset: {
+                        width: 0,
+                        height: 0,
+                      },
+                      shadowOpacity: 0.8,
+                      shadowRadius: 8,
+                      elevation: 8,
+                    }
+                  ]}
                   onLongPress={() => isMyMessage && deleteMessage(item._id)}
-                  onPress={handleMessagePress}
+                  onPress={() => {
+                    console.log('🚀 GROUP TouchableOpacity onPress fired!');
+                    handleMessagePress();
+                  }}
                   delayLongPress={800}
+                  activeOpacity={0.7}
                 >
+                  {/* Checkbox สำหรับ Selection Mode - แสดงเฉพาะข้อความที่ถูกเลือก */}
+                  {selectionMode && selectedMessages.includes(item._id) && (
+                    <View 
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: isMyMessage ? 10 : 50,
+                        zIndex: 10,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        borderWidth: 2,
+                        borderColor: '#007AFF',
+                        backgroundColor: '#007AFF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 2,
+                        elevation: 2
+                      }}>
+                      <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>✓</Text>
+                    </View>
+                  )}
+                  
                   <Text style={{
                     fontSize: 16,
                     lineHeight: 22,
@@ -1472,7 +1867,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                   {item.isSending && (
                     <ActivityIndicator 
                       size="small" 
-                      color={isMyMessage ? "#FFA500" : "#666"} 
+                      color={isMyMessage ? "#333" : "#666"} 
                       style={{ marginLeft: 8 }}
                     />
                   )}
@@ -1569,11 +1964,39 @@ const GroupChatScreen = ({ route, navigation }) => {
             {isCreator && ' • ผู้สร้างกลุ่ม'}
           </Text>
         </View>
-        {isCreator && (
-          <View style={styles.adminBadge}>
-            <Text style={styles.adminBadgeText}>ผู้สร้าง</Text>
-          </View>
-        )}
+        
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {isCreator && (
+            <View style={styles.adminBadge}>
+              <Text style={styles.adminBadgeText}>ผู้สร้าง</Text>
+            </View>
+          )}
+          
+          {/* ปุ่มเตะสมาชิกออก - แสดงเฉพาะผู้สร้างกลุ่ม และไม่ใช่ตัวเอง */}
+          {(groupInfo?.creator === authUser._id || groupInfo?.admin === authUser._id) && 
+           !isCreator && 
+           item._id !== authUser._id && (
+            <TouchableOpacity
+              style={styles.removeMemberButton}
+              onPress={() => {
+                Alert.alert(
+                  'เตะสมาชิกออก',
+                  `คุณต้องการเตะ ${memberName} ออกจากกลุ่มหรือไม่?`,
+                  [
+                    { text: 'ยกเลิก', style: 'cancel' },
+                    { 
+                      text: 'เตะออก', 
+                      style: 'destructive',
+                      onPress: () => removeMember(item._id)
+                    }
+                  ]
+                );
+              }}
+            >
+              <Text style={styles.removeMemberText}>เตะออก</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
@@ -1689,8 +2112,80 @@ const GroupChatScreen = ({ route, navigation }) => {
           </View>
         </TouchableOpacity>
 
-        {/* ปุ่มจัดการกลุ่ม (แสดงเฉพาะผู้สร้างกลุ่ม) */}
-        <View style={{ flexDirection: 'row' }}>
+        {/* Header Actions */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* ปุ่มยกเลิก/ลบ สำหรับ Selection Mode */}
+          {selectionMode ? (
+            <>
+              {/* ปุ่มยกเลิก - ซ้าย */}
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('🔄 Cancel selection mode');
+                  setSelectionMode(false);
+                  setSelectedMessages([]);
+                }}
+                style={{ 
+                  padding: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#6B7280',
+                  borderRadius: 8,
+                  minWidth: 60,
+                  minHeight: 32,
+                  marginRight: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+                  ยกเลิก
+                </Text>
+              </TouchableOpacity>
+              
+              {/* ปุ่มลบ - ขวา */}
+              <TouchableOpacity
+                onPress={deleteSelectedMessages}
+                disabled={selectedMessages.length === 0}
+                style={{ 
+                  padding: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: selectedMessages.length > 0 ? '#FF3B30' : '#9CA3AF',
+                  borderRadius: 8,
+                  minWidth: 50,
+                  minHeight: 32
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+                  ลบ ({selectedMessages.length})
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* ปุ่มเมนู - แสดง Modal ตัวเลือก */}
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('🔄 Opening group menu modal');
+                  setShowMenuModal(true);
+                }}
+                style={{ 
+                  padding: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#007AFF',
+                  borderRadius: 8,
+                  minWidth: 50,
+                  minHeight: 40,
+                  marginRight: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>
+                  เมนู
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* ปุ่มจัดการกลุ่ม (แสดงเฉพาะผู้สร้างกลุ่ม) */}
           {(() => {
             const isAdmin = isGroupAdmin();
             console.log('🔧 Showing manage button:', isAdmin);
@@ -1709,22 +2204,6 @@ const GroupChatScreen = ({ route, navigation }) => {
               }}>⚙️</Text>
             </TouchableOpacity>
           )}
-
-          <TouchableOpacity 
-            onPress={leaveGroup} 
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              backgroundColor: '#ef4444',
-              borderRadius: 12
-            }}
-          >
-            <Text style={{
-              fontSize: 12,
-              color: '#ffffff',
-              fontWeight: '500'
-            }}>ออก</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -1758,10 +2237,7 @@ const GroupChatScreen = ({ route, navigation }) => {
             keyboardShouldPersistTaps="handled"
           bounces={true}
           getItemLayout={null}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 100
-          }}
+          maintainVisibleContentPosition={null}
           ListEmptyComponent={() => (
             <View style={styles.emptyMessageContainer}>
               <Text style={styles.emptyMessageText}>
@@ -1805,8 +2281,41 @@ const GroupChatScreen = ({ route, navigation }) => {
             setShowScrollToBottom(!isAtBottom);
           }}
           scrollEventThrottle={16}
+          ListHeaderComponent={() => (
+            hasMoreMessages && messages.length > 0 ? (
+              <View style={styles.loadingMoreContainer}>
+                <TouchableOpacity
+                  style={styles.loadMoreButton}
+                  onPress={loadMoreMessages}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? (
+                    <ActivityIndicator size="small" color="#007AFF" />
+                  ) : (
+                    <Text style={styles.loadMoreText}>โหลดข้อความเก่า</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null
+          )}
         />
       </TouchableOpacity>
+
+      {/* Debug Banner - Group Chat */}
+      <View style={{
+        backgroundColor: selectionMode ? '#FF3B30' : '#6B7280',
+        paddingVertical: 4,
+        paddingHorizontal: 16,
+        alignItems: 'center'
+      }}>
+        <Text style={{
+          color: 'white',
+          fontSize: 10,
+          fontWeight: 'bold'
+        }}>
+          GROUP CHAT - Selection: {selectionMode ? 'ON' : 'OFF'} | Selected: {selectedMessages.length}
+        </Text>
+      </View>
 
       {/* Scroll to Bottom Button */}
       {showScrollToBottom && (
@@ -2225,6 +2734,88 @@ const GroupChatScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Modal สำหรับตัวเลือกเมนู - Dropdown ขวาบน */}
+      <Modal
+        visible={showMenuModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenuModal(false)}
+      >
+        <TouchableOpacity 
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.3)'
+          }}
+          activeOpacity={1}
+          onPress={() => setShowMenuModal(false)}
+        >
+          <View style={{
+            position: 'absolute',
+            top: 80, // ห่างจากขอบบน
+            right: 16, // ห่างจากขอบขวา
+            backgroundColor: 'white',
+            borderRadius: 12,
+            padding: 16,
+            width: 200,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 6,
+            elevation: 8
+          }}>
+            {/* ปุ่มเลือกข้อความเพื่อลบ */}
+            <TouchableOpacity
+              onPress={() => {
+                console.log('🔄 Entering selection mode from menu');
+                setShowMenuModal(false);
+                setSelectionMode(true);
+              }}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                backgroundColor: '#F0F8FF',
+                marginBottom: 8,
+                flexDirection: 'row',
+                alignItems: 'center'
+              }}
+            >
+              <Text style={{
+                color: '#007AFF',
+                fontSize: 14,
+                fontWeight: '500'
+              }}>
+                เลือกข้อความเพื่อลบ
+              </Text>
+            </TouchableOpacity>
+
+            {/* ปุ่มออกกลุ่ม */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowMenuModal(false);
+                leaveGroup();
+              }}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                backgroundColor: '#FFF0F0',
+                flexDirection: 'row',
+                alignItems: 'center'
+              }}
+            >
+              <Text style={{
+                color: '#FF3B30',
+                fontSize: 14,
+                fontWeight: '500'
+              }}>
+                ออกจากกลุ่ม
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -2411,7 +3002,7 @@ const styles = StyleSheet.create({
     width: 40, 
     height: 40, 
     borderRadius: 20, 
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
     justifyContent: 'center', 
     alignItems: 'center', 
     marginRight: 8,
@@ -2432,7 +3023,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, 
     paddingVertical: 10, 
     borderRadius: 20, 
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
   },
   sendTextLabel: { 
     fontSize: 16, 
@@ -2626,7 +3217,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   updateNameButton: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -2860,6 +3451,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+  },
+  fileAttachmentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  loadingMoreContainer: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  removeMemberButton: {
+    backgroundColor: '#ff4757',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  removeMemberText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
 });
 

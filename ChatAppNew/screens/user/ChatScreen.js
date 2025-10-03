@@ -25,8 +25,7 @@ const ChatScreen = ({ route, navigation }) => {
   const { user: authUser, loading: authLoading, login } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [chats, setChats] = useState([]);
-  const [hiddenChats, setHiddenChats] = useState([]); // เพิ่มสำหรับเก็บแชทที่ซ่อน
-  const hiddenChatsRef = useRef([]); // เพิ่ม ref สำหรับ hiddenChats
+  // ระบบซ่อนแชทถูกลบออกแล้ว
   const joinedChatroomsRef = useRef(new Set()); // เพิ่ม ref เพื่อ track chatrooms ที่ join แล้ว (สำหรับ iOS)
   const focusTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่ focus
   const lastLoadUserTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่โหลด user ครั้งล่าสุด
@@ -124,14 +123,9 @@ const ChatScreen = ({ route, navigation }) => {
           setServerStatus('ready');
         }
       }
-      loadHiddenChats(); // โหลดรายการแชทที่ซ่อน
+      // ระบบซ่อนแชทถูกลบออกแล้ว
     }
   }, [authLoading]);
-
-  // อัพเดท hiddenChatsRef เมื่อ hiddenChats เปลี่ยน
-  useEffect(() => {
-    hiddenChatsRef.current = hiddenChats;
-  }, [hiddenChats]);
 
   useEffect(() => {
     if (currentUser) {
@@ -175,11 +169,7 @@ const ChatScreen = ({ route, navigation }) => {
         console.log('💬 Current user:', currentUser._id);
         console.log('💬 Chatroom ID:', data.chatroomId);
         
-        // ตรวจสอบว่าแชทนี้ถูกซ่อนอยู่หรือไม่ หากใช่ให้แสดงกลับ
-        if (hiddenChatsRef.current.includes(data.chatroomId)) {
-          console.log('🔄 Unhiding chat due to new message:', data.chatroomId);
-          await unhideChat(data.chatroomId);
-        }
+        // ระบบซ่อนแชทถูกลบออกแล้ว
         
         // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
         const isOwnMessage = data.message.sender._id === currentUser._id;
@@ -433,32 +423,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // โหลดรายการแชทที่ซ่อน
-  const loadHiddenChats = async () => {
-    try {
-      const hidden = await AsyncStorage.getItem(`hiddenChats_${authUser?._id}`);
-      if (hidden) {
-        const hiddenList = JSON.parse(hidden);
-        console.log('📱 Loaded hidden chats:', hiddenList);
-        setHiddenChats(hiddenList);
-      } else {
-        console.log('📱 No hidden chats found');
-        setHiddenChats([]);
-      }
-    } catch (error) {
-      console.error('Error loading hidden chats:', error);
-      setHiddenChats([]);
-    }
-  };
-
-  // บันทึกรายการแชทที่ซ่อน
-  const saveHiddenChats = async (hiddenList) => {
-    try {
-      await AsyncStorage.setItem(`hiddenChats_${authUser?._id}`, JSON.stringify(hiddenList));
-    } catch (error) {
-      console.error('Error saving hidden chats:', error);
-    }
-  };
+  // ระบบซ่อนแชทถูกลบออกแล้ว
 
   const loadChats = async () => {
     try {
@@ -508,13 +473,8 @@ const ChatScreen = ({ route, navigation }) => {
       
       const allChats = [...filteredPrivateChats, ...filteredGroupChats];
       
-      // กรองออกแชทที่ซ่อนไว้ (เฉพาะแชทส่วนตัว ไม่รวมแชทกลุ่ม)
-      const visibleChats = allChats.filter(chat => 
-        chat.isGroup || !hiddenChatsRef.current.includes(chat._id) // แชทกลุ่มแสดงเสมอ
-      );
-      
       // เรียงตามเวลาล่าสุด (แชทที่มีกิจกรรมล่าสุดจะอยู่บนสุด)
-      const sortedChats = visibleChats.sort((a, b) => {
+      const sortedChats = allChats.sort((a, b) => {
         // ใช้เวลาล่าสุดจาก lastMessage, lastActivity หรือ createdAt
         const aTime = new Date(a.lastMessage?.timestamp || a.lastActivity || a.createdAt || 0);
         const bTime = new Date(b.lastMessage?.timestamp || b.lastActivity || b.createdAt || 0);
@@ -523,10 +483,7 @@ const ChatScreen = ({ route, navigation }) => {
         return bTime - aTime;
       });
       
-      console.log('🔍 All chats after filtering:', sortedChats.length);
-      console.log('🔍 Hidden chats:', hiddenChatsRef.current);
-      console.log('🔍 All chats before hiding filter:', allChats.length);
-      console.log('🔍 Visible chats after hiding filter:', visibleChats.length);
+      console.log('🔍 All chats after sorting:', sortedChats.length);
       
       setChats(sortedChats);
       console.log('✅ Updated chats state with', allChats.length, 'items');
@@ -556,77 +513,9 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันซ่อนแชท (แทนการลบ)
-  const hideChat = async (chatId) => {
-    try {
-      console.log('� Hiding chat:', chatId);
-      
-      const newHiddenChats = [...hiddenChats, chatId];
-      setHiddenChats(newHiddenChats);
-      await saveHiddenChats(newHiddenChats);
-      
-      // อัปเดตรายการแชทในหน้าจอ
-      setChats(prev => prev.filter(chat => chat._id !== chatId));
-      
-      Alert.alert('สำเร็จ', 'ซ่อนห้องแชทเรียบร้อยแล้ว');
-      
-    } catch (error) {
-      console.error('❌ Error hiding chat:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถซ่อนห้องแชทได้');
-    }
-  };
+  // ระบบซ่อนแชทถูกลบออกแล้ว - เปลี่ยนเป็นระบบจัดเรียงแชท
 
-  // ฟังก์ชันสำหรับแสดงแชทที่ซ่อนกลับมา (เมื่อได้รับข้อความใหม่)
-  const unhideChat = async (chatId) => {
-    try {
-      console.log('🔄 Unhiding chat:', chatId);
-      const newHiddenChats = hiddenChatsRef.current.filter(id => id !== chatId);
-      setHiddenChats(newHiddenChats);
-      hiddenChatsRef.current = newHiddenChats;
-      await saveHiddenChats(newHiddenChats);
-      console.log('✅ Chat unhidden successfully:', chatId);
-      
-      // รีเฟรชรายการแชทเพื่อแสดงแชทที่ unhide แล้ว
-      setTimeout(() => {
-        const refreshChats = async () => {
-          try {
-            await loadChats();
-          } catch (error) {
-            console.error('Error refreshing after unhide:', error);
-          }
-        };
-        refreshChats();
-      }, 100);
-      
-    } catch (error) {
-      console.error('Error unhiding chat:', error);
-    }
-  };
-
-  const handleLongPressChat = (chat) => {
-    // ไม่อนุญาตให้ซ่อนแชทกลุ่ม
-    if (chat.isGroup) {
-      Alert.alert(
-        'ไม่สามารถซ่อนได้',
-        'ไม่สามารถซ่อนแชทกลุ่มได้ หากต้องการออกจากกลุ่มให้เข้าไปในแชทกลุ่ม',
-        [{ text: 'ตกลง', style: 'default' }]
-      );
-      return;
-    }
-    
-    Alert.alert(
-      'ซ่อนห้องแชท',
-      `คุณต้องการซ่อนห้องแชท "${chat.roomName || 'แชทส่วนตัว'}" หรือไม่?\n\n(แชทจะถูกซ่อนจากรายการ แต่ยังสามารถเข้าถึงได้หากมีข้อความใหม่)`,
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        { 
-          text: 'ซ่อน', 
-          style: 'destructive',
-          onPress: () => hideChat(chat._id)
-        }
-      ]
-    );
-  };
+  // ระบบซ่อนแชทถูกลบออกแล้ว - เปลี่ยนเป็นระบบจัดเรียงแชท
 
   const handleLogout = async () => {
     try {
@@ -770,8 +659,6 @@ const ChatScreen = ({ route, navigation }) => {
             item.unreadCount > 0 && styles.chatItemUnread
           ]}
           onPress={() => handleChatPress(item)}
-          onLongPress={() => handleLongPressChat(item)}
-          delayLongPress={500}
         >
           <View style={styles.avatarContainer}>
             {item.groupAvatar ? (
@@ -855,8 +742,6 @@ const ChatScreen = ({ route, navigation }) => {
             item.unreadCount > 0 && styles.chatItemUnread
           ]}
           onPress={() => handleChatPress(item)}
-          onLongPress={() => handleLongPressChat(item)}
-          delayLongPress={500}
         >
           <View style={styles.avatarContainer}>
             {otherParticipant?.avatar ? (
@@ -1040,7 +925,7 @@ const ChatScreen = ({ route, navigation }) => {
         <Text style={styles.floatingIcon}>⋮</Text>
       </TouchableOpacity>
 
-      {/* Popup Modal */}
+      {/* Popup Menu - ขวาล่างแนวตั้ง */}
       {showPopup && (
         <View style={styles.popupOverlay}>
           <TouchableOpacity 
@@ -1049,13 +934,14 @@ const ChatScreen = ({ route, navigation }) => {
           />
           <Animated.View 
             style={[
-              styles.popupContainer,
+              styles.verticalPopupContainer,
               {
+                opacity: popupAnimation,
                 transform: [
                   {
-                    translateY: popupAnimation.interpolate({
+                    scale: popupAnimation.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [300, 0]
+                      outputRange: [0.8, 1]
                     })
                   }
                 ]
@@ -1063,17 +949,25 @@ const ChatScreen = ({ route, navigation }) => {
             ]}
           >
             <TouchableOpacity 
-              style={styles.popupItem}
+              style={styles.verticalPopupItem}
               onPress={createGroup}
             >
-              <Text style={styles.menuIcon}>👥</Text>
-              <Text style={styles.popupText}>สร้างกลุ่ม</Text>
+              <Text style={styles.verticalMenuIcon}>👥</Text>
             </TouchableOpacity>
             
-            <View style={styles.popupDivider} />
+            <TouchableOpacity 
+              style={styles.verticalPopupItem}
+              onPress={() => {
+                closePopup();
+                // TODO: เปิดหน้าจัดการแชท
+                Alert.alert('จัดการแชท', 'ฟีเจอร์นี้อยู่ในระหว่างการพัฒนา');
+              }}
+            >
+              <Text style={styles.verticalMenuIcon}>⚙️</Text>
+            </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.popupItem}
+              style={styles.verticalPopupItem}
               onPress={() => {
                 closePopup();
                 setTimeout(() => {
@@ -1088,8 +982,7 @@ const ChatScreen = ({ route, navigation }) => {
                 }, 300);
               }}
             >
-              <Text style={styles.menuIcon}>🚪</Text>
-              <Text style={[styles.popupText, { color: '#ff3b30' }]}>ออกจากระบบ</Text>
+              <Text style={[styles.verticalMenuIcon, { color: '#ff3b30' }]}>🚪</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -1280,7 +1173,7 @@ const styles = StyleSheet.create({
   searchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFA500', // เปลี่ยนเป็นสีส้ม
+    backgroundColor: '#333',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
@@ -1341,8 +1234,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingRight: 20,
+    paddingBottom: 80,
   },
   popupBackground: {
     position: 'absolute',
@@ -1351,8 +1246,33 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  // Vertical popup แนวตั้งขวาล่าง
+  verticalPopupContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  verticalPopupItem: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 4,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  verticalMenuIcon: {
+    fontSize: 20,
+    color: '#333',
+  },
+  // เก็บสไตล์เก่าไว้สำหรับใช้ที่อื่น
   popupContainer: {
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลืองเหมือนพื้นหลัง
+    backgroundColor: '#F5C842',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingVertical: 16,
@@ -1381,7 +1301,7 @@ const styles = StyleSheet.create({
   },
   popupDivider: {
     height: 1,
-    backgroundColor: '#E6B800', // เปลี่ยนเป็นสีเหลืองเข้ม
+    backgroundColor: '#E6B800',
     marginHorizontal: 16,
     marginVertical: 8,
   },

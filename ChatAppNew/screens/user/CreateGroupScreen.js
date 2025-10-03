@@ -454,7 +454,7 @@ const CreateGroupScreen = ({ navigation }) => {
 
           {loadingMajors ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#FFA500" />
+              <ActivityIndicator size="large" color="#333" />
               <Text>กำลังโหลดสาขา...</Text>
             </View>
           ) : (
@@ -506,7 +506,7 @@ const CreateGroupScreen = ({ navigation }) => {
 
           {loadingClassCodes ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#FFA500" />
+              <ActivityIndicator size="large" color="#333" />
               <Text>กำลังโหลดกลุ่มเรียน...</Text>
             </View>
           ) : (
@@ -572,7 +572,7 @@ const CreateGroupScreen = ({ navigation }) => {
 
           {loadingUsers ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#FFA500" />
+              <ActivityIndicator size="large" color="#333" />
               <Text>กำลังโหลดรายชื่อผู้ใช้...</Text>
             </View>
           ) : (
@@ -589,7 +589,7 @@ const CreateGroupScreen = ({ navigation }) => {
 
       {isLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#FFA500" />
+          <ActivityIndicator size="large" color="#333" />
           <Text style={styles.loadingText}>กำลังสร้างกลุ่ม...</Text>
         </View>
       )}
@@ -630,7 +630,7 @@ const styles = StyleSheet.create({
     width: 40, // Same width as back button for centering
   },
   createButton: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -786,7 +786,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   createGroupButton: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#333',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
   },
   modalHeaderButton: {
     fontSize: 16,
-    color: '#FFA500',
+    color: '#333',
     fontWeight: '600',
   },
   placeholder: {
@@ -867,12 +867,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#f8f8f8',
     borderRadius: 8,
     marginBottom: 8,
   },
   userItemSelected: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#f0f0f0',
   },
   userAvatar: {
     width: 40,
@@ -902,7 +902,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkMark: {
-    color: '#FFA500',
+    color: '#333',
     fontSize: 16,
     fontWeight: 'bold',
   },
