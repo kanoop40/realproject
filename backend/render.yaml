@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: chatapp-backend
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: |
+      echo "🚀 Starting build..."
+      rm -rf node_modules package-lock.json || true
+      npm cache clean --force || true
+      npm install --verbose --no-audit --no-fund
+      echo "✅ Build completed"
+    startCommand: npm start
+    healthCheckPath: /api/health
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    disk:
+      name: chatapp-data
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 1
