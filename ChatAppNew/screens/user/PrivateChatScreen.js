@@ -1469,7 +1469,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.messageTimeBottom,
                       isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
                     ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
                     </Text>
                     {isMyMessage && !item.isOptimistic && (
                       <View style={styles.readStatusContainer}>
@@ -1488,7 +1488,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                         {/* Debug: แสดงสถานะ isRead สำหรับรูปภาพ */}
                         {__DEV__ && (
                           <Text style={{fontSize: 8, color: 'gray', marginLeft: 5}}>
-                            [IMG:{String(item.isRead)}]
+                            {`[IMG:${String(item.isRead)}]`}
                           </Text>
                         )}
                       </View>
@@ -1546,7 +1546,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.messageTimeBottom,
                       isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
                     ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
                     </Text>
                     {isMyMessage && !item.isOptimistic && (
                       <View style={styles.readStatusContainer}>
@@ -1638,7 +1638,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.messageTimeBottom,
                       isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
                     ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
                     </Text>
                     {isMyMessage && !item.isOptimistic && (
                       <View style={styles.readStatusContainer}>
