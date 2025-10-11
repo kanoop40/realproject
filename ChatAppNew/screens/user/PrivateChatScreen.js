@@ -1514,7 +1514,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   isMyMessage ? styles.myMessageText : styles.otherMessageText,
                   item.isOptimistic && styles.optimisticMessageText
                 ]}>
-                  {item.content && item.content.trim() !== '' ? item.content : 'ข้อความ'}
+                  {(item?.content && typeof item.content === 'string' && item.content.trim() !== '') 
+                    ? item.content 
+                    : 'ข้อความ'}
                 </Text>
                 {item.editedAt && (
                   <Text style={[styles.editedText, isMyMessage ? styles.myEditedText : styles.otherEditedText]}>
@@ -1806,7 +1808,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
               fontWeight: 'bold',
               color: '#000000'
             }}>
-              {recipientName || roomName || 'แชทส่วนตัว'}
+              {(typeof recipientName === 'string' ? recipientName : '') || 
+               (typeof roomName === 'string' ? roomName : '') || 
+               'แชทส่วนตัว'}
             </Text>
             <Text style={{
               fontSize: 12,
