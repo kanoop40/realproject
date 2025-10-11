@@ -1797,7 +1797,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 fontWeight: 'bold',
                 color: '#6b7280'
               }}>
-                {recipientName?.charAt(0)?.toUpperCase() || '?'}
+                {(typeof recipientName === 'string' && recipientName.charAt(0)) 
+                  ? recipientName.charAt(0).toUpperCase() 
+                  : '?'}
               </Text>
             </View>
           )}
