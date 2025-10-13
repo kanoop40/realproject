@@ -460,10 +460,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
         });
       }
 
+      // Debug FormData content
+      console.log('📋 FormData entries:');
+      for (let pair of formData._parts) {
+        console.log('📋', pair[0], ':', pair[1]);
+      }
+
       const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 30000, // 30 seconds timeout
       });
 
       // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
@@ -491,13 +498,24 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('✅ Message sent successfully:', response.data._id);
     } catch (error) {
       console.error('❌ Error sending message:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
       
       // ลบข้อความชั่วคราวถ้าส่งไม่สำเร็จ
       setMessages(prev => prev.filter(msg => msg._id !== tempId));
       setNewMessage(messageToSend); // คืนข้อความ
       setSelectedFile(fileToSend); // คืนไฟล์
 
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งข้อความได้');
+      let errorMessage = 'ไม่สามารถส่งข้อความได้';
+      
+      if (error.response?.status === 500) {
+        errorMessage = 'เซิร์ฟเวอร์มีปัญหา กรุณาลองใหม่ภายหลัง';
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+      } else {
+        errorMessage = error.response?.data?.message || error.message || errorMessage;
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsSending(false);
     }
@@ -613,10 +631,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('📤 Sending image with file object:', fileObj);
       formData.append('file', fileObj);
 
+      // Debug FormData for image
+      console.log('🖼️ FormData entries for image:');
+      for (let pair of formData._parts) {
+        console.log('🖼️', pair[0], ':', pair[1]);
+      }
+
       const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 30000, // 30 seconds timeout
       });
 
       // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
@@ -641,12 +666,24 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       console.log('✅ Image sent successfully');
     } catch (error) {
-      console.error('Error sending image:', error);
+      console.error('❌ Error sending image:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
       
       // ลบข้อความชั่วคราวถ้าส่งไม่สำเร็จ
       setMessages(prev => prev.filter(msg => msg._id !== tempId));
       
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งรูปภาพได้');
+      let errorMessage = 'ไม่สามารถส่งรูปภาพได้';
+      
+      if (error.response?.status === 500) {
+        errorMessage = 'เซิร์ฟเวอร์มีปัญหา กรุณาเริ่มเซิร์ฟเวอร์ backend';
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์ backend ทำงานอยู่';
+      } else {
+        errorMessage = error.response?.data?.message || error.message || errorMessage;
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsSending(false);
     }
