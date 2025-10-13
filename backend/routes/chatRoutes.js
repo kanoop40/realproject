@@ -95,6 +95,7 @@ const conditionalUpload = (req, res, next) => {
     
     // Use any() instead of single() to be more flexible
     return uploadMessage.any()(req, res, (err) => {
+      console.log('🔄 Multer middleware callback called, error:', err);
       if (err) {
         console.error('❌ Multer processing error:', err);
         return handleMulterError(err, req, res, next);
@@ -110,6 +111,7 @@ const conditionalUpload = (req, res, next) => {
         console.log('📎 Selected file for processing:', req.file);
       }
       
+      console.log('✅ Multer processing completed, calling next()');
       next();
     });
   } else {
