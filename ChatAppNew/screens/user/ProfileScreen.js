@@ -9,7 +9,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../service/api';
-import { COLORS } from '../../styles/theme';
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SHADOWS } from '../../styles/theme';
 import TabBar from '../../components_user/TabBar';
 import ProfileHeader from '../../components_user/ProfileHeader';
 import ProfileSection from '../../components_user/ProfileSection';

@@ -25,7 +25,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
-import { useSocket } from '../../context/SocketContext_Mock';
+import { useSocket } from '../../context/SocketContext';
 // Removed InlineLoadingScreen import - no longer using loading screens
 // Removed useProgressLoading hook - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';

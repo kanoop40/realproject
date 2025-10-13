@@ -14,7 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createPrivateChat } from '../../service/api';
 import api, { API_URL } from '../../service/api';
-import { useSocket } from '../../context/SocketContext_Mock';
+import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationService from '../../service/notificationService';
 import UserChatItem from '../../components_user/UserChatItem';

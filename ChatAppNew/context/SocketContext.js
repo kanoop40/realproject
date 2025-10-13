@@ -28,6 +28,12 @@ export const SocketProvider = ({ children }) => {
       console.log('🔑 Token exists:', !!token);
       console.log('👤 User data exists:', !!userString);
       
+      // หากไม่มี token ให้ข้ามการเชื่อมต่อ socket
+      if (!token) {
+        console.log('⚠️ No token found, skipping socket connection');
+        return;
+      }
+      
       if (!userString && token) {
         console.log('⚠️ No user data but token exists! Fetching user data...');
         try {
@@ -80,16 +86,18 @@ export const SocketProvider = ({ children }) => {
             token: token,
             userId: user._id
           },
-          transports: ['websocket', 'polling'],
-          timeout: 60000, // เพิ่มเป็น 60 วินาที เพื่อรอ cold start
-          forceNew: true,
+          transports: ['polling', 'websocket'], // เริ่มด้วย polling ก่อน แล้วค่อย upgrade เป็น websocket
+          timeout: 120000, // เพิ่มเป็น 2 นาที เพื่อรอ cold start
+          forceNew: false, // ลด load
           reconnection: true,
-          reconnectionAttempts: 10, // เพิ่มจำนวนครั้งการ reconnect
-          reconnectionDelay: 3000, // เพิ่มช่วงเวลารอเป็น 3 วินาที
-          reconnectionDelayMax: 10000, // เพิ่มเวลารอสูงสุด
+          reconnectionAttempts: 5, // ลดจำนวนครั้งการ reconnect
+          reconnectionDelay: 5000, // เพิ่มช่วงเวลารอเป็น 5 วินาที
+          reconnectionDelayMax: 30000, // เพิ่มเวลารอสูงสุดเป็น 30 วินาที
           autoConnect: true,
           upgrade: true,
-          rememberUpgrade: true
+          rememberUpgrade: false, // ไม่จำการ upgrade เพื่อให้ลองใหม่ทุกครั้ง
+          withCredentials: false,
+          rejectUnauthorized: false // สำหรับ https connection
         });
 
         socketInstance.on('connect', () => {
@@ -106,15 +114,21 @@ export const SocketProvider = ({ children }) => {
         });
 
         socketInstance.on('connect_error', (error) => {
-          console.error('❌ Socket connection error:', error.message);
+          console.error('❌ Socket connection error:', error.message || 'Connection failed');
           console.error('❌ Error type:', error.type || 'Unknown');
           console.error('❌ Error description:', error.description || 'No description');
           setIsConnected(false);
           
-          // ถ้าเป็น timeout ให้แจ้งผู้ใช้ว่าอาจต้องรอสักครู่
-          if (error.message && error.message.includes('timeout')) {
-            console.log('⏰ Connection timeout - server might be starting up (cold start)');
-            console.log('🔄 Will continue trying to connect...');
+          // ถ้าเป็น timeout หรือ transport error ให้แจ้งผู้ใช้ว่าอาจต้องรอสักครู่
+          if (error.message && (error.message.includes('timeout') || error.message.includes('websocket'))) {
+            console.log('⏰ Connection issue - server might be starting up or websocket unavailable');
+            console.log('🔄 Will continue trying to connect with polling...');
+          }
+          
+          // หากเกิดข้อผิดพลาดจาก websocket ให้ลองใช้ polling อย่างเดียว
+          if (error.message && error.message.includes('websocket')) {
+            console.log('🔄 Websocket failed, trying polling only...');
+            socketInstance.io.opts.transports = ['polling'];
           }
         });
 
@@ -260,10 +274,10 @@ export const SocketProvider = ({ children }) => {
     socket,
     isConnected,
     onlineUsers,
-    joinChatroom,
-    leaveChatroom,
-    sendMessage,
-    sendTyping,
+    joinChatroom: socket ? joinChatroom : () => console.log('Socket not connected - joinChatroom ignored'),
+    leaveChatroom: socket ? leaveChatroom : () => console.log('Socket not connected - leaveChatroom ignored'),
+    sendMessage: socket ? sendMessage : () => console.log('Socket not connected - sendMessage ignored'),
+    sendTyping: socket ? sendTyping : () => console.log('Socket not connected - sendTyping ignored'),
     reconnectSocket
   };
 
