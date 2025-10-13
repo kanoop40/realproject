@@ -3,9 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Development API URL (auto-detect)
-const API_URL = Constants.isDevice ? 'http://172.22.98.120:5000' : 'http://localhost:5000';
-//const API_URL = 'https://realproject-mg25.onrender.com';
+// Development API URL (auto-detect)  
+//const API_URL = Constants.isDevice ? 'http://172.22.98.120:5000' : 'http://localhost:5000';
+const API_URL = 'https://realproject-mg25.onrender.com';
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
   Platform: Platform.OS,

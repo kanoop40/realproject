@@ -20,12 +20,46 @@ const { protect } = require('../Middleware/authMiddleware');
 // File upload configuration
 const { fileStorage } = require('../config/cloudinary');
 const multer = require('multer');
+
+// Add error handling for multer
 const uploadMessage = multer({ 
   storage: fileStorage,
   limits: {
     fileSize: 50 * 1024 * 1024 // 50MB
+  },
+  fileFilter: (req, file, cb) => {
+    console.log('🔍 Multer processing file:', {
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size
+    });
+    cb(null, true); // Accept all files
   }
 });
+
+// Multer error handling middleware
+const handleMulterError = (error, req, res, next) => {
+  console.error('❌ Multer Error:', error);
+  
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ 
+        message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 50MB' 
+      });
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ 
+        message: 'รูปแบบไฟล์ไม่ถูกต้อง' 
+      });
+    }
+  }
+  
+  return res.status(500).json({ 
+    message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
+    error: error.message 
+  });
+};
 
 // Apply authentication middleware to all routes
 router.use(protect);
@@ -52,8 +86,8 @@ router.get('/:id/messages', getMessages);
 
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
-// @access  Private
-router.post('/:id/messages', uploadMessage.single('file'), sendMessage);
+// @access  Private  
+router.post('/:id/messages', uploadMessage.single('file'), handleMulterError, sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants
