@@ -120,10 +120,19 @@ const conditionalUpload = (req, res, next) => {
   }
 };
 
+// Debug middleware to verify routing
+const debugBeforeSendMessage = (req, res, next) => {
+  console.log('🎯 About to call sendMessage controller');
+  console.log('🎯 Request params:', req.params);
+  console.log('🎯 Request body:', req.body);
+  console.log('🎯 Request file:', req.file ? 'Present' : 'Not present');
+  next();
+};
+
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
 // @access  Private  
-router.post('/:id/messages', conditionalUpload, sendMessage);
+router.post('/:id/messages', conditionalUpload, debugBeforeSendMessage, sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants
