@@ -17,6 +17,16 @@ const {
 } = require('../controllers/newChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
+// File upload configuration
+const { fileStorage } = require('../config/cloudinary');
+const multer = require('multer');
+const uploadMessage = multer({ 
+  storage: fileStorage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB
+  }
+});
+
 // Apply authentication middleware to all routes
 router.use(protect);
 
@@ -43,7 +53,7 @@ router.get('/:id/messages', getMessages);
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
 // @access  Private
-router.post('/:id/messages', sendMessage);
+router.post('/:id/messages', uploadMessage.single('file'), sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants
@@ -85,17 +95,6 @@ router.put('/messages/:id', require('../controllers/newChatController').editMess
 // @access  Private
 router.post('/messages/:id/read', markMessageAsRead);
 
-// @route   POST /api/chats/:id/upload  
-// @desc    Upload file in private chat
-// @access  Private
-const { fileStorage } = require('../config/cloudinary');
-const multer = require('multer');
-const uploadFile = multer({ 
-  storage: fileStorage,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB
-  }
-});
-router.post('/:id/upload', uploadFile.single('file'), sendMessage);
+// File upload is now handled by the /messages route above
 
 module.exports = router;
