@@ -468,7 +468,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         }
         
         console.log('📎 Final file object:', fileObject);
-        formData.append('file', fileObject, originalFileName);
+        formData.append('file', fileObject);
         
         // Debug FormData content
         console.log('📋 FormData entries:');
@@ -652,7 +652,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
       
       console.log('📤 Sending image with file object:', fileObj);
-      formData.append('file', fileObj, fileName);
+      formData.append('file', fileObj);
 
       // Debug FormData for image
       console.log('🖼️ FormData entries for image:');

@@ -87,14 +87,29 @@ router.get('/:id/messages', getMessages);
 // Middleware to conditionally apply multer
 const conditionalUpload = (req, res, next) => {
   console.log('🔍 Checking request content-type:', req.get('Content-Type'));
+  console.log('🔍 Request headers:', req.headers);
   
   // Only apply multer for multipart/form-data requests
   if (req.get('Content-Type')?.includes('multipart/form-data')) {
     console.log('📎 Multipart request detected - applying multer');
-    return uploadMessage.single('file')(req, res, (err) => {
+    
+    // Use any() instead of single() to be more flexible
+    return uploadMessage.any()(req, res, (err) => {
       if (err) {
+        console.error('❌ Multer processing error:', err);
         return handleMulterError(err, req, res, next);
       }
+      
+      // Log what multer found
+      console.log('📎 Multer processed files:', req.files);
+      console.log('📎 Multer processed fields:', req.body);
+      
+      // Convert files array to single file for backward compatibility
+      if (req.files && req.files.length > 0) {
+        req.file = req.files.find(f => f.fieldname === 'file');
+        console.log('📎 Selected file for processing:', req.file);
+      }
+      
       next();
     });
   } else {
