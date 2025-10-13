@@ -1469,7 +1469,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.messageTimeBottom,
                       isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
                     ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
                     </Text>
                     {isMyMessage && !item.isOptimistic && (
                       <View style={styles.readStatusContainer}>
@@ -1488,7 +1488,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                         {/* Debug: แสดงสถานะ isRead สำหรับรูปภาพ */}
                         {__DEV__ && (
                           <Text style={{fontSize: 8, color: 'gray', marginLeft: 5}}>
-                            [IMG:{String(item.isRead)}]
+                            {`[IMG:${String(item.isRead)}]`}
                           </Text>
                         )}
                       </View>
@@ -1514,7 +1514,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   isMyMessage ? styles.myMessageText : styles.otherMessageText,
                   item.isOptimistic && styles.optimisticMessageText
                 ]}>
-                  {item.content && item.content.trim() !== '' ? item.content : 'ข้อความ'}
+                  {(item?.content && typeof item.content === 'string' && item.content.trim() !== '') 
+                    ? item.content 
+                    : 'ข้อความ'}
                 </Text>
                 {item.editedAt && (
                   <Text style={[styles.editedText, isMyMessage ? styles.myEditedText : styles.otherEditedText]}>
@@ -1544,7 +1546,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.messageTimeBottom,
                       isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
                     ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
                     </Text>
                     {isMyMessage && !item.isOptimistic && (
                       <View style={styles.readStatusContainer}>
@@ -1636,7 +1638,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                       styles.messageTimeBottom,
                       isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
                     ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
                     </Text>
                     {isMyMessage && !item.isOptimistic && (
                       <View style={styles.readStatusContainer}>
@@ -1795,7 +1797,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 fontWeight: 'bold',
                 color: '#6b7280'
               }}>
-                {recipientName?.charAt(0)?.toUpperCase() || '?'}
+                {(typeof recipientName === 'string' && recipientName.charAt(0)) 
+                  ? recipientName.charAt(0).toUpperCase() 
+                  : '?'}
               </Text>
             </View>
           )}
@@ -1806,7 +1810,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
               fontWeight: 'bold',
               color: '#000000'
             }}>
-              {recipientName || roomName || 'แชทส่วนตัว'}
+              {(typeof recipientName === 'string' ? recipientName : '') || 
+               (typeof roomName === 'string' ? roomName : '') || 
+               'แชทส่วนตัว'}
             </Text>
             <Text style={{
               fontSize: 12,

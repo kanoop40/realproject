@@ -8,6 +8,8 @@ import { ChatProvider } from './context/ChatContext';
 import WelcomeScreen from './screens/WelcomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import AdminScreen from './screens/admin/AdminScreen';
+import AddUserScreen from './screens/admin/AddUserScreen';
+import UserDetailScreen from './screens/admin/UserDetailScreen';
 import ChatScreen from './screens/user/ChatScreen';
 import PrivateChatScreen from './screens/user/PrivateChatScreen';
 import GroupChatScreen from './screens/user/GroupChatScreen';
@@ -29,26 +31,28 @@ export default function App() {
       <SocketProvider>
         <ChatProvider>
           <NavigationContainer>
-          <Stack.Navigator screenOptions={{ 
-            headerShown: false,
-            animation: 'fade',
-            animationDuration: 300
-          }}>
-            <Stack.Screen name="Welcome" component={WelcomeScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Admin" component={AdminScreen} />
-            <Stack.Screen name="Chat" component={ChatScreen} />
-            <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
-            <Stack.Screen name="GroupChat" component={GroupChatScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
-            <Stack.Screen name="EditGroup" component={EditGroupScreen} />
-            <Stack.Screen name="SearchUser" component={SearchUserScreen} />
-            <Stack.Screen name="NewSearchUser" component={NewSearchUserScreen} />
-            <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
+            <Stack.Navigator screenOptions={{ 
+              headerShown: false,
+              animation: 'fade',
+              animationDuration: 300
+            }}>
+              <Stack.Screen name="Welcome" component={WelcomeScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Admin" component={AdminScreen} />
+              <Stack.Screen name="AddUser" component={AddUserScreen} />
+              <Stack.Screen name="UserDetail" component={UserDetailScreen} />
+              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
+              <Stack.Screen name="GroupChat" component={GroupChatScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+              <Stack.Screen name="EditGroup" component={EditGroupScreen} />
+              <Stack.Screen name="SearchUser" component={SearchUserScreen} />
+              <Stack.Screen name="NewSearchUser" component={NewSearchUserScreen} />
+              <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+              <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
         </ChatProvider>
       </SocketProvider>
     </AuthProvider>

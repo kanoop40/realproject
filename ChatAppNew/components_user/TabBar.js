@@ -15,7 +15,7 @@ const TabBar = ({
   };
 
   const navigateToSearch = () => {
-    navigation.navigate('Search');
+    navigation.navigate('SearchUser');
   };
 
   const handleLogoutPress = () => {

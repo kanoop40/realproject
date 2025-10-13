@@ -477,7 +477,7 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const navigateToSearch = () => {
-    navigation.navigate('Search');
+    navigation.navigate('SearchUser');
   };
 
   const navigateToProfile = () => {

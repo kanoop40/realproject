@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
+  Text,
+  Image,
   Alert,
   ActivityIndicator,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  Modal,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import api from '../../service/api';
+import api, { API_URL } from '../../service/api';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SHADOWS } from '../../styles/theme';
 import TabBar from '../../components_user/TabBar';
 import ProfileHeader from '../../components_user/ProfileHeader';

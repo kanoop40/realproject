@@ -12,3 +12,9 @@ export { default as ProfileActions } from './ProfileActions';
 export { default as EditProfileModal } from './EditProfileModal';
 export { default as ImagePickerModal } from './ImagePickerModal';
 export { default as PasswordChangeModal } from './PasswordChangeModal';
+
+// Chat Components - test one by one after fixing imports
+export { default as MessageBubble } from './MessageBubble';
+// export { default as ChatHeader } from './ChatHeader';
+// export { default as MessageInput } from './MessageInput';
+// export { default as ChatMenuButton } from './ChatMenuButton';

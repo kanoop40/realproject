@@ -87,12 +87,12 @@ export const SocketProvider = ({ children }) => {
             userId: user._id
           },
           transports: ['polling', 'websocket'], // เริ่มด้วย polling ก่อน แล้วค่อย upgrade เป็น websocket
-          timeout: 120000, // เพิ่มเป็น 2 นาที เพื่อรอ cold start
+          timeout: 15000, // ลดเวลา timeout เพื่อให้รู้เร็วขึ้นว่าไม่มี Socket.IO
           forceNew: false, // ลด load
           reconnection: true,
-          reconnectionAttempts: 5, // ลดจำนวนครั้งการ reconnect
-          reconnectionDelay: 5000, // เพิ่มช่วงเวลารอเป็น 5 วินาที
-          reconnectionDelayMax: 30000, // เพิ่มเวลารอสูงสุดเป็น 30 วินาที
+          reconnectionAttempts: 3, // ลดจำนวนครั้งการ reconnect เมื่อ 404
+          reconnectionDelay: 3000, // ช่วงเวลารอ 3 วินาที
+          reconnectionDelayMax: 10000, // เวลารอสูงสุด 10 วินาที
           autoConnect: true,
           upgrade: true,
           rememberUpgrade: false, // ไม่จำการ upgrade เพื่อให้ลองใหม่ทุกครั้ง
@@ -118,6 +118,15 @@ export const SocketProvider = ({ children }) => {
           console.error('❌ Error type:', error.type || 'Unknown');
           console.error('❌ Error description:', error.description || 'No description');
           setIsConnected(false);
+          
+          // ถ้าเป็น 404 หรือ polling error แสดงว่า server ไม่มี Socket.IO
+          if (error.description === '404' || error.description === 404) {
+            console.log('⚠️ Socket.IO not available on server - running in offline mode');
+            console.log('📱 App will work without real-time features');
+            // ไม่พยายาม reconnect อีก
+            socketInstance.disconnect();
+            return;
+          }
           
           // ถ้าเป็น timeout หรือ transport error ให้แจ้งผู้ใช้ว่าอาจต้องรอสักครู่
           if (error.message && (error.message.includes('timeout') || error.message.includes('websocket'))) {
@@ -157,7 +166,9 @@ export const SocketProvider = ({ children }) => {
 
         socketInstance.on('reconnect_failed', () => {
           console.error('❌ Socket reconnection failed after all attempts');
+          console.log('📱 Running in offline mode - app will work without real-time features');
           setIsConnected(false);
+          socketInstance.disconnect(); // หยุดการพยายาม reconnect
         });
 
         socketInstance.on('onlineUsers', (users) => {
