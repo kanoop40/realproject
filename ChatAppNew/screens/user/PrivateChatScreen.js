@@ -29,6 +29,8 @@ import { useSocket } from '../../context/SocketContext';
 // Removed InlineLoadingScreen import - no longer using loading screens
 // Removed useProgressLoading hook - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
+import ChatMessage from '../../components_user/ChatMessage';
+import ChatInputBar from '../../components_user/ChatInputBar';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -568,9 +570,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const sendImageDirectly = async (imageAsset) => {
     if (!chatroomId || isSending) return;
     
+    setIsSending(true);
+    const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
+    
     try {
-      setIsSending(true);
-      const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
       
       // Optimistic UI - เพิ่มข้อความทันทีก่อนส่งไปเซิร์ฟเวอร์
       const optimisticMessage = {
@@ -600,11 +603,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const formData = new FormData();
       formData.append('content', 'รูปภาพ');
       
-      formData.append('file', {
+      // ตรวจสอบและจัดรูปแบบ file object ให้ถูกต้อง
+      const fileObj = {
         uri: imageAsset.uri,
-        type: imageAsset.mimeType || 'image/jpeg',
-        name: imageAsset.fileName || 'image.jpg',
-      });
+        type: imageAsset.mimeType || imageAsset.type || 'image/jpeg',
+        name: imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`,
+      };
+      
+      console.log('📤 Sending image with file object:', fileObj);
+      formData.append('file', fileObj);
 
       const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
         headers: {
@@ -1266,9 +1273,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const renderMessage = useCallback(({ item, index }) => {
-    const isMyMessage = item.sender._id === currentUser._id;
-    const showTime = shouldShowTime(item, index);
-    
     const handleDeleteMessageConfirm = () => {
       Alert.alert(
         'ลบข้อความ',
@@ -1327,342 +1331,49 @@ const PrivateChatScreen = ({ route, navigation }) => {
         item.lastPress = now;
       }
     };
+
+    const openImageModal = (imageUri) => {
+      if (imageUri) {
+        setSelectedModalImage(imageUri);
+        setImageModalVisible(true);
+      }
+    };
+
+    const showFileOptions = (file) => {
+      // File handling logic
+    };
+
+    const handleMessageSelect = (messageId) => {
+      setSelectedMessages(prev => {
+        const isSelected = prev.includes(messageId);
+        const newSelection = isSelected 
+          ? prev.filter(id => id !== messageId)
+          : [...prev, messageId];
+        return newSelection;
+      });
+    };
     
     return (
-      <TouchableOpacity
-        style={[
-          styles.messageContainer,
-          isMyMessage ? styles.myMessage : styles.otherMessage
-        ]}
-        onLongPress={isMyMessage ? handleDeleteMessageConfirm : null}
-        onPress={() => {
-          console.log('🚀 TouchableOpacity onPress fired!');
-          handleMessagePress();
-        }}
-        delayLongPress={500}
-        activeOpacity={0.7}
-      >
-        {/* Checkbox สำหรับ Selection Mode - แสดงเฉพาะข้อความที่ถูกเลือก */}
-        {selectionMode && selectedMessages.includes(item._id) && (
-          <View 
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: isMyMessage ? 10 : 'auto',
-              left: isMyMessage ? 'auto' : 50,
-              zIndex: 10,
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              borderWidth: 2,
-              borderColor: '#007AFF',
-              backgroundColor: '#007AFF',
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-              elevation: 2
-            }}>
-            <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>✓</Text>
-          </View>
-        )}
-        {!isMyMessage && (
-          <View style={styles.messageAvatarContainer}>
-            {recipientAvatar ? (
-              <Image
-                source={{ 
-                  uri: recipientAvatar.startsWith('http') 
-                    ? recipientAvatar 
-                    : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                }}
-                style={styles.messageAvatar}
-                defaultSource={require('../../assets/default-avatar.jpg')}
-              />
-            ) : (
-              <View style={[styles.messageAvatar, styles.defaultMessageAvatar]}>
-                <Text style={styles.messageAvatarText}>
-                  {recipientName?.charAt(0)?.toUpperCase() || '?'}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-        
-        <View style={[
-          styles.messageContentContainer,
-          isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
-        ]}>
-          {/* แสดงรูปภาพในกรอบแยก */}
-          {(item.image || (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && (
-            <View>
-              <View style={[
-                styles.imageMessageBubble,
-                isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
-                item.isOptimistic && styles.optimisticMessage,
-                selectedMessages.includes(item._id) && styles.selectedMessage
-              ]}>
-                <TouchableOpacity 
-                  style={styles.imageContainer}
-                  onPress={() => {
-                    if (selectionMode) {
-                      // ในโหมดเลือก ให้เลือกข้อความแทนการเปิดรูป
-                      handleMessageSelect(item._id);
-                    } else {
-                      // โหมดปกติ เปิดรูปภาพ
-                      const imageUri = item.image?.file_path || 
-                                      item.image?.uri ||
-                                      (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                                        item.file.url : 
-                                        (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
-                      openImageModal(imageUri);
-                    }
-                  }}
-                >
-                  <Image
-                    source={{ 
-                      uri: item.image?.file_path || 
-                           item.image?.uri ||
-                           (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                             item.file.url : 
-                             (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
-                    }}
-                    style={styles.messageImage}
-                    resizeMode="cover"
-                    onError={(error) => {
-                      console.log('❌ Error loading image:', error.nativeEvent.error);
-                      console.log('🔍 Image data:', {
-                        file_path: item.image?.file_path,
-                        uri: item.image?.uri,
-                        file_url: item.file?.url,
-                        file_path_alt: item.file?.file_path
-                      });
-                    }}
-                    onLoad={() => {
-                      console.log('✅ Image loaded successfully');
-                    }}
-                  />
-
-                </TouchableOpacity>
-              </View>
-              
-              {/* วันเวลาอยู่ข้างล่างรูปภาพ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
-              {(showTime || showTimeForMessages.has(item._id)) && (
-                <Animated.View 
-                  style={[
-                    styles.messageTimeBottomContainer,
-                    isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
-                    {
-                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
-                        (timeAnimations[item._id]).interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 30]
-                        }) : 0)
-                    }
-                  ]}
-                >
-                  <View style={styles.timeAndStatusRow}>
-                    <Text style={[
-                      styles.messageTimeBottom,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
-                    ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
-                    </Text>
-                    {isMyMessage && !item.isOptimistic && (
-                      <View style={styles.readStatusContainer}>
-                        <Text style={[
-                          styles.readStatusIcon,
-                          item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
-                        ]}>
-                          {item.isRead ? '✓✓' : '✓'}
-                        </Text>
-                        <Text style={[
-                          styles.readStatusBottom,
-                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
-                        ]}>
-                          {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
-                        </Text>
-                        {/* Debug: แสดงสถานะ isRead สำหรับรูปภาพ */}
-                        {__DEV__ && (
-                          <Text style={{fontSize: 8, color: 'gray', marginLeft: 5}}>
-                            {`[IMG:${String(item.isRead)}]`}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </Animated.View>
-              )}
-            </View>
-          )}
-
-          {/* แสดงข้อความในกรอบแยก (ถ้ามีข้อความและไม่ใช่ default) */}
-          {item.content && item.content !== 'รูปภาพ' && item.content !== 'ไฟล์แนบ' && (
-            <View>
-              <View style={[
-                styles.messageBubble,
-                isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
-                item.isOptimistic && styles.optimisticMessage,
-                (item.image || (item.file && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && styles.messageWithMedia,
-                selectedMessages.includes(item._id) && styles.selectedMessage
-              ]}>
-                <Text style={[
-                  styles.messageText,
-                  isMyMessage ? styles.myMessageText : styles.otherMessageText,
-                  item.isOptimistic && styles.optimisticMessageText
-                ]}>
-                  {(item?.content && typeof item.content === 'string' && item.content.trim() !== '') 
-                    ? item.content 
-                    : 'ข้อความ'}
-                </Text>
-                {item.editedAt && (
-                  <Text style={[styles.editedText, isMyMessage ? styles.myEditedText : styles.otherEditedText]}>
-                    แก้ไขแล้ว
-                  </Text>
-                )}
-              </View>
-              
-              {/* วันเวลาอยู่ข้างล่างข้อความ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
-              {(showTime || showTimeForMessages.has(item._id)) && (
-                <Animated.View 
-                  style={[
-                    styles.messageTimeBottomContainer,
-                    isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
-                    {
-                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
-                        (timeAnimations[item._id]).interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 30]
-                        }) : 0)
-                    }
-                  ]}
-                >
-                  <View style={styles.timeAndStatusRow}>
-                    <Text style={[
-                      styles.messageTimeBottom,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
-                    ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
-                    </Text>
-                    {isMyMessage && !item.isOptimistic && (
-                      <View style={styles.readStatusContainer}>
-                        <Text style={[
-                          styles.readStatusIcon,
-                          item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
-                        ]}>
-                          {item.isRead ? '✓✓' : '✓'}
-                        </Text>
-                        <Text style={[
-                          styles.readStatusBottom,
-                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
-                        ]}>
-                          {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </Animated.View>
-              )}
-            </View>
-          )}
-
-          {/* แสดงไฟล์ถ้ามี (ที่ไม่ใช่รูปภาพ) - แบบไม่มีกรอบ */}
-          {item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) && (
-            <View>
-              <View style={[
-                styles.fileMessageBubble,
-                isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
-                item.isOptimistic && styles.optimisticMessage,
-                selectedMessages.includes(item._id) && styles.selectedMessage
-              ]}>
-                <View style={styles.fileAttachmentContainer}>
-                  <TouchableOpacity 
-                    style={[
-                      styles.fileAttachment,
-                      isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
-                    ]}
-                    onPress={() => {
-                      if (selectionMode) {
-                        // ในโหมดเลือก ให้เลือกข้อความแทนการเปิดไฟล์
-                        handleMessageSelect(item._id);
-                      } else {
-                        // โหมดปกติ เปิดตัวเลือกไฟล์
-                        showFileOptions(item.file);
-                      }
-                    }}
-                  >
-                    <View style={styles.fileIcon}>
-                      {getFileIcon(decodeFileName(item.file.file_name))}
-                    </View>
-                    <View style={styles.fileDetails}>
-                      <Text style={[
-                        styles.fileName,
-                        { color: isMyMessage ? "#fff" : "#333" }
-                      ]} numberOfLines={2}>
-                        {decodeFileName(item.file.file_name)}
-                      </Text>
-                      <Text style={[
-                        styles.fileSize,
-                        { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
-                      ]}>
-                        {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
-              
-              {/* วันเวลาอยู่ข้างล่างไฟล์ (ซ้าย) - แสดงเฉพาะข้อความล่าสุดหรือที่ถูกคลิก */}
-              {(showTime || showTimeForMessages.has(item._id)) && (
-                <Animated.View 
-                  style={[
-                    styles.messageTimeBottomContainer,
-                    isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
-                    {
-                      opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-                      maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
-                        (timeAnimations[item._id]).interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 30]
-                        }) : 0)
-                    }
-                  ]}
-                >
-                  <View style={styles.timeAndStatusRow}>
-                    <Text style={[
-                      styles.messageTimeBottom,
-                      isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom
-                    ]}>
-                      {item.isOptimistic ? 'กำลังส่ง...' : (formatDateTime && item.timestamp ? formatDateTime(item.timestamp) : 'N/A')}
-                    </Text>
-                    {isMyMessage && !item.isOptimistic && (
-                      <View style={styles.readStatusContainer}>
-                        <Text style={[
-                          styles.readStatusIcon,
-                          item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
-                        ]}>
-                          {item.isRead ? '✓✓' : '✓'}
-                        </Text>
-                        <Text style={[
-                          styles.readStatusBottom,
-                          isMyMessage ? styles.myReadStatusBottom : styles.otherReadStatusBottom
-                        ]}>
-                          {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </Animated.View>
-              )}
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
+      <ChatMessage
+        item={item}
+        index={index}
+        currentUser={currentUser}
+        recipientAvatar={recipientAvatar}
+        recipientName={recipientName}
+        showTimeForMessages={showTimeForMessages}
+        timeAnimations={timeAnimations}
+        selectionMode={selectionMode}
+        selectedMessages={selectedMessages}
+        onMessagePress={handleMessagePress}
+        onLongPress={handleDeleteMessageConfirm}
+        onImagePress={openImageModal}
+        onFilePress={showFileOptions}
+        formatDateTime={formatDateTime}
+        shouldShowTime={shouldShowTime}
+        getFileIcon={getFileIcon}
+        decodeFileName={decodeFileName}
+        formatFileSize={formatFileSize}
+      />
     );
   }, [currentUser, recipientAvatar, recipientName, messages, showTimeForMessages, timeAnimations, selectionMode, selectedMessages]);
 
@@ -1956,7 +1667,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
 
       {/* Input สำหรับพิมพ์ข้อความ */}
-      <View style={styles.inputContainer}>
+      <ChatInputBar
+        newMessage={newMessage}
+        setNewMessage={setNewMessage}
+        selectedFile={selectedFile}
+        isSending={isSending}
+        showAttachmentMenu={showAttachmentMenu}
+        setShowAttachmentMenu={setShowAttachmentMenu}
+        onSendMessage={sendMessage}
+        onPickImage={pickImage}
+        onPickFile={pickFile}
+        getFileIcon={getFileIcon}
+      />
         {/* แสดงไฟล์/รูปภาพที่เลือก แบบ Telegram */}
         {selectedFile && (
           <View style={{
@@ -2035,41 +1757,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
               <Text style={styles.attachmentMenuText}>ไฟล์</Text>
             </TouchableOpacity>
           </View>
-        )}        <View style={styles.messageInputRow}>
-          <TouchableOpacity
-            style={styles.leftAttachmentButton}
-            onPress={() => {
-              console.log('📎 Plus button pressed');
-              setShowAttachmentMenu(!showAttachmentMenu);
-            }}
-          >
-            <Text style={{ fontSize: 28, color: "#007AFF", fontWeight: 'bold' }}>+</Text>
-          </TouchableOpacity>
-          
-          <TextInput
-            style={styles.textInput}
-            value={newMessage}
-            onChangeText={setNewMessage}
-            placeholder="พิมพ์ข้อความ..."
-            placeholderTextColor="#999"
-            multiline
-            maxLength={1000}
-            keyboardType="default"
-            returnKeyType="default"
-            autoCorrect={true}
-            spellCheck={true}
-            autoCapitalize="sentences"
-          />
-          
-          <TouchableOpacity
-            style={styles.floatingSendButton}
-            onPress={sendMessage}
-            disabled={(!newMessage.trim() && !selectedFile) || isSending}
-          >
-            <Text style={styles.sendButtonText}>ส่ง</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        )}
 
       {/* Image Zoom Modal */}
       <Modal
