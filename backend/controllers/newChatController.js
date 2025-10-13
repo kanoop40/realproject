@@ -341,11 +341,17 @@ const getMessages = asyncHandler(async (req, res) => {
 // @route   POST /api/chats/:id/messages  
 // @access  Private
 const sendMessage = asyncHandler(async (req, res) => {
+    console.log('🚀 sendMessage function called - start');
     try {
+        console.log('🚀 Inside try block');
         const { id } = req.params;
+        console.log('🚀 Got id:', id);
         const { content } = req.body;
+        console.log('🚀 Got content:', content);
         const userId = req.user._id;
+        console.log('🚀 Got userId:', userId);
         const file = req.file;
+        console.log('🚀 Got file:', !!file);
 
         console.log('📨 sendMessage request:', {
             chatId: id,
@@ -534,7 +540,10 @@ const sendMessage = asyncHandler(async (req, res) => {
             file: message.file_id || null
         });
     } catch (error) {
-        console.error('Error sending message:', error);
+        console.error('❌❌❌ Error sending message:', error);
+        console.error('❌ Error name:', error.name);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
         res.status(500).json({
             message: 'เกิดข้อผิดพลาดในการส่งข้อความ',
             error: error.message
