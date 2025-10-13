@@ -351,6 +351,8 @@ const sendMessage = asyncHandler(async (req, res) => {
             chatId: id,
             content,
             userId,
+            contentType: req.get('Content-Type'),
+            isMultipart: req.get('Content-Type')?.includes('multipart/form-data'),
             hasFile: !!file,
             fileDetails: file ? {
                 originalname: file.originalname,

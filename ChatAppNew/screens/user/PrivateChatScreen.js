@@ -441,13 +441,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
     setSelectedFile(null);
 
     try {
-      const formData = new FormData();
-      
       // ส่งข้อความ หรือ default text สำหรับไฟล์
       const contentToSend = messageToSend || (fileToSend ? 'ไฟล์แนบ' : '');
-      formData.append('content', contentToSend);
+      
+      let response;
       
       if (fileToSend) {
+        // ส่งไฟล์ = ใช้ FormData + multipart/form-data
+        const formData = new FormData();
+        formData.append('content', contentToSend);
         console.log('📎 Sending file:', fileToSend);
         // ใช้ชื่อไฟล์จริงจาก file picker
         const originalFileName = fileToSend.name || fileToSend.fileName || 'unknown_file';
@@ -467,20 +469,26 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         console.log('📎 Final file object:', fileObject);
         formData.append('file', fileObject, originalFileName);
-      }
+        
+        // Debug FormData content
+        console.log('📋 FormData entries:');
+        for (let pair of formData._parts) {
+          console.log('📋', pair[0], ':', pair[1]);
+        }
 
-      // Debug FormData content
-      console.log('📋 FormData entries:');
-      for (let pair of formData._parts) {
-        console.log('📋', pair[0], ':', pair[1]);
+        response = await api.post(`/chats/${chatroomId}/messages`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 30000, // 30 seconds timeout
+        });
+      } else {
+        // ส่งข้อความธรรมดา = ใช้ JSON
+        console.log('💬 Sending text message:', contentToSend);
+        response = await api.post(`/chats/${chatroomId}/messages`, {
+          content: contentToSend
+        });
       }
-
-      const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 30000, // 30 seconds timeout
-      });
 
       // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
       console.log('📥 Server response:', response.data);

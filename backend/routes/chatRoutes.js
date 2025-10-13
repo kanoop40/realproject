@@ -84,10 +84,29 @@ router.post('/private', createPrivateChat);
 // @access  Private
 router.get('/:id/messages', getMessages);
 
+// Middleware to conditionally apply multer
+const conditionalUpload = (req, res, next) => {
+  console.log('🔍 Checking request content-type:', req.get('Content-Type'));
+  
+  // Only apply multer for multipart/form-data requests
+  if (req.get('Content-Type')?.includes('multipart/form-data')) {
+    console.log('📎 Multipart request detected - applying multer');
+    return uploadMessage.single('file')(req, res, (err) => {
+      if (err) {
+        return handleMulterError(err, req, res, next);
+      }
+      next();
+    });
+  } else {
+    console.log('💬 Regular JSON request - skipping multer');
+    next();
+  }
+};
+
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
 // @access  Private  
-router.post('/:id/messages', uploadMessage.single('file'), handleMulterError, sendMessage);
+router.post('/:id/messages', conditionalUpload, sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants
