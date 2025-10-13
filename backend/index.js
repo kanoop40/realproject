@@ -199,6 +199,19 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Debug environment endpoint
+app.get('/api/env-check', (req, res) => {
+    res.json({
+        cloudinary: {
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? '✅ Set' : '❌ Missing',
+            api_key: process.env.CLOUDINARY_API_KEY ? '✅ Set' : '❌ Missing', 
+            api_secret: process.env.CLOUDINARY_API_SECRET ? '✅ Set' : '❌ Missing'
+        },
+        node_env: process.env.NODE_ENV || 'undefined',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
     res.json({
