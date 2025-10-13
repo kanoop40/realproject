@@ -347,6 +347,19 @@ const sendMessage = asyncHandler(async (req, res) => {
         const userId = req.user._id;
         const file = req.file;
 
+        console.log('📨 sendMessage request:', {
+            chatId: id,
+            content,
+            userId,
+            hasFile: !!file,
+            fileDetails: file ? {
+                originalname: file.originalname,
+                mimetype: file.mimetype,
+                size: file.size,
+                path: file.path
+            } : null
+        });
+
         // แยกเช็คเงื่อนไข: ต้องมีอย่างน้อย content หรือ file
         if ((!content || content.trim() === '') && !file) {
             return res.status(400).json({ message: 'กรุณากรอกข้อความหรือแนบไฟล์' });

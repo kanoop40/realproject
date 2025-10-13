@@ -448,16 +448,25 @@ const PrivateChatScreen = ({ route, navigation }) => {
       formData.append('content', contentToSend);
       
       if (fileToSend) {
-        console.log('� Sending file:', fileToSend);
+        console.log('📎 Sending file:', fileToSend);
         // ใช้ชื่อไฟล์จริงจาก file picker
         const originalFileName = fileToSend.name || fileToSend.fileName || 'unknown_file';
         console.log('📎 Original file name:', originalFileName);
         
-        formData.append('file', {
+        // ส่งไฟล์ในรูปแบบที่ multer รองรับ
+        const fileObject = {
           uri: fileToSend.uri,
-          type: fileToSend.mimeType || 'application/octet-stream',
+          type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
           name: originalFileName
-        });
+        };
+        
+        // เพิ่มขนาดไฟล์ถ้ามี
+        if (fileToSend.size || fileToSend.fileSize) {
+          fileObject.size = fileToSend.size || fileToSend.fileSize;
+        }
+        
+        console.log('📎 Final file object:', fileObject);
+        formData.append('file', fileObject, originalFileName);
       }
 
       // Debug FormData content
@@ -622,14 +631,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
       formData.append('content', 'รูปภาพ');
       
       // ตรวจสอบและจัดรูปแบบ file object ให้ถูกต้อง
+      const fileName = imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`;
       const fileObj = {
         uri: imageAsset.uri,
         type: imageAsset.mimeType || imageAsset.type || 'image/jpeg',
-        name: imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`,
+        name: fileName,
       };
       
+      // เพิ่มขนาดไฟล์ถ้ามี
+      if (imageAsset.fileSize || imageAsset.size) {
+        fileObj.size = imageAsset.fileSize || imageAsset.size;
+      }
+      
       console.log('📤 Sending image with file object:', fileObj);
-      formData.append('file', fileObj);
+      formData.append('file', fileObj, fileName);
 
       // Debug FormData for image
       console.log('🖼️ FormData entries for image:');
