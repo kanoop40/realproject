@@ -4,7 +4,8 @@ const File = require('./models/FileModel');
 
 const checkData = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://kwankanok4:AaWLT23784@cluster0.vqj4o.mongodb.net/electoronic-database');
+        require('dotenv').config();
+        await mongoose.connect(process.env.MONGO_URI);
         
         console.log('🔍 Checking message data...');
         
