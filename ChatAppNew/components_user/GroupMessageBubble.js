@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: TYPOGRAPHY.fontSize.xs,
-    color: COLORS.textSecondary,
+    color: '#000000',
     marginRight: 4,
   },
   readStatus: {

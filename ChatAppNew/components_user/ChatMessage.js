@@ -54,15 +54,11 @@ const ChatMessage = ({
   };
 
   return (
-    <TouchableOpacity
+    <View
       style={[
         styles.messageContainer,
         isMyMessage ? styles.myMessage : styles.otherMessage
       ]}
-      onLongPress={isMyMessage ? handleDeleteMessageConfirm : null}
-      onPress={handleMessagePress}
-      delayLongPress={500}
-      activeOpacity={0.7}
     >
       {/* Selection indicator */}
       {selectionMode && selectedMessages.includes(item._id) && (
@@ -125,6 +121,7 @@ const ChatMessage = ({
             selectionMode={selectionMode}
             onImagePress={onImagePress}
             onMessagePress={onMessagePress}
+            onLongPress={onLongPress}
             formatDateTime={formatDateTime}
             shouldShowTime={shouldShowTime}
           />
@@ -141,6 +138,8 @@ const ChatMessage = ({
             selectedMessages={selectedMessages}
             formatDateTime={formatDateTime}
             shouldShowTime={shouldShowTime}
+            onMessagePress={onMessagePress}
+            onLongPress={onLongPress}
           />
         )}
 
@@ -166,6 +165,7 @@ const ChatMessage = ({
             selectionMode={selectionMode}
             onFilePress={onFilePress}
             onMessagePress={onMessagePress}
+            onLongPress={onLongPress}
             formatDateTime={formatDateTime}
             shouldShowTime={shouldShowTime}
             getFileIcon={getFileIcon}
@@ -174,7 +174,7 @@ const ChatMessage = ({
           />
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 

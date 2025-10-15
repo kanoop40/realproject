@@ -20,6 +20,7 @@ const ImageMessage = ({
   selectionMode,
   onImagePress,
   onMessagePress,
+  onLongPress,
   formatDateTime,
   shouldShowTime
 }) => {
@@ -35,33 +36,37 @@ const ImageMessage = ({
       item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
     ))
   );
-  const showTime = shouldShowTime(item, index);
+  const showTime = shouldShowTime && shouldShowTime(item._id);
 
   return (
     <View>
-      <View style={[
-        styles.imageMessageBubble,
-        isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
-        item.isOptimistic && styles.optimisticMessage,
-        selectedMessages.includes(item._id) && styles.selectedMessage
-      ]}>
-        <TouchableOpacity 
-          style={styles.imageContainer}
-          onPress={() => {
-            if (selectionMode) {
-              // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดรูป
-              onMessagePress(item);
-            } else {
-              // โหมดปกติ ให้เปิดรูป
-              const imageUri = item.image?.file_path || 
-                              item.image?.uri ||
-                              (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                                item.file.url : 
-                                (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
-              onImagePress(imageUri);
-            }
-          }}
-        >
+      <TouchableOpacity
+        style={[
+          styles.imageMessageBubble,
+          isMyMessage ? styles.myImageBubble : styles.otherImageBubble,
+          item.isOptimistic && styles.optimisticMessage,
+          selectedMessages.includes(item._id) && styles.selectedMessage
+        ]}
+        onPress={() => {
+          if (selectionMode) {
+            // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดรูป
+            onMessagePress && onMessagePress(item._id);
+          } else {
+            // โหมดปกติ แสดงเวลา และเปิดรูป
+            onMessagePress && onMessagePress(item._id);
+            const imageUri = item.image?.file_path || 
+                            item.image?.uri ||
+                            (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                              item.file.url : 
+                              (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+            setTimeout(() => onImagePress && onImagePress(imageUri), 200);
+          }
+        }}
+        onLongPress={() => onLongPress && onLongPress(item._id)}
+        delayLongPress={500}
+        activeOpacity={0.7}
+      >
+        <View style={styles.imageContainer}>
           {/* Check if we have actual image data */}
           {(item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path) ? (
             <Image
@@ -87,11 +92,11 @@ const ImageMessage = ({
               <Text style={styles.brokenImageSubText}>รูปภาพไม่พร้อมใช้งาน</Text>
             </View>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
       
       {/* Time and status for images */}
-      {(showTime || showTimeForMessages.has(item._id)) && (
+      {showTimeForMessages.has(item._id) && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,

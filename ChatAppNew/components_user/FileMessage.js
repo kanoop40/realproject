@@ -18,6 +18,7 @@ const FileMessage = ({
   selectionMode,
   onFilePress,
   onMessagePress,
+  onLongPress,
   formatDateTime,
   shouldShowTime,
   getFileIcon,
@@ -36,46 +37,49 @@ const FileMessage = ({
       item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
     ))
   );
-  const showTime = shouldShowTime(item, index);
+  const showTime = shouldShowTime && shouldShowTime(item._id);
 
   return (
     <View>
-      <View style={[
-        styles.fileMessageBubble,
-        isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
-        item.isOptimistic && styles.optimisticMessage,
-        selectedMessages.includes(item._id) && styles.selectedMessage
-      ]}>
+      <TouchableOpacity
+        style={[
+          styles.fileMessageBubble,
+          isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
+          item.isOptimistic && styles.optimisticMessage,
+          selectedMessages.includes(item._id) && styles.selectedMessage
+        ]}
+        onPress={() => {
+          if (selectionMode) {
+            // ในโหมดจัดการแชท ให้เลือกข้อความ
+            onMessagePress && onMessagePress(item._id);
+          } else {
+            // โหมดปกติ ให้แสดงเวลา และเปิดไฟล์
+            onMessagePress && onMessagePress(item._id);
+            setTimeout(() => {
+              const fileData = {
+                file_name: item.file?.file_name || item.fileName || item.file_name,
+                fileName: item.file?.fileName || item.fileName || item.file_name,
+                url: item.file?.url || item.fileUrl || item.url,
+                file_path: item.file?.file_path || item.filePath || item.file_path,
+                size: item.file?.size || item.fileSize || item.size,
+                ...item.file,
+                ...(item.fileName && { fileName: item.fileName }),
+                ...(item.fileUrl && { url: item.fileUrl })
+              };
+              onFilePress && onFilePress(fileData);
+            }, 200);
+          }
+        }}
+        onLongPress={() => onLongPress && onLongPress(item._id)}
+        delayLongPress={500}
+        activeOpacity={0.7}
+      >
         <View style={styles.fileAttachmentContainer}>
-          <TouchableOpacity 
+          <View 
             style={[
               styles.fileAttachment,
               isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
             ]}
-            onPress={() => {
-              if (selectionMode) {
-                // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดไฟล์
-                onMessagePress(item);
-              } else {
-                // โหมดปกติ ให้เปิดไฟล์ - ส่งข้อมูลไฟล์ที่ถูกต้อง
-                console.log('📂 FileMessage: item data:', item);
-                const fileData = {
-                  // รวมข้อมูลจากทั้ง item.file และ item โดยตรง
-                  file_name: item.file?.file_name || item.fileName || item.file_name,
-                  fileName: item.file?.fileName || item.fileName || item.file_name,
-                  url: item.file?.url || item.fileUrl || item.url,
-                  file_path: item.file?.file_path || item.filePath || item.file_path,
-                  size: item.file?.size || item.fileSize || item.size,
-                  // เพิ่มข้อมูลเดิมทั้งหมด
-                  ...item.file,
-                  // Override ด้วยข้อมูลจาก item หากมี
-                  ...(item.fileName && { fileName: item.fileName }),
-                  ...(item.fileUrl && { url: item.fileUrl })
-                };
-                console.log('📂 FileMessage: calling onFilePress with:', fileData);
-                onFilePress(fileData);
-              }
-            }}
           >
             <View style={styles.fileIcon}>
               {getFileIcon(decodeFileName(item.fileName || item.file?.file_name || 'unknown_file'))}
@@ -94,12 +98,12 @@ const FileMessage = ({
                 {(item.fileSize || item.file?.size) ? formatFileSize(item.fileSize || item.file.size) : 'ไม่มีข้อมูลไฟล์จาก server'}
               </Text>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
       
       {/* Time and status for files */}
-      {(showTime || showTimeForMessages.has(item._id)) && (
+      {showTimeForMessages.has(item._id) && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,

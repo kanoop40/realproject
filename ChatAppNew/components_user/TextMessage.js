@@ -3,7 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Animated
+  Animated,
+  TouchableOpacity
 } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from '../styles/theme';
 
@@ -15,7 +16,9 @@ const TextMessage = ({
   timeAnimations,
   selectedMessages,
   formatDateTime,
-  shouldShowTime
+  shouldShowTime,
+  onMessagePress,
+  onLongPress
 }) => {
   // Handle both object and string sender formats
   const isMyMessage = (
@@ -27,17 +30,23 @@ const TextMessage = ({
       item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
     ))
   );
-  const showTime = shouldShowTime(item, index);
+  const showTime = shouldShowTime && shouldShowTime(item._id);
 
   return (
     <View>
-      <View style={[
-        styles.messageBubble,
-        isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
-        item.isOptimistic && styles.optimisticMessage,
-        (item.image || (item.file && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && styles.messageWithMedia,
-        selectedMessages.includes(item._id) && styles.selectedMessage
-      ]}>
+      <TouchableOpacity
+        style={[
+          styles.messageBubble,
+          isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
+          item.isOptimistic && styles.optimisticMessage,
+          (item.image || (item.file && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && styles.messageWithMedia,
+          selectedMessages.includes(item._id) && styles.selectedMessage
+        ]}
+        onPress={() => onMessagePress && onMessagePress(item._id)}
+        onLongPress={() => onLongPress && onLongPress(item._id)}
+        delayLongPress={500}
+        activeOpacity={0.7}
+      >
         <Text style={[
           styles.messageText,
           isMyMessage ? styles.myMessageText : styles.otherMessageText,
@@ -52,10 +61,10 @@ const TextMessage = ({
             แก้ไขแล้ว
           </Text>
         )}
-      </View>
+      </TouchableOpacity>
       
       {/* Time and status for text messages */}
-      {(showTime || showTimeForMessages.has(item._id)) && (
+      {showTimeForMessages.has(item._id) && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,

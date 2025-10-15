@@ -649,23 +649,47 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         });
         
         try {
+            console.log('📤 Starting file upload process...');
+            console.log('📋 File data received:', {
+                name: fileData.name,
+                type: fileData.type,
+                base64Length: fileData.base64 ? fileData.base64.length : 'undefined'
+            });
+
+            if (!fileData.base64) {
+                throw new Error('ไม่พบข้อมูลไฟล์ base64');
+            }
+
             const buffer = Buffer.from(fileData.base64, 'base64');
+            console.log('📊 Buffer created, size:', buffer.length, 'bytes');
+            
+            // Check Cloudinary config
+            if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+                throw new Error('Cloudinary configuration missing');
+            }
             
             // Upload to Cloudinary
+            console.log('☁️ Uploading to Cloudinary...');
             const result = await new Promise((resolve, reject) => {
                 cloudinary.uploader.upload_stream(
                     {
                         resource_type: 'auto',
                         folder: 'chat-app-files',
+                        public_id: `group_${groupId}_${Date.now()}`,
                     },
                     (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
+                        if (error) {
+                            console.error('☁️ Cloudinary error:', error);
+                            reject(error);
+                        } else {
+                            console.log('☁️ Cloudinary success:', result.secure_url);
+                            resolve(result);
+                        }
                     }
                 ).end(buffer);
             });
             
-            console.log('☁️ Cloudinary upload result:', result.secure_url);
+            console.log('✅ Cloudinary upload result:', result.secure_url);
             
             messageData.content = hasContent ? content.trim() : (isImage ? '📷 รูปภาพ' : '📎 ไฟล์');
             messageData.messageType = isImage ? 'image' : 'file';
@@ -675,9 +699,17 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
             messageData.mimeType = fileData.type;
             
         } catch (error) {
-            console.error('❌ Error uploading base64 file to Cloudinary:', error);
+            console.error('❌ Detailed upload error:', {
+                message: error.message,
+                stack: error.stack,
+                cloudinaryConfig: {
+                    cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? 'SET' : 'MISSING',
+                    api_key: process.env.CLOUDINARY_API_KEY ? 'SET' : 'MISSING',
+                    api_secret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'MISSING'
+                }
+            });
             res.status(500);
-            throw new Error('ไม่สามารถอัพโหลดไฟล์ได้');
+            throw new Error(`ไม่สามารถอัพโหลดไฟล์ได้: ${error.message}`);
         }
     } 
     else {

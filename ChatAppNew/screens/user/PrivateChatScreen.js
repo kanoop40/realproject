@@ -114,7 +114,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           if (data.message && data.message.sender && data.message.sender._id !== currentUser?._id) {
             console.log('✅ Message is from other user, processing...');
             
-            const newMessages = [...prevMessages, {
+            const newMessage = {
               _id: data.message._id,
               content: data.message.content,
               sender: data.message.sender,
@@ -126,10 +126,19 @@ const PrivateChatScreen = ({ route, navigation }) => {
               fileSize: data.message.fileSize,
               mimeType: data.message.mimeType,
               user_id: data.message.sender
-            }];
+            };
+            
+            const newMessages = [...prevMessages, newMessage];
             
             setTimeout(() => {
               flatListRef.current?.scrollToEnd({ animated: true });
+              
+              // Show time for new message automatically after 500ms
+              setTimeout(() => {
+                if (newMessage._id) {
+                  toggleTimeDisplay(newMessage._id);
+                }
+              }, 500);
             }, 100);
             
             return newMessages;
@@ -229,6 +238,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
               if (index === scrollAttempts.length - 1) {
                 setHasScrolledToEnd(true);
                 console.log('🎯 Final scroll to bottom completed');
+                
+                // Show time for the latest message automatically
+                const latestMessage = messages.filter(msg => msg.type !== 'date_separator').pop();
+                if (latestMessage && latestMessage._id) {
+                  setTimeout(() => {
+                    toggleTimeDisplay(latestMessage._id);
+                  }, 1000);
+                }
               }
             }
           } catch (error) {
@@ -584,6 +601,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         const updatedMessages = [...filteredMessages, serverMessage];
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
+          
+          // Show time for sent message automatically after 500ms
+          setTimeout(() => {
+            if (serverMessage._id) {
+              toggleTimeDisplay(serverMessage._id);
+            }
+          }, 500);
         }, 100);
         return updatedMessages;
       });
@@ -749,6 +773,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
+          
+          // Show time for sent image automatically after 500ms
+          setTimeout(() => {
+            if (serverMessage._id) {
+              toggleTimeDisplay(serverMessage._id);
+            }
+          }, 500);
         }, 100);
         
         return updatedMessages;
@@ -782,6 +813,46 @@ const PrivateChatScreen = ({ route, navigation }) => {
     return date.toLocaleTimeString('th-TH', {
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  // Toggle time display for message
+  const toggleTimeDisplay = (messageId) => {
+    if (!messageId || messageId.startsWith('date_')) return;
+
+    setShowTimeForMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        // ซ่อนเวลา
+        newSet.delete(messageId);
+      } else {
+        // แสดงเวลา
+        newSet.add(messageId);
+        
+        // สร้าง animation หากยังไม่มี
+        if (!timeAnimations[messageId]) {
+          const newAnimation = new Animated.Value(0);
+          setTimeAnimations(prev => ({
+            ...prev,
+            [messageId]: newAnimation
+          }));
+          
+          // เริ่ม animation ทันที
+          Animated.timing(newAnimation, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: false
+          }).start();
+        } else {
+          // ถ้ามี animation อยู่แล้ว ให้เริ่มทันที
+          Animated.timing(timeAnimations[messageId], {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: false
+          }).start();
+        }
+      }
+      return newSet;
     });
   };
 
@@ -1050,7 +1121,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // Handle message selection
   const handleMessagePress = (messageId) => {
-    if (selectionMode && messageId && !messageId.startsWith('date_')) {
+    if (!messageId || messageId.startsWith('date_')) return;
+    
+    if (selectionMode) {
+      // Selection mode - select/deselect messages
       setSelectedMessages(prev => {
         if (prev.includes(messageId)) {
           return prev.filter(id => id !== messageId);
@@ -1058,6 +1132,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
           return [...prev, messageId];
         }
       });
+    } else {
+      // Normal mode - toggle time display
+      toggleTimeDisplay(messageId);
     }
   };
 
@@ -1105,7 +1182,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         onImagePress={openImageModal}
         onFilePress={showFileOptions}
         formatDateTime={formatDateTime}
-        shouldShowTime={() => true}
+        shouldShowTime={(messageId) => showTimeForMessages.has(messageId)}
         getFileIcon={getFileIcon}
         decodeFileName={decodeFileName}
         formatFileSize={formatFileSize}
@@ -1157,15 +1234,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
               style={styles.messagesList}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefreshing}
-                  onRefresh={onRefresh}
-                  colors={['#007AFF']}
-                  tintColor="#007AFF"
-                  title="โหลดข้อความใหม่..."
-                />
-              }
+
               inverted={false}
 
               onContentSizeChange={(contentWidth, contentHeight) => {
