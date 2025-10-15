@@ -21,7 +21,7 @@ import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
@@ -77,7 +77,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // Debug useEffect for selectionMode
   useEffect(() => {
-    console.log('👀 selectionMode changed:', { selectionMode, selectedCount: selectedMessages.length });
+    // selectionMode changed
   }, [selectionMode, selectedMessages]);
 
   // Removed initial loading state - no longer using loading functionality
@@ -473,17 +473,34 @@ const PrivateChatScreen = ({ route, navigation }) => {
         // ใช้ชื่อไฟล์จริงจาก file picker
         const originalFileName = fileToSend.name || fileToSend.fileName || 'unknown_file';
         
-        // ส่งไฟล์ในรูปแบบที่ React Native รองรับ
+        // ส่งไฟล์ในรูปแบบที่ React Native รองรับ - ใช้ URI เต็ม
         const fileObj = {
-          uri: Platform.OS === 'ios' ? fileToSend.uri.replace('file://', '') : fileToSend.uri,
+          uri: fileToSend.uri, // ใช้ URI เต็มแบบ file://
           type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
           name: originalFileName,
         };
         
-        formData.append('file', fileObj);
+        console.log('🔥 FRONTEND FormData Debug (File):', {
+          content: contentToSend,
+          messageType: 'file',
+          fileObj: fileObj,
+          originalFileToSend: fileToSend
+        });
+        
+        // อ่านไฟล์เป็น base64 แทนการใช้ FormData
+        const base64 = await FileSystem.readAsStringAsync(fileObj.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
 
-        response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-          timeout: 30000, // 30 seconds timeout
+        // ส่งเป็น JSON แทน FormData
+        response = await api.post(`/chats/${chatroomId}/messages`, {
+          content: contentToSend,
+          messageType: 'file',
+          fileData: {
+            base64: base64,
+            name: fileObj.name,
+            type: fileObj.type,
+          }
         });
       } else {
         // ส่งข้อความธรรมดา = ใช้ JSON
@@ -669,23 +686,44 @@ const PrivateChatScreen = ({ route, navigation }) => {
       // ตรวจสอบและจัดรูปแบบ file object ให้ถูกต้องสำหรับ React Native
       const fileName = imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`;
       
-      // สร้าง file object ที่ถูกต้อง
-      let fileUri = imageAsset.uri;
-      if (Platform.OS === 'ios' && fileUri.startsWith('file://')) {
-        fileUri = fileUri.replace('file://', '');
-      }
-      
-      // เพิ่มไฟล์
-      formData.append('file', {
-        uri: fileUri,
+      // สร้าง file object ที่ถูกต้อง - ใช้ URI เต็มสำหรับ React Native
+      const fileObject = {
+        uri: imageAsset.uri, // ใช้ URI เต็มแบบ file://
         type: imageAsset.mimeType || imageAsset.type || 'image/jpeg', 
         name: fileName,
+      };
+      
+      console.log('🔥 FRONTEND FormData Debug:', {
+        content: 'รูปภาพ',
+        messageType: 'image',
+        fileObject: fileObject,
+        originalImageAsset: imageAsset
+      });
+      
+      // อ่านไฟล์เป็น base64 แทนการใช้ FormData
+      const base64 = await FileSystem.readAsStringAsync(fileObject.uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
 
-
-
-      const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-        timeout: 30000, // 30 seconds timeout
+      console.log('🚀 Sending image data:', {
+        content: 'รูปภาพ',
+        messageType: 'image',
+        fileData: {
+          name: fileObject.name,
+          type: fileObject.type,
+          base64Length: base64?.length
+        }
+      });
+      
+      // ส่งเป็น JSON แทน FormData
+      const response = await api.post(`/chats/${chatroomId}/messages`, {
+        content: 'รูปภาพ',
+        messageType: 'image',
+        fileData: {
+          base64: base64,
+          name: fileObject.name,
+          type: fileObject.type,
+        }
       });
 
       console.log('📥 Image Server response:', response.data);
@@ -1169,9 +1207,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันจัดการการเลือกข้อความ
   const handleMessageSelect = (messageId) => {
-    console.log('🔄 handleMessageSelect called:', { messageId, selectionMode, selectedMessages });
     if (!selectionMode) {
-      console.log('❌ Not in selection mode');
       return;
     }
     
@@ -1179,31 +1215,42 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const newSelection = prev.includes(messageId) 
         ? prev.filter(id => id !== messageId)
         : [...prev, messageId];
-      console.log('✅ Updated selectedMessages:', newSelection);
       return newSelection;
     });
   };
 
-  // ฟังก์ชันลบข้อความที่เลือก (เฉพาะในเครื่อง)
-  const deleteSelectedMessages = () => {
+  // ฟังก์ชันลบข้อความที่เลือก (ลบจาก server จริง)
+  const deleteSelectedMessages = async () => {
     if (selectedMessages.length === 0) return;
     
     Alert.alert(
       'ลบข้อความ',
-      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?\n(ลบเฉพาะในเครื่องของคุณ ไม่ลบจากเซิร์ฟเวอร์)`,
+      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?\n(ข้อความจะถูกลบถาวรจากเซิร์ฟเวอร์)`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
           text: 'ลบ',
           style: 'destructive',
-          onPress: () => {
-            // ลบข้อความเฉพาะในเครื่อง (ไม่ส่งไปเซิร์ฟเวอร์)
-            setMessages(prevMessages => 
-              prevMessages.filter(msg => !selectedMessages.includes(msg._id))
-            );
-            setSelectedMessages([]);
-            setSelectionMode(false);
-            console.log(`✅ Deleted ${selectedMessages.length} messages locally`);
+          onPress: async () => {
+            try {
+              // ลบข้อความทีละข้อความจาก server
+              for (const messageId of selectedMessages) {
+                try {
+                  await handleDeleteMessage(messageId);
+                } catch (error) {
+                  console.error('Error deleting message:', messageId, error);
+                }
+              }
+              
+              // Reset selection mode
+              setSelectedMessages([]);
+              setSelectionMode(false);
+              
+              Alert.alert('สำเร็จ', 'ลบข้อความเรียบร้อยแล้ว');
+            } catch (error) {
+              console.error('Error in bulk delete:', error);
+              Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบข้อความได้ กรุณาลองใหม่');
+            }
           }
         }
       ]
@@ -1221,23 +1268,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     setSelectionMode(true);
   };
 
-  const handleClearChat = () => {
-    Alert.alert(
-      'ล้างประวัติแชท',
-      'คุณต้องการล้างข้อความทั้งหมดหรือไม่?',
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        {
-          text: 'ล้าง',
-          style: 'destructive',
-          onPress: () => {
-            setMessages([]);
-            console.log('✅ Chat history cleared');
-          }
-        }
-      ]
-    );
-  };
+
 
   const handleCancelSelection = () => {
     setSelectionMode(false);
@@ -1441,28 +1472,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
     };
     
     const handleMessagePress = () => {
-      console.log('👆 handleMessagePress called:', { 
-        selectionMode, 
-        messageId: item._id,
-        selectedMessages: selectedMessages.length 
-      });
-      
       // Force selection mode to work - direct call
       if (selectionMode) {
-        console.log('🎯 In selection mode, calling handleMessageSelect');
-        console.log('🔍 Current selectedMessages before:', selectedMessages);
-        
         // Direct state update instead of calling function
         setSelectedMessages(prev => {
           const isSelected = prev.includes(item._id);
           const newSelection = isSelected 
             ? prev.filter(id => id !== item._id)
             : [...prev, item._id];
-          console.log('✅ Direct update selectedMessages:', { 
-            was: prev, 
-            now: newSelection,
-            action: isSelected ? 'removed' : 'added' 
-          });
           return newSelection;
         });
         return;
@@ -1474,11 +1491,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       if (item.lastPress && (now - item.lastPress) < DOUBLE_PRESS_DELAY) {
         // Double press detected - แก้ไขข้อความ
-        console.log('🔄 Double press - edit message');
         handleMessageDoublePress(item);
       } else {
         // Single press - แสดง/ซ่อนเวลา (สำหรับทุกข้อความ)
-        console.log('🔄 Single press - toggle time');
         toggleShowTime(item._id);
         item.lastPress = now;
       }
@@ -1601,28 +1616,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         roomName={roomName}
         selectionMode={selectionMode}
         selectedMessages={selectedMessages}
-        onGoBack={handleGoBack}
+        onBackPress={handleGoBack}
         onManageChat={handleManageChat}
-        onClearChat={handleClearChat}
         onCancelSelection={handleCancelSelection}
         onDeleteSelected={deleteSelectedMessages}
       />
 
-      {/* Debug Banner - Always Show */}
-      <View style={{
-        backgroundColor: selectionMode ? '#FF3B30' : '#6B7280',
-        paddingVertical: 4,
-        paddingHorizontal: 16,
-        alignItems: 'center'
-      }}>
-        <Text style={{
-          color: 'white',
-          fontSize: 12,
-          fontWeight: 'bold'
-        }}>
-          DEBUG: {selectionMode ? 'โหมดเลือกข้อความ' : 'โหมดปกติ'} - เลือกแล้ว: {selectedMessages.length}
-        </Text>
-      </View>
+
 
       {/* Selection Mode Banner */}
       {selectionMode && (

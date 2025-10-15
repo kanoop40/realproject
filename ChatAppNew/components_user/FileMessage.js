@@ -15,7 +15,9 @@ const FileMessage = ({
   showTimeForMessages,
   timeAnimations,
   selectedMessages,
+  selectionMode,
   onFilePress,
+  onMessagePress,
   formatDateTime,
   shouldShowTime,
   getFileIcon,
@@ -50,7 +52,15 @@ const FileMessage = ({
               styles.fileAttachment,
               isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
             ]}
-            onPress={() => onFilePress(item)}
+            onPress={() => {
+              if (selectionMode) {
+                // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดไฟล์
+                onMessagePress(item);
+              } else {
+                // โหมดปกติ ให้เปิดไฟล์
+                onFilePress(item);
+              }
+            }}
           >
             <View style={styles.fileIcon}>
               {getFileIcon(decodeFileName(item.fileName || item.file?.file_name || 'unknown_file'))}

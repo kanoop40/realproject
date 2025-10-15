@@ -17,7 +17,9 @@ const ImageMessage = ({
   showTimeForMessages,
   timeAnimations,
   selectedMessages,
+  selectionMode,
   onImagePress,
+  onMessagePress,
   formatDateTime,
   shouldShowTime
 }) => {
@@ -46,12 +48,18 @@ const ImageMessage = ({
         <TouchableOpacity 
           style={styles.imageContainer}
           onPress={() => {
-            const imageUri = item.image?.file_path || 
-                            item.image?.uri ||
-                            (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                              item.file.url : 
-                              (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
-            onImagePress(imageUri);
+            if (selectionMode) {
+              // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดรูป
+              onMessagePress(item);
+            } else {
+              // โหมดปกติ ให้เปิดรูป
+              const imageUri = item.image?.file_path || 
+                              item.image?.uri ||
+                              (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                                item.file.url : 
+                                (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+              onImagePress(imageUri);
+            }
           }}
         >
           {/* Check if we have actual image data */}

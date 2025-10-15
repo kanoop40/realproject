@@ -4,8 +4,8 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Development API URL (auto-detect)  
-//const API_URL = Constants.isDevice ? 'http://172.22.98.120:5000' : 'http://localhost:5000';
-const API_URL = 'https://realproject-mg25.onrender.com';
+const API_URL = 'http://192.168.2.54:5000'; // ใช้ IP เดียวกันทั้ง simulator และ device
+//const API_URL = 'https://realproject-mg25.onrender.com';
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
   Platform: Platform.OS,
@@ -16,9 +16,7 @@ console.log('🎯 API will connect to:', API_URL);
 const api = axios.create({
   baseURL: `${API_URL}/api`,
   timeout: 60000, // เพิ่มเป็น 60 วินาทีสำหรับ file upload
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  // ไม่ตั้ง default Content-Type ให้ axios จัดการเอง (สำหรับ FormData)
 });
 
 // Request interceptor สำหรับ debug
@@ -32,6 +30,12 @@ api.interceptors.request.use(
       } else {
         console.log('⚠️ No token found');
       }
+      
+      // ตั้ง Content-Type เป็น JSON สำหรับ request ที่ไม่ใช่ FormData
+      if (!config.headers['Content-Type'] && !(config.data instanceof FormData)) {
+        config.headers['Content-Type'] = 'application/json';
+      }
+      
       console.log(`🔄 Making ${config.method?.toUpperCase()} request to:`, config.url);
     } catch (error) {
       console.log('❌ Error getting token:', error.message || error);

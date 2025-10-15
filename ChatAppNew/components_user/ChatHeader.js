@@ -16,8 +16,6 @@ const ChatHeader = ({
   onCancelSelection,
   onDeleteSelected,
   onManageChat,
-  onClearChat,
-  onBlockUser,
   navigation,
   chatroomId,
   returnChatId
@@ -96,10 +94,7 @@ const ChatHeader = ({
           </>
         ) : (
           <ChatMenuButton
-            recipientName={recipientName}
             onManageChat={onManageChat}
-            onClearChat={onClearChat}
-            onBlockUser={onBlockUser}
           />
         )}
       </View>

@@ -129,10 +129,34 @@ const debugBeforeSendMessage = (req, res, next) => {
   next();
 };
 
+// Debug middleware for detailed logging
+const detailedDebug = (req, res, next) => {
+  console.log('\n🔥🔥🔥 DETAILED REQUEST DEBUG 🔥🔥🔥');
+  console.log('📨 Request Method:', req.method);
+  console.log('📨 Content-Type:', req.get('Content-Type'));
+  console.log('📨 Body Keys:', Object.keys(req.body));
+  console.log('📨 Body Content:', req.body);
+  console.log('📨 Files Array:', req.files);
+  console.log('📨 Files Length:', req.files ? req.files.length : 0);
+  console.log('📨 Single File:', req.file);
+  if (req.files && req.files.length > 0) {
+    req.files.forEach((file, index) => {
+      console.log(`📁 File ${index}:`, {
+        fieldname: file.fieldname,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      });
+    });
+  }
+  console.log('🔥🔥🔥 END DEBUG 🔥🔥🔥\n');
+  next();
+};
+
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
 // @access  Private  
-router.post('/:id/messages', conditionalUpload, debugBeforeSendMessage, sendMessage);
+router.post('/:id/messages', uploadMessage.any(), detailedDebug, debugBeforeSendMessage, sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants

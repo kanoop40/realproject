@@ -8,6 +8,7 @@ const GroupChat = require('../models/GroupChatModel');
 const Notification = require('../models/NotificationModel');
 const NotificationService = require('../utils/notificationService');
 const multer = require('multer');
+const { cloudinary } = require('../config/cloudinary');
 const path = require('path');
 const { fileStorage } = require('../config/cloudinary');
 
@@ -346,12 +347,29 @@ const sendMessage = asyncHandler(async (req, res) => {
         console.log('🚀 Inside try block');
         const { id } = req.params;
         console.log('🚀 Got id:', id);
-        const { content } = req.body;
+        console.log('🚀 Full req.body:', Object.keys(req.body));
+        console.log('🚀 req.body content preview:', JSON.stringify(req.body).substring(0, 500));
+        
+        const { content, fileData, messageType } = req.body; // เพิ่ม fileData และ messageType สำหรับ base64
         console.log('🚀 Got content:', content);
+        console.log('🚀 Got fileData:', !!fileData);
+        console.log('🚀 Got messageType:', messageType);
+        if (fileData) {
+            console.log('🚀 FileData details:', {
+                name: fileData.name,
+                type: fileData.type,
+                base64Length: fileData.base64?.length
+            });
+        }
         const userId = req.user._id;
         console.log('🚀 Got userId:', userId);
-        const file = req.file;
+        // Handle both req.file and req.files
+        let file = req.file;
+        if (!file && req.files && req.files.length > 0) {
+            file = req.files.find(f => f.fieldname === 'file') || req.files[0];
+        }
         console.log('🚀 Got file:', !!file);
+        console.log('🚀 Files array:', req.files);
 
         console.log('📨 sendMessage request:', {
             chatId: id,
@@ -360,7 +378,9 @@ const sendMessage = asyncHandler(async (req, res) => {
             contentType: req.get('Content-Type'),
             isMultipart: req.get('Content-Type')?.includes('multipart/form-data'),
             hasFile: !!file,
+            filesCount: req.files?.length || 0,
             fileDetails: file ? {
+                fieldname: file.fieldname,
                 originalname: file.originalname,
                 mimetype: file.mimetype,
                 size: file.size,
@@ -368,13 +388,13 @@ const sendMessage = asyncHandler(async (req, res) => {
             } : null
         });
 
-        // แยกเช็คเงื่อนไข: ต้องมีอย่างน้อย content หรือ file
-        if ((!content || content.trim() === '') && !file) {
+        // แยกเช็คเงื่อนไข: ต้องมีอย่างน้อย content หรือ file หรือ fileData
+        if ((!content || content.trim() === '') && !file && !fileData) {
             return res.status(400).json({ message: 'กรุณากรอกข้อความหรือแนบไฟล์' });
         }
 
         // ถ้ามีไฟล์แต่ไม่มี content ให้ใช้ค่า default
-        const messageContent = content?.trim() || (file ? 'ไฟล์แนบ' : '');
+        const messageContent = content?.trim() || (file || fileData ? 'ไฟล์แนบ' : '');
 
         // Check if user is participant in this chatroom (รองรับทั้ง user_id และ participants)
         const chatroom = await Chatrooms.findOne({
@@ -404,29 +424,105 @@ const sendMessage = asyncHandler(async (req, res) => {
 
         await message.save();
 
-        // If file is uploaded, save file info to database and link to message
-        if (file) {
-            const isImage = file.mimetype && file.mimetype.startsWith('image/');
-            
-            fileDoc = new File({
-                file_name: file.originalname,
-                url: file.path, // Use Cloudinary URL
-                user_id: userId,
-                chat_id: id,
-                size: file.size.toString(),
-                file_type: file.mimetype,
-                Messages_id: message._id // เชื่อมโยงกับ message ที่สร้างแล้ว
-            });
-            await fileDoc.save();
+        // If file is uploaded or base64 data provided, save file info to database and link to message
+        if (file || fileData) {
+            try {
+                console.log('🔥 Processing file upload...');
+                
+                if (fileData) {
+                    // Handle base64 file data
+                    console.log('🔥 Processing base64 file data:', {
+                        name: fileData.name,
+                        type: fileData.type,
+                        base64Length: fileData.base64?.length
+                    });
+                    
+                    const buffer = Buffer.from(fileData.base64, 'base64');
+                    
+                    // Upload to Cloudinary
+                    const result = await new Promise((resolve, reject) => {
+                        cloudinary.uploader.upload_stream(
+                            {
+                                resource_type: 'auto',
+                                folder: 'chat-app-files',
+                            },
+                            (error, result) => {
+                                if (error) reject(error);
+                                else resolve(result);
+                            }
+                        ).end(buffer);
+                    });
+                    
+                    const isImage = fileData.type && fileData.type.startsWith('image/');
+                    
+                    fileDoc = new File({
+                        file_name: fileData.name,
+                        url: result.secure_url,
+                        user_id: userId,
+                        chat_id: id,
+                        size: buffer.length.toString(),
+                        file_type: fileData.type,
+                        Messages_id: message._id
+                    });
+                    
+                    console.log('🔥 Saving base64 file document...');
+                    await fileDoc.save();
+                    
+                    message.file_id = fileDoc._id;
+                    message.messageType = isImage ? 'image' : 'file';
+                    message.fileUrl = result.secure_url;
+                    message.fileName = fileData.name;
+                    message.fileSize = buffer.length;
+                    message.mimeType = fileData.type;
+                } else {
+                    // Handle regular file upload
+                    console.log('🔥 File details:', {
+                        originalname: file.originalname,
+                        mimetype: file.mimetype,
+                        size: file.size,
+                        path: file.path,
+                        fieldname: file.fieldname
+                    });
+                    
+                    const isImage = file.mimetype && file.mimetype.startsWith('image/');
+                    console.log('🔥 File type check - isImage:', isImage, 'mimetype:', file.mimetype);
+                
+                    fileDoc = new File({
+                        file_name: file.originalname,
+                        url: file.path, // Use Cloudinary URL
+                        user_id: userId,
+                        chat_id: id,
+                        size: file.size.toString(),
+                        file_type: file.mimetype,
+                        Messages_id: message._id // เชื่อมโยงกับ message ที่สร้างแล้ว
+                    });
+                    
+                    console.log('🔥 Saving file document...');
+                    await fileDoc.save();
+                    console.log('🔥 File document saved with ID:', fileDoc._id);
 
-            // อัปเดต message ให้มี file_id และข้อมูลไฟล์
-            message.file_id = fileDoc._id;
-            message.messageType = isImage ? 'image' : 'file';
-            message.fileUrl = file.path;
-            message.fileName = file.originalname;
-            message.fileSize = file.size;
-            message.mimeType = file.mimetype;
+                    // อัปเดต message ให้มี file_id และข้อมูลไฟล์
+                    message.file_id = fileDoc._id;
+                    message.messageType = isImage ? 'image' : 'file';
+                    message.fileUrl = file.path;
+                    message.fileName = file.originalname;
+                    message.fileSize = file.size;
+                    message.mimeType = file.mimetype;
+                }
+            
+            console.log('🔥 Updating message with file info...');
             await message.save();
+            console.log('🔥 Message updated successfully');
+            
+        } catch (fileError) {
+            console.error('❌ Error processing file:', fileError);
+            // ถ้า file processing ล้มเหลว ให้ส่งเป็น text message แทน
+        }
+        } else {
+            console.log('📝 No file detected, saving as text message')
+            if (messageType) {
+                console.log('⚠️ MessageType provided but no file/fileData found:', messageType);
+            }
         }
 
         // Populate message for response
@@ -527,7 +623,7 @@ const sendMessage = asyncHandler(async (req, res) => {
             console.error('Error broadcasting via SSE:', sseError);
         }
 
-        res.status(201).json({
+        const responseData = {
             _id: message._id,
             content: message.content,
             sender: message.user_id,
@@ -538,7 +634,16 @@ const sendMessage = asyncHandler(async (req, res) => {
             fileSize: message.fileSize,
             mimeType: message.mimeType,
             file: message.file_id || null
+        };
+        
+        console.log('🎉 Sending response:', {
+            messageType: responseData.messageType,
+            hasFile: !!responseData.file,
+            fileUrl: responseData.fileUrl,
+            fileName: responseData.fileName
         });
+
+        res.status(201).json(responseData);
     } catch (error) {
         console.error('❌❌❌ Error sending message:', error);
         console.error('❌ Error name:', error.name);

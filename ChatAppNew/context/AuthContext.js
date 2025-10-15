@@ -17,11 +17,11 @@ export const AuthProvider = ({ children }) => {
   const loadUser = async () => {
     try {
       // Wake up server ก่อนโหลดข้อมูล user (ไม่รอผลลัพธ์)
-      console.log('🏥 Starting health check...');
-      wakeUpServer(); // ไม่รอผลลัพธ์ ให้ทำงานพื้นหลัง
+      // console.log('🏥 Starting health check...');
+      // wakeUpServer(); // ปิดชั่วคราวสำหรับ localhost testing
       
       // เริ่ม keep-alive service เพื่อป้องกัน cold start
-      keepAliveService.start();
+      // keepAliveService.start(); // ปิดชั่วคราวสำหรับ localhost testing
       
       const userDataStr = await AsyncStorage.getItem('userData');
       if (userDataStr) {

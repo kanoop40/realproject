@@ -15,10 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 const ChatOptionsMenu = ({ 
   visible,
   onClose,
-  onManageChat,
-  onClearChat,
-  onBlockUser,
-  recipientName 
+  onManageChat
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-10)).current;
@@ -62,7 +59,6 @@ const ChatOptionsMenu = ({
       color: COLORS.accent,
       onPress: onManageChat,
     },
-   
   ];
 
   if (!visible) return null;
@@ -129,9 +125,6 @@ const ChatOptionsMenu = ({
 
 const ChatMenuButton = ({ 
   onManageChat,
-  onClearChat,
-  onBlockUser,
-  recipientName,
   disabled = false
 }) => {
   const [menuVisible, setMenuVisible] = useState(false);
@@ -163,9 +156,6 @@ const ChatMenuButton = ({
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
         onManageChat={onManageChat}
-        onClearChat={onClearChat}
-        onBlockUser={onBlockUser}
-        recipientName={recipientName}
       />
     </>
   );

@@ -21,6 +21,9 @@ export const SocketProvider = ({ children }) => {
 
   const initSocket = async () => {
     try {
+      console.log('🚫 Socket connection disabled for localhost testing');
+      return; // ปิด Socket ชั่วคราว
+      
       const token = await AsyncStorage.getItem('userToken');
       const userString = await AsyncStorage.getItem('currentUser');
       

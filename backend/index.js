@@ -239,11 +239,14 @@ app.use('*', (req, res) => {
     });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌍 Server accessible at:`);
+    console.log(`   - http://localhost:${PORT}`);
+    console.log(`   - http://127.0.0.1:${PORT}`);
+    console.log(`   - http://192.168.2.54:${PORT}`);
     console.log(`📡 SSE server running`);
     console.log(`🌐 Environment: ${NODE_ENV}`);
     console.log(`🔗 CORS Origins: ${ALLOWED_ORIGINS.join(', ')}`);
     console.log(`📱 Expo Development Support: ${NODE_ENV === 'development' ? 'Enabled' : 'Limited'}`);
-    console.log(`🌍 Server URL: ${NODE_ENV === 'production' ? 'https://realproject-mg25.onrender.com' : `http://localhost:${PORT}`}`);
 });
