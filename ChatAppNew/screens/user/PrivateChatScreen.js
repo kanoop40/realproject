@@ -1056,7 +1056,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     Alert.alert(
       'ลบข้อความ', 
-      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?\n(ลบจากเซิร์ฟเวอร์และทุกคนจะไม่เห็นข้อความนี้)`,
+      `คุณต้องการลบ ${selectedMessages.length} ข้อความของคุณหรือไม่?\n(ลบจากเซิร์ฟเวอร์และทุกคนจะไม่เห็นข้อความนี้)`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
@@ -1124,7 +1124,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
     if (!messageId || messageId.startsWith('date_')) return;
     
     if (selectionMode) {
-      // Selection mode - select/deselect messages
+      // Selection mode - ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
+      const message = messages.find(msg => msg._id === messageId);
+      if (!message) return;
+      
+      // ตรวจสอบว่าเป็นข้อความของผู้ส่งปัจจุบันหรือไม่
+      const isMyMessage = (
+        (typeof message.sender === 'object' && message.sender?._id === currentUser._id) ||
+        (typeof message.sender === 'string' && (
+          message.sender === currentUser?.firstName ||
+          message.sender === currentUser?.firstName?.split(' ')[0] ||
+          currentUser?.firstName?.startsWith(message.sender) ||
+          message.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+        ))
+      );
+      
+      // ลบได้เฉพาะข้อความของตัวเอง
+      if (!isMyMessage) {
+        return; // กดไม่ได้เลย
+      }
+      
+      // เลือก/ยกเลิกการเลือกข้อความ
       setSelectedMessages(prev => {
         if (prev.includes(messageId)) {
           return prev.filter(id => id !== messageId);
@@ -1140,8 +1160,26 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const handleLongPress = (messageId) => {
     if (!selectionMode && messageId && !messageId.startsWith('date_')) {
-      setSelectionMode(true);
-      setSelectedMessages([messageId]);
+      // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
+      const message = messages.find(msg => msg._id === messageId);
+      if (!message) return;
+      
+      const isMyMessage = (
+        (typeof message.sender === 'object' && message.sender?._id === currentUser._id) ||
+        (typeof message.sender === 'string' && (
+          message.sender === currentUser?.firstName ||
+          message.sender === currentUser?.firstName?.split(' ')[0] ||
+          currentUser?.firstName?.startsWith(message.sender) ||
+          message.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+        ))
+      );
+      
+      // เข้าโหมดเลือกได้เฉพาะข้อความของตัวเอง
+      if (isMyMessage) {
+        setSelectionMode(true);
+        setSelectedMessages([messageId]);
+      }
+      // ถ้าไม่ใช่ข้อความของตัวเอง ไม่ทำอะไร
     }
   };
 

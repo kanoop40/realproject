@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
   Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated
@@ -48,11 +48,12 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [messageReadCount, setMessageReadCount] = useState({}); // เก็บจำนวนคนที่อ่านข้อความแต่ละข้อความ
   const [selectionMode, setSelectionMode] = useState(false); // โหมดเลือกข้อความ
   const [selectedMessages, setSelectedMessages] = useState([]); // ข้อความที่เลือก
-
-  const [isLoadingMore, setIsLoadingMore] = useState(false); // สำหรับโหลดข้อความเก่า
-  const [hasMoreMessages, setHasMoreMessages] = useState(true); // มีข้อความเก่าเหลืออยู่หรือไม่
-  const [currentPage, setCurrentPage] = useState(1); // หน้าปัจจุบัน
-  const [showLoadOlderButton, setShowLoadOlderButton] = useState(false); // แสดงปุ่มโหลดข้อความเก่า
+  
+  // States สำหรับโหลดข้อความเก่า
+  const [showLoadOlderButton, setShowLoadOlderButton] = useState(false);
+  const [canLoadMore, setCanLoadMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const flatListRef = useRef(null);
 
   const { 
@@ -86,7 +87,7 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   // Debug selection mode
   useEffect(() => {
-    console.log('👀 selectionMode changed:', { selectionMode, selectedCount: selectedMessages.length });
+
   }, [selectionMode, selectedMessages]);
 
   useEffect(() => {
@@ -102,11 +103,6 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   // เพิ่ม useEffect เพื่อตรวจสอบ Socket status เมื่อเข้าหน้า
   useEffect(() => {
-    console.log('🔍 Checking socket status on component mount...');
-    console.log('🔍 Socket exists:', !!socket);
-    console.log('🔍 Socket connected:', socket?.connected);
-    console.log('🔍 GroupId:', groupId);
-    console.log('🔍 AuthUser exists:', !!authUser);
     
     // ตรวจสอบสถานะ Socket และอัปเดต UI
     if (socket) {
@@ -143,7 +139,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (messages.length > 0 && !hasScrolledToEnd) {
       // รอให้ FlatList render เสร็จแล้วค่อย scroll (ไม่ต้องรอ loading เสร็จ)
-      console.log('📍 Auto-scrolling to end on messages change (background):', messages.length);
+
       
       // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า render เสร็จแล้ว
       const timeoutId = setTimeout(() => {
@@ -171,7 +167,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (messages.length > 0) {
       // scroll ทันทีเมื่อมี messages โดยไม่ต้องรอ loading เสร็จ
-      console.log('🎯 Immediate scroll attempt (background):', messages.length);
+
       
       const immediateScrollTimeout = setTimeout(() => {
         try {
@@ -194,7 +190,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     if (messages.length > 0) {
       // รอ 1 วินาทีแล้วลอง scroll อีกครั้ง ในกรณีที่ useEffect อื่นไม่ทำงาน
       const finalScrollTimeout = setTimeout(() => {
-        console.log('🎯 Final attempt to scroll to end:', messages.length);
+
         try {
           if (messages.length > 0) {
             flatListRef.current?.scrollToEnd({ 
@@ -211,12 +207,6 @@ const GroupChatScreen = ({ route, navigation }) => {
   }, [messages.length]);
 
   useEffect(() => {
-    console.log('🔍 Socket useEffect triggered');
-    console.log('🔍 socket exists:', !!socket);
-    console.log('🔍 socket.connected:', socket?.connected);
-    console.log('🔍 groupId:', groupId);
-    console.log('🔍 authUser exists:', !!authUser);
-    console.log('🔍 authUser._id:', authUser?._id);
     
     if (socket && groupId && authUser) {
       console.log('🔌 Setting up GroupChat socket listeners for group:', groupId);
@@ -242,7 +232,7 @@ const GroupChatScreen = ({ route, navigation }) => {
           return;
         }
         
-        console.log('✅ Message is for this group, processing...');
+
         console.log('💬 Message sender ID:', data.message?.sender?._id);
         console.log('💬 Current user ID:', authUser._id);
         
@@ -269,7 +259,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                 senderId: data.message?.sender?._id 
               }
             );
-            console.log('✅ Notification sent successfully');
+
           } catch (error) {
             console.error('❌ Error showing notification:', error);
           }
@@ -293,7 +283,7 @@ const GroupChatScreen = ({ route, navigation }) => {
               } catch (error) {
                 flatListRef.current?.scrollToEnd({ animated: true });
               }
-              console.log('🎯 Auto-scrolled to new message from socket');
+
             }, 100);
             
             return newMessages;
@@ -373,7 +363,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         const retrySetup = () => {
           if (socket.connected) {
-            console.log('🔄 Socket is now connected, setting up listeners...');
+
             // Setup listeners ทันที
             socket.on('newMessage', (data) => {
               console.log('� [Retry] GroupChat received new message:', data);
@@ -385,7 +375,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         // ลอง connect ทุก 1 วินาที จนกว่าจะ connected
         const connectInterval = setInterval(() => {
           if (socket.connected) {
-            console.log('✅ Socket connection established, cleaning up retry interval');
+
             clearInterval(connectInterval);
             retrySetup();
           } else {
@@ -409,16 +399,17 @@ const GroupChatScreen = ({ route, navigation }) => {
       }
       
       const [messagesRes, groupRes] = await Promise.all([
-        api.get(`/groups/${groupId}/messages?page=${page}&limit=30`),
+        api.get(`/groups/${groupId}/messages?page=${page}&limit=30`), // ปรับกลับเป็น 30
         page === 1 ? api.get(`/groups/${groupId}`) : Promise.resolve({ data: groupInfo })
       ]);
       
-      console.log('📨 Group messages loaded (page ' + page + '):', messagesRes.data);
-      if (page === 1) {
-        console.log('👥 Group info loaded:', groupRes.data);
-      }
-      
       const loadedMessages = messagesRes.data.data || messagesRes.data.messages || [];
+      console.log('📨 Group messages loaded (page ' + page + '):', {
+        count: loadedMessages.length,
+        firstMessageId: loadedMessages[0]?._id,
+        lastMessageId: loadedMessages[loadedMessages.length - 1]?._id,
+        lastMessageTime: loadedMessages[loadedMessages.length - 1]?.timestamp
+      });
       const groupData = groupRes.data.data || groupRes.data;
       
       if (loadedMessages.length === 0) {
@@ -427,7 +418,7 @@ const GroupChatScreen = ({ route, navigation }) => {
           setMessages([]); // ตั้งค่าเป็น array ว่าง
           setHasScrolledToEnd(true);
         }
-        setHasMoreMessages(false);
+        setCanLoadMore(false);
         // setIsScrollingToEnd(false);
       } else {
         if (append && page > 1) {
@@ -456,9 +447,9 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         // เช็คว่ามีข้อความเก่าเหลืออยู่อีกหรือไม่
         if (loadedMessages.length < 30) {
-          setHasMoreMessages(false);
+          setCanLoadMore(false);
         } else {
-          setHasMoreMessages(true);
+          setCanLoadMore(true);
         }
         
         // เริ่มต้นข้อมูล messageReadCount สำหรับข้อความที่โหลดมา
@@ -479,6 +470,11 @@ const GroupChatScreen = ({ route, navigation }) => {
       console.log('📨 Messages set, total:', append ? `${messages.length} + ${loadedMessages.length}` : loadedMessages.length);
       if (page === 1) {
         setGroupInfo(groupData);
+        
+        // รีเซ็ต pagination states
+        setCurrentPage(1);
+        setCanLoadMore(true);
+        console.log('📚 Initial load - canLoadMore set to true');
         
         // แปลงข้อมูลสมาชิกให้ถูกต้อง
         const members = groupData.members || [];
@@ -503,8 +499,7 @@ const GroupChatScreen = ({ route, navigation }) => {
       setCurrentPage(page);
       
     } catch (error) {
-      console.error('Error loading group data:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลกลุ่มได้');
+  console.error('Error loading group data:', error);
     } finally {
       if (page === 1) {
         // setIsScrollingToEnd(false);
@@ -514,13 +509,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadMoreMessages = async () => {
-    if (isLoadingMore || !hasMoreMessages) return;
-    
-    console.log('📥 Loading more messages... Current page:', currentPage);
-    const nextPage = currentPage + 1;
-    await loadGroupData(nextPage, true);
-  };
+
 
   const removeMember = async (memberId) => {
     try {
@@ -542,7 +531,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     
     Alert.alert(
       'ลบข้อความ',
-      `คุณต้องการลบ ${selectedMessages.length} ข้อความหรือไม่?\n(ลบจากเซิร์ฟเวอร์และทุกคนในกลุ่มจะไม่เห็นข้อความนี้)`,
+      `คุณต้องการลบ ${selectedMessages.length} ข้อความของคุณหรือไม่?\n(ลบจากเซิร์ฟเวอร์และทุกคนในกลุ่มจะไม่เห็นข้อความนี้)`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
@@ -562,7 +551,7 @@ const GroupChatScreen = ({ route, navigation }) => {
               const deletePromises = messagesToDelete.map(async (messageId) => {
                 try {
                   await api.delete(`/groups/${groupId}/messages/${messageId}`);
-                  console.log(`✅ Deleted group message ${messageId} from server`);
+
                   
                   // Emit socket event for real-time deletion
                   if (socket) {
@@ -579,7 +568,7 @@ const GroupChatScreen = ({ route, navigation }) => {
               });
 
               await Promise.all(deletePromises);
-              console.log(`✅ Successfully deleted ${messagesToDelete.length} group messages from server`);
+
               
             } catch (error) {
               console.error('❌ Error deleting group messages:', error);
@@ -604,6 +593,53 @@ const GroupChatScreen = ({ route, navigation }) => {
       ]
     );
   };
+
+  // ฟังก์ชันโหลดข้อความเก่า
+  const loadMoreMessages = useCallback(async () => {
+    if (isLoadingMore || !canLoadMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      console.log(`📚 Loading more group messages - page ${nextPage}`);
+      
+      const response = await api.get(`/groups/${groupId}/messages?limit=30&page=${nextPage}`);
+      const olderMessages = response.data.messages || [];
+      
+      if (olderMessages.length < 30) {
+        setCanLoadMore(false);
+        console.log('📚 No more group messages to load');
+      }
+      
+      if (olderMessages.length > 0) {
+        // เก็บตำแหน่งปัจจุบันก่อนเพิ่มข้อความเก่า
+        const currentScrollOffset = flatListRef.current?._listRef?._scrollMetrics?.offset || 0;
+        
+        setMessages(prevMessages => [
+          ...olderMessages,
+          ...prevMessages
+        ]);
+        setCurrentPage(nextPage);
+
+        
+        // คืนตำแหน่งการเลื่อนหลังจากเพิ่มข้อความใหม่
+        setTimeout(() => {
+          if (flatListRef.current && currentScrollOffset > 0) {
+            flatListRef.current.scrollToOffset({ 
+              offset: currentScrollOffset + (olderMessages.length * 100), 
+              animated: false 
+            });
+          }
+        }, 50);
+      }
+      
+    } catch (error) {
+      console.error('Error loading more group messages:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อความเก่าได้');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, canLoadMore, currentPage, groupId]);
 
   const sendMessage = async () => {
     if ((!inputText.trim() && !selectedFile && !selectedImage) || !groupId || isSending) return;
@@ -688,18 +724,21 @@ const GroupChatScreen = ({ route, navigation }) => {
         });
       }
 
-      console.log('📥 Group message sent successfully:', response.data);
+
+      
+      // แก้ไข: ข้อมูลจริงอยู่ใน response.data.data
+      const actualMessageData = response.data.data || response.data;
+      
       setMessages(prev => {
         const filteredMessages = prev.filter(msg => msg._id !== tempId);
-        
         const optimisticMsg = prev.find(msg => msg._id === tempId);
         
         const messageExists = filteredMessages.some(msg => {
-          if (msg._id === response.data._id) return true;
+          if (msg._id === actualMessageData._id) return true;
           
           if ((fileToSend || imageToSend) && msg.fileName && msg.sender?._id === authUser?._id) {
-            const timeDiff = Math.abs(new Date(msg.timestamp) - new Date(response.data.timestamp));
-            if (msg.fileName === (response.data.fileName || optimisticMsg?.fileName) && timeDiff < 5000) {
+            const timeDiff = Math.abs(new Date(msg.timestamp) - new Date(actualMessageData.timestamp));
+            if (msg.fileName === (actualMessageData.fileName || optimisticMsg?.fileName) && timeDiff < 5000) {
               return true;
             }
           }
@@ -708,29 +747,37 @@ const GroupChatScreen = ({ route, navigation }) => {
         });
         
         if (messageExists) {
-          console.log('🔄 Server message already exists from socket, skipping...');
           return filteredMessages;
         }
         
+        // ตรวจสอบว่า actualMessageData มี _id ที่ถูกต้องหรือไม่
+        if (!actualMessageData._id) {
+          console.log('❌ Invalid message data - no _id found, keeping temp message');
+          return prev; // คืนค่า messages เดิมรวมทั้ง temp message
+        }
+        
         const serverMessage = { 
-          ...response.data, 
+          ...actualMessageData, 
           isTemporary: false,
-          messageType: (response.data.fileUrl || optimisticMsg?.fileName) ? messageType : response.data.messageType,
-          fileName: response.data.fileName || optimisticMsg?.fileName,
-          fileSize: response.data.fileSize || optimisticMsg?.fileSize,
-          mimeType: response.data.mimeType || optimisticMsg?.mimeType,
+          messageType: (actualMessageData.fileUrl || optimisticMsg?.fileName) ? messageType : actualMessageData.messageType,
+          fileName: actualMessageData.fileName || optimisticMsg?.fileName,
+          fileSize: actualMessageData.fileSize || optimisticMsg?.fileSize,
+          mimeType: actualMessageData.mimeType || optimisticMsg?.mimeType,
         };
         
         const updatedMessages = [...filteredMessages, serverMessage];
+        
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
         return updatedMessages;
       });
-      
-      console.log('✅ Group message sent successfully:', response.data._id);
+      console.log('🎉 Message sent successfully, ID:', actualMessageData._id);
     } catch (error) {
       console.error('❌ Error sending group message:', error);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error status:', error.response?.status);
       
       setMessages(prev => prev.filter(msg => msg._id !== tempId));
       setInputText(messageToSend);
@@ -747,6 +794,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         errorMessage = error.response?.data?.message || error.message || errorMessage;
       }
       
+      console.error('❌ About to show alert with message:', errorMessage);
       Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsSending(false);
@@ -1211,7 +1259,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     const adminIdString = typeof adminId === 'object' ? adminId._id || adminId.toString() : adminId.toString();
     const currentUserIdString = typeof currentUserId === 'object' ? currentUserId.toString() : currentUserId.toString();
     
-    console.log('🔍 Admin check:', { adminIdString, currentUserIdString, isAdmin: adminIdString === currentUserIdString });
+
     
     return adminIdString === currentUserIdString;
   };
@@ -1220,55 +1268,42 @@ const GroupChatScreen = ({ route, navigation }) => {
     navigation.navigate('EditGroup', { groupId });
   };
 
-  const getAdminName = () => {
-    console.log('🔍 getAdminName called');
-    console.log('📋 groupInfo:', JSON.stringify(groupInfo, null, 2));
+  const getAdminName = useMemo(() => {
     const adminId = groupInfo?.admin || groupInfo?.creator;
-    console.log('👑 admin/creator ID:', adminId);
-    console.log('👥 groupMembers count:', groupMembers.length);
-    console.log('👤 authUser ID:', authUser?._id);
     
     if (!adminId) {
-      console.log('❌ No admin/creator found');
       return 'ไม่ทราบ';
     }
     
     // ตรวจสอบว่า adminId เป็น Object หรือ String
     const adminIdString = typeof adminId === 'object' ? adminId._id || adminId.toString() : adminId.toString();
-    console.log('🔑 adminIdString:', adminIdString);
     
     const adminMember = groupMembers.find(member => {
       const memberIdString = typeof member._id === 'object' ? member._id.toString() : member._id.toString();
       return memberIdString === adminIdString;
     });
     
-    console.log('👑 Admin member found:', adminMember);
-    
     if (adminMember) {
       const name = adminMember.name || 
                   `${adminMember.firstName || ''} ${adminMember.lastName || ''}`.trim() || 
                   adminMember.email || 'ไม่ทราบ';
-      console.log('✅ Admin name:', name);
       return name;
     }
     
     // ตรวจสอบว่าเป็นตัวเราเอง
     const currentUserIdString = authUser?._id?.toString();
     if (adminIdString === currentUserIdString) {
-      console.log('✅ Admin is current user');
       return 'คุณ';
     }
     
     // ถ้าไม่พบในรายชื่อสมาชิก แต่มีข้อมูล admin object
     if (typeof adminId === 'object' && (adminId.firstName || adminId.name)) {
       const name = adminId.name || `${adminId.firstName || ''} ${adminId.lastName || ''}`.trim();
-      console.log('✅ Admin name from admin object:', name);
       return name;
     }
     
-    console.log('❌ Admin not found in members');
     return 'ผู้ใช้ที่ออกจากกลุ่มแล้ว';
-  };
+  }, [groupInfo?.admin, groupInfo?.creator, groupMembers, authUser?._id]);
 
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleTimeString('th-TH', {
@@ -1485,6 +1520,13 @@ const GroupChatScreen = ({ route, navigation }) => {
       });
       
       if (selectionMode) {
+        // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
+        const isMyMessage = item.sender?._id === authUser._id;
+        
+        if (!isMyMessage) {
+          return; // กดไม่ได้เลย
+        }
+        
         setSelectedMessages(prev => {
           const isSelected = prev.includes(item._id);
           const newSelection = isSelected 
@@ -1515,8 +1557,11 @@ const GroupChatScreen = ({ route, navigation }) => {
     const handleLongPress = () => {
       const isMyMessage = item.sender?._id === authUser._id;
       if (isMyMessage) {
-        deleteMessage(item._id);
+        // เข้าโหมดเลือกข้อความแทนการลบทันที
+        setSelectionMode(true);
+        setSelectedMessages([item._id]);
       }
+      // ถ้าไม่ใช่ข้อความของตัวเอง ไม่ทำอะไร
     };
     
     return (
@@ -1715,23 +1760,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                 fontSize: 12,
                 color: '#10b981'
               }}>{groupMembers.length} สมาชิก</Text>
-              {(groupInfo?.admin || groupInfo?.creator) ? (
-                <Text style={{
-                  fontSize: 12,
-                  color: '#6b7280',
-                  marginLeft: 4
-                }}>
-                  • สร้างโดย {getAdminName()}
-                </Text>
-              ) : (
-                <Text style={{
-                  fontSize: 12,
-                  color: '#6b7280',
-                  marginLeft: 4
-                }}>
-                  • กำลังโหลดข้อมูล...
-                </Text>
-              )}
+           
             </View>
           </View>
         </TouchableOpacity>
@@ -1878,26 +1907,38 @@ const GroupChatScreen = ({ route, navigation }) => {
           onScroll={(event) => {
             const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
             const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
-            const isNearTop = contentOffset.y < 200;
+            const isNearTop = contentOffset.y < 500; // เพิ่มจาก 200 เป็น 500
             
             setShowScrollToBottom(!isAtBottom);
             
             // แสดงปุ่มโหลดข้อความเก่าเมื่อเลื่อนขึ้นไป
-            setShowLoadOlderButton(isNearTop && hasMoreMessages && !isLoadingMore && messages.length >= 30);
+            const actualMessageCount = messages.filter(msg => msg.type !== 'date_separator').length;
+            // ลดเงื่อนไขให้ง่ายขึ้น - แสดงเมื่อเลื่อนขึ้นมาและมีข้อความมากกว่า 5 ข้อความ
+            const shouldShowLoadButton = isNearTop && canLoadMore && actualMessageCount >= 5;
+            
+            // Only log when button state would change
+            if (shouldShowLoadButton !== showLoadOlderButton) {
+              console.log('📏 Load button state change:', { shouldShowLoadButton, isNearTop, canLoadMore, actualMessageCount });
+            }
+            
+            setShowLoadOlderButton(shouldShowLoadButton);
           }}
           scrollEventThrottle={16}
-          ListHeaderComponent={() => (
-            showLoadOlderButton ? (
+          ListHeaderComponent={() => {
+            // console.log('📏 ListHeader Debug:', { showLoadOlderButton, isLoadingMore, canLoadMore, messagesCount: messages.length });
+            
+            // ทดสอบ: แสดงปุ่มเสมอ
+            return (
               <LoadOlderMessagesGroupChat
                 visible={true}
                 isLoading={isLoadingMore}
-                canLoadMore={hasMoreMessages}
+                canLoadMore={canLoadMore}
                 onLoadMore={loadMoreMessages}
-                messagesCount={messages.length}
+                messagesCount={messages.filter(msg => msg.type !== 'date_separator').length}
                 style={styles.loadOlderInList}
               />
-            ) : null
-          )}
+            );
+          }}
         />
       </TouchableOpacity>
 
@@ -1968,7 +2009,7 @@ const GroupChatScreen = ({ route, navigation }) => {
             {(groupInfo?.admin || groupInfo?.creator) && (
               <View style={styles.groupCreatorInfo}>
                 <Text style={styles.groupCreatorLabel}>👑 ผู้สร้างกลุ่ม:</Text>
-                <Text style={styles.groupCreatorName}>{getAdminName()}</Text>
+                <Text style={styles.groupCreatorName}>{getAdminName}</Text>
               </View>
             )}
             <FlatList

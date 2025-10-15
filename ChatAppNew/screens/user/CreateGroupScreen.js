@@ -321,7 +321,9 @@ const CreateGroupScreen = ({ navigation }) => {
         <View style={styles.avatarSection}>
           <TouchableOpacity style={styles.avatarContainer} onPress={pickImage}>
             {groupAvatar ? (
-              <Image source={{ uri: groupAvatar.uri }} style={styles.groupAvatarImage} />
+              <Image source={{ uri: groupAvatar.uri }} 
+                     defaultSource={require('../../assets/default-avatar.jpg')}
+                     style={styles.groupAvatarImage} />
             ) : (
               <View style={styles.defaultGroupAvatar}>
                 <Text style={styles.avatarPlaceholder}>👥</Text>

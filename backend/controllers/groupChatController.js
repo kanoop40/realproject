@@ -722,7 +722,7 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     const message = await Messages.create(messageData);
     await message.populate('user_id', 'firstName lastName username role avatar');
 
-    console.log('📝 Created message with file info:', {
+    console.log('📝 Created message:', {
         messageId: message._id,
         content: message.content,
         messageType: message.messageType,
@@ -735,7 +735,10 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
             firstName: message.user_id.firstName,
             lastName: message.user_id.lastName,
             avatar: message.user_id.avatar
-        }
+        },
+        time: message.time,
+        now: new Date(),
+        timeDiffSeconds: Math.abs((new Date() - new Date(message.time)) / 1000)
     });
 
     // อัปเดท lastActivity ของกลุ่ม
@@ -810,16 +813,17 @@ const getGroupMessages = asyncHandler(async (req, res) => {
 
     const messages = await Messages.find({ chat_id: groupId })
         .populate('user_id', 'firstName lastName username role avatar')
-        .sort({ time: 1 }) // เรียงจากเก่าไปใหม่
+        .sort({ time: -1 }) // เรียงจากใหม่ไปเก่า สำหรับ pagination
         .limit(parseInt(limit))
         .skip((parseInt(page) - 1) * parseInt(limit));
 
     // แปลง field names เพื่อให้ตรงกับที่ frontend คาดหวัง
-    const transformedMessages = messages.map(message => ({
+    // และเรียงใหม่ให้เก่าไปใหม่สำหรับการแสดงผล
+    const transformedMessages = messages.reverse().map(message => ({
         _id: message._id,
         content: message.content,
         sender: message.user_id, // แปลง user_id เป็น sender
-        timestamp: message.time, // แปลง time เป็น timestamp
+        timestamp: message.time, // แปลง time เป็ timestamp
         messageType: message.messageType,
         fileUrl: message.fileUrl,
         fileName: message.fileName,

@@ -392,6 +392,7 @@ const EditGroupScreen = ({ route, navigation }) => {
                          ? `${API_URL}${groupInfo.groupAvatar}`
                          : 'https://via.placeholder.com/80')
               }}
+              defaultSource={require('../../assets/default-avatar.jpg')}
               style={styles.avatar}
             />
             <Text style={styles.avatarHint}>
