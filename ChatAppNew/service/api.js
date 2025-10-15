@@ -4,8 +4,8 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Development API URL (auto-detect)  
-const API_URL = 'http://192.168.2.54:5000'; // ใช้ IP เดียวกันทั้ง simulator และ device
-//const API_URL = 'https://realproject-mg25.onrender.com';
+//const API_URL = 'http://192.168.2.54:5000'; // ใช้ IP เดียวกันทั้ง simulator และ device
+const API_URL = 'https://realproject-mg25.onrender.com';
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
   Platform: Platform.OS,
