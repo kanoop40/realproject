@@ -458,11 +458,6 @@ const SearchUserScreen = ({ navigation }) => {
       </Modal>
 
       {/* Removed LoadingModal - no longer using loading functionality */}
-
-      <TabBar 
-        navigation={navigation}
-        handleLogout={handleLogout}
-      />
     </View>
   );
 };
@@ -711,7 +706,7 @@ const SearchUserScreenWithTabBar = (props) => {
   return (
     <>
       <SearchUserScreen {...props} />
-      <TabBar navigation={props.navigation} activeTab="SearchUser" />
+      <TabBar navigation={props.navigation} activeTab="Search" />
     </>
   );
 };

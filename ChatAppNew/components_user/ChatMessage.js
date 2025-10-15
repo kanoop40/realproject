@@ -31,7 +31,18 @@ const ChatMessage = ({
   decodeFileName,
   formatFileSize
 }) => {
-  const isMyMessage = item.sender._id === currentUser._id;
+  // Fallback system working correctly
+  
+  // Handle both object and string sender formats
+  const isMyMessage = (
+    (typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
+    (typeof item.sender === 'string' && (
+      item.sender === currentUser?.firstName ||
+      item.sender === currentUser?.firstName?.split(' ')[0] ||
+      currentUser?.firstName?.startsWith(item.sender) ||
+      item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+    ))
+  );
 
   const handleDeleteMessageConfirm = () => {
     // Logic for delete confirmation
@@ -96,8 +107,14 @@ const ChatMessage = ({
         styles.messageContentContainer,
         isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
       ]}>
-        {/* Image messages */}
-        {(item.image || (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && (
+        {/* Image messages - check for actual image data first, then fallback */}
+        {(
+          item.messageType === 'image' || 
+          item.image || 
+          (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) || 
+          (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
+          (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.image && !item.file && !item.fileName)
+        ) && (
           <ImageMessage
             item={item}
             index={index}
@@ -125,8 +142,18 @@ const ChatMessage = ({
           />
         )}
 
-        {/* File messages (non-images) */}
-        {item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) && (
+        {/* File messages (non-images) - check for actual file data first, then fallback */}
+        {(
+          item.messageType === 'file' || 
+          (item.fileName && !(item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName))) || 
+          (item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) || 
+          (item.content === 'ไฟล์แนบ' && item.messageType === 'text' && !item.file && !item.fileName)
+        ) && !(
+          item.messageType === 'image' || 
+          item.image || 
+          (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
+          (item.content === 'รูปภาพ' && item.messageType === 'text')
+        ) && (
           <FileMessage
             item={item}
             index={index}

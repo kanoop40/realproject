@@ -27,6 +27,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme
 
 const ChatScreen = ({ route, navigation }) => {
   const { user: authUser, loading: authLoading, login } = useAuth();
+  const { socket, joinChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
   const [chats, setChats] = useState([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true); // เพิ่ม loading state สำหรับแชท
@@ -113,8 +114,16 @@ const ChatScreen = ({ route, navigation }) => {
     };
   }, []);
 
+  // Load current user when auth is ready
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && !currentUser) {
+      loadCurrentUser();
+    }
+  }, [authLoading]);
+
+  // Load chats when user is ready
+  useEffect(() => {
+    if (!authLoading && currentUser) {
       loadChats();
     }
   }, [authLoading, currentUser]);
@@ -248,9 +257,14 @@ const ChatScreen = ({ route, navigation }) => {
   // ระบบซ่อนแชทถูกลบออกแล้ว
 
   const loadChats = async () => {
+    if (!currentUser) {
+      console.log('ChatScreen: Cannot load chats - no current user');
+      return;
+    }
+    
     try {
       setIsLoadingChats(true); // เริ่ม loading
-      console.log('ChatScreen: Loading chats...');
+      console.log('ChatScreen: Loading chats for user:', currentUser._id);
       const [chatsResponse, groupsResponse] = await Promise.all([
         api.get('/chats'),
         api.get('/groups')

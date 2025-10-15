@@ -8,9 +8,9 @@ import {
   FlatList,
   ScrollView,
   Image,
+  Platform,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
   Alert,
   Linking,
   Modal,
@@ -152,7 +152,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
     if (socket && chatroomId && currentUser) { // เพิ่ม currentUser เป็นเงื่อนไข
       console.log('🔌 Setting up socket listeners for private chat:', chatroomId);
       console.log('👤 Current user loaded:', currentUser._id);
-      console.log('🔌 Socket connected:', socket.connected);
+      console.log('� Current user object:', {
+        _id: currentUser._id,
+        firstName: currentUser.firstName,
+        fullName: currentUser.firstName + ' ' + currentUser.lastName
+      });
+      console.log('�🔌 Socket connected:', socket.connected);
       console.log('🔌 Socket ID:', socket.id);
       
       // Removed progress update - no longer using loading functionality
@@ -340,7 +345,16 @@ const PrivateChatScreen = ({ route, navigation }) => {
         // setIsScrollingToEnd(false);
       } else {
         loadedMessages.forEach((msg, index) => {
-          const isMyMessage = msg.sender._id === currentUser?._id;
+          // Handle both object and string sender formats
+          const isMyMessage = (
+            (typeof msg.sender === 'object' && msg.sender?._id === currentUser?._id) ||
+            (typeof msg.sender === 'string' && (
+              msg.sender === currentUser?.firstName ||
+              msg.sender === currentUser?.firstName?.split(' ')[0] ||
+              currentUser?.firstName?.startsWith(msg.sender) ||
+              msg.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+            ))
+          );
           
           // แจ้งเตือนถ้าข้อความของเราไม่มี isRead status ที่ถูกต้อง
           if (isMyMessage && msg.isRead === undefined) {
@@ -418,6 +432,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
       sender: currentUser,
       timestamp: new Date().toISOString(),
       messageType: messageType,
+      // เพิ่มข้อมูลไฟล์ที่ root level
+      fileName: selectedFile ? (selectedFile.name || selectedFile.fileName) : null,
+      fileSize: selectedFile ? (selectedFile.size || selectedFile.fileSize) : null,
+      mimeType: selectedFile ? (selectedFile.mimeType || selectedFile.type) : null,
       file: selectedFile ? {
         file_name: selectedFile.name || selectedFile.fileName,
         url: selectedFile.uri,
@@ -451,48 +469,31 @@ const PrivateChatScreen = ({ route, navigation }) => {
         // ส่งไฟล์ = ใช้ FormData + multipart/form-data
         const formData = new FormData();
         formData.append('content', contentToSend);
-        console.log('📎 Sending file:', fileToSend);
+        formData.append('messageType', 'file');
         // ใช้ชื่อไฟล์จริงจาก file picker
         const originalFileName = fileToSend.name || fileToSend.fileName || 'unknown_file';
-        console.log('📎 Original file name:', originalFileName);
         
-        // ส่งไฟล์ในรูปแบบที่ multer รองรับ
-        const fileObject = {
-          uri: fileToSend.uri,
+        // ส่งไฟล์ในรูปแบบที่ React Native รองรับ
+        const fileObj = {
+          uri: Platform.OS === 'ios' ? fileToSend.uri.replace('file://', '') : fileToSend.uri,
           type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
-          name: originalFileName
+          name: originalFileName,
         };
         
-        // เพิ่มขนาดไฟล์ถ้ามี
-        if (fileToSend.size || fileToSend.fileSize) {
-          fileObject.size = fileToSend.size || fileToSend.fileSize;
-        }
-        
-        console.log('📎 Final file object:', fileObject);
-        formData.append('file', fileObject);
-        
-        // Debug FormData content
-        console.log('📋 FormData entries:');
-        for (let pair of formData._parts) {
-          console.log('📋', pair[0], ':', pair[1]);
-        }
+        formData.append('file', fileObj);
 
         response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
           timeout: 30000, // 30 seconds timeout
         });
       } else {
         // ส่งข้อความธรรมดา = ใช้ JSON
-        console.log('💬 Sending text message:', contentToSend);
         response = await api.post(`/chats/${chatroomId}/messages`, {
           content: contentToSend
         });
       }
 
       // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
-      console.log('📥 Server response:', response.data);
+      console.log('📥 File Server response:', response.data);
       setMessages(prev => {
         const filteredMessages = prev.filter(msg => msg._id !== tempId);
         
@@ -503,7 +504,31 @@ const PrivateChatScreen = ({ route, navigation }) => {
           return filteredMessages;
         }
         
-        const serverMessage = { ...response.data, isOptimistic: false };
+        // หา optimistic message เพื่อเก็บข้อมูลไฟล์ไว้
+        const optimisticMsg = prev.find(msg => msg._id === tempId);
+        
+        // ถ้า server ไม่มีไฟล์แต่ optimistic message มีไฟล์ ให้ใช้จาก optimistic
+        const serverMessage = { 
+          ...response.data, 
+          isOptimistic: false,
+          // ถ้า server ไม่มีไฟล์ แต่เราส่งไฟล์ไป ให้ force messageType
+          messageType: (response.data.fileUrl || optimisticMsg?.fileName) ? 'file' : response.data.messageType,
+          // ถ้า server ไม่มีไฟล์ ใช้ข้อมูลไฟล์จาก optimistic message
+          fileName: response.data.fileName || optimisticMsg?.fileName,
+          fileSize: response.data.fileSize || optimisticMsg?.fileSize,
+          mimeType: response.data.mimeType || optimisticMsg?.mimeType,
+        };
+        
+        console.log('🔄 Creating final file message:', {
+          originalMessageType: response.data.messageType,
+          optimisticFileName: optimisticMsg?.fileName,
+          hasOptimisticFile: !!optimisticMsg?.fileName,
+          hasServerFile: !!response.data.fileUrl,
+          finalMessageType: serverMessage.messageType,
+          finalFileName: serverMessage.fileName,
+          hasFileName: !!serverMessage.fileName
+        });
+        
         console.log('💾 Adding server message:', serverMessage);
         const updatedMessages = [...filteredMessages, serverMessage];
         // Scroll อีกครั้งเมื่อได้ response จริง
@@ -548,8 +573,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
         type: '*/*',
         copyToCacheDirectory: true,
       });
-
-      console.log('📎 File picker result:', result);
 
       if (!result.cancelled && result.assets && result.assets.length > 0) {
         // เวอร์ชันใหม่ของ DocumentPicker
@@ -636,37 +659,36 @@ const PrivateChatScreen = ({ route, navigation }) => {
         return newMessages;
       });
       
+      // สร้าง FormData และเพิ่มข้อมูล
       const formData = new FormData();
+      
+      // เพิ่ม content และ messageType
       formData.append('content', 'รูปภาพ');
+      formData.append('messageType', 'image');
       
-      // ตรวจสอบและจัดรูปแบบ file object ให้ถูกต้อง
+      // ตรวจสอบและจัดรูปแบบ file object ให้ถูกต้องสำหรับ React Native
       const fileName = imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`;
-      const fileObj = {
-        uri: imageAsset.uri,
-        type: imageAsset.mimeType || imageAsset.type || 'image/jpeg',
+      
+      // สร้าง file object ที่ถูกต้อง
+      let fileUri = imageAsset.uri;
+      if (Platform.OS === 'ios' && fileUri.startsWith('file://')) {
+        fileUri = fileUri.replace('file://', '');
+      }
+      
+      // เพิ่มไฟล์
+      formData.append('file', {
+        uri: fileUri,
+        type: imageAsset.mimeType || imageAsset.type || 'image/jpeg', 
         name: fileName,
-      };
-      
-      // เพิ่มขนาดไฟล์ถ้ามี
-      if (imageAsset.fileSize || imageAsset.size) {
-        fileObj.size = imageAsset.fileSize || imageAsset.size;
-      }
-      
-      console.log('📤 Sending image with file object:', fileObj);
-      formData.append('file', fileObj);
+      });
 
-      // Debug FormData for image
-      console.log('🖼️ FormData entries for image:');
-      for (let pair of formData._parts) {
-        console.log('🖼️', pair[0], ':', pair[1]);
-      }
+
 
       const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
         timeout: 30000, // 30 seconds timeout
       });
+
+      console.log('📥 Image Server response:', response.data);
 
       // แทนที่ข้อความชั่วคราวด้วยข้อความจริงจากเซิร์ฟเวอร์
       setMessages(prev => {
@@ -678,7 +700,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
           return filteredMessages;
         }
         
-        const serverMessage = { ...response.data, isOptimistic: false };
+        // หา optimistic message เพื่อเก็บข้อมูล image ไว้
+        const optimisticMsg = prev.find(msg => msg._id === tempId);
+        
+        // ถ้า server ไม่มีไฟล์แต่ optimistic message มี image ให้ใช้จาก optimistic
+        const serverMessage = { 
+          ...response.data, 
+          isOptimistic: false,
+          // ถ้า server ไม่มีไฟล์ แต่เราส่งรูปไป ให้ force เป็น image
+          messageType: (response.data.fileUrl || optimisticMsg?.image) ? 'image' : response.data.messageType,
+          // ถ้า server ไม่มีไฟล์ ใช้ image จาก optimistic message
+          image: response.data.fileUrl ? undefined : optimisticMsg?.image,
+        };
+        
+        console.log('🔄 Creating final message:', {
+          originalMessageType: response.data.messageType,
+          hasOptimisticImage: !!optimisticMsg?.image,
+          hasServerFile: !!response.data.fileUrl,
+          finalMessageType: serverMessage.messageType,
+          hasImage: !!serverMessage.image
+        });
+        
         const updatedMessages = [...filteredMessages, serverMessage];
         
         setTimeout(() => {
@@ -1368,6 +1410,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const renderMessage = useCallback(({ item, index }) => {
+    // Debug removed - fallback system working
+    
+    // Debug log for files and images specifically
+    if (item.messageType === 'image' || item.messageType === 'file' || item.file || item.fileUrl || item.image) {
+      console.log('🖼️ Detailed file/image message:', JSON.stringify({
+        messageType: item.messageType,
+        file: item.file,
+        fileUrl: item.fileUrl,
+        fileName: item.fileName,
+        fileSize: item.fileSize,
+        image: item.image,
+        content: item.content
+      }, null, 2));
+    }
+    
     const handleDeleteMessageConfirm = () => {
       Alert.alert(
         'ลบข้อความ',
@@ -1522,13 +1579,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={{
-        flex: 1,
-        backgroundColor: '#ffffff'
-      }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={{ flex: 1 }}>
+      <KeyboardAvoidingView 
+        style={{
+          flex: 1,
+          backgroundColor: '#ffffff'
+        }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       {/* Loading overlay สำหรับการ scroll - ปิดการใช้งาน */}
       {/* {isScrollingToEnd && (
         <View style={styles.scrollLoadingOverlay}>
@@ -1813,6 +1871,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
 
     </KeyboardAvoidingView>
+    </View>
   );
 };
 

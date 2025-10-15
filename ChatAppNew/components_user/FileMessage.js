@@ -22,7 +22,18 @@ const FileMessage = ({
   decodeFileName,
   formatFileSize
 }) => {
-  const isMyMessage = item.sender._id === currentUser._id;
+  // File fallback system working
+  
+  // Handle both object and string sender formats
+  const isMyMessage = (
+    (typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
+    (typeof item.sender === 'string' && (
+      item.sender === currentUser?.firstName ||
+      item.sender === currentUser?.firstName?.split(' ')[0] ||
+      currentUser?.firstName?.startsWith(item.sender) ||
+      item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+    ))
+  );
   const showTime = shouldShowTime(item, index);
 
   return (
@@ -42,20 +53,20 @@ const FileMessage = ({
             onPress={() => onFilePress(item)}
           >
             <View style={styles.fileIcon}>
-              {getFileIcon(decodeFileName(item.file.file_name))}
+              {getFileIcon(decodeFileName(item.fileName || item.file?.file_name || 'unknown_file'))}
             </View>
             <View style={styles.fileDetails}>
               <Text style={[
                 styles.fileName,
                 { color: isMyMessage ? "#fff" : "#333" }
               ]} numberOfLines={2}>
-                {decodeFileName(item.file.file_name)}
+                {item.fileName || item.file?.file_name || 'ไฟล์ที่ไม่สามารถแสดงได้'}
               </Text>
               <Text style={[
                 styles.fileSize,
                 { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
               ]}>
-                {item.file.size ? formatFileSize(item.file.size) : 'ขนาดไม่ทราบ'}
+                {(item.fileSize || item.file?.size) ? formatFileSize(item.fileSize || item.file.size) : 'ไม่มีข้อมูลไฟล์จาก server'}
               </Text>
             </View>
           </TouchableOpacity>

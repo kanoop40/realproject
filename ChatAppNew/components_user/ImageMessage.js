@@ -21,7 +21,18 @@ const ImageMessage = ({
   formatDateTime,
   shouldShowTime
 }) => {
-  const isMyMessage = item.sender._id === currentUser._id;
+  // Image fallback system working - updated
+  
+  // Handle both object and string sender formats
+  const isMyMessage = (
+    (typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
+    (typeof item.sender === 'string' && (
+      item.sender === currentUser?.firstName ||
+      item.sender === currentUser?.firstName?.split(' ')[0] ||
+      currentUser?.firstName?.startsWith(item.sender) ||
+      item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+    ))
+  );
   const showTime = shouldShowTime(item, index);
 
   return (
@@ -34,25 +45,40 @@ const ImageMessage = ({
       ]}>
         <TouchableOpacity 
           style={styles.imageContainer}
-          onPress={() => onImagePress(item)}
+          onPress={() => {
+            const imageUri = item.image?.file_path || 
+                            item.image?.uri ||
+                            (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                              item.file.url : 
+                              (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+            onImagePress(imageUri);
+          }}
         >
-          <Image
-            source={{ 
-              uri: item.image?.file_path || 
-                   item.image?.uri ||
-                   (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                     item.file.url : 
-                     (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
-            }}
-            style={styles.messageImage}
-            resizeMode="cover"
-            onError={(error) => {
-              console.log('Image load error:', error.nativeEvent?.error || error);
-            }}
-            onLoad={() => {
-              console.log('Image loaded successfully');
-            }}
-          />
+          {/* Check if we have actual image data */}
+          {(item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path) ? (
+            <Image
+              source={{ 
+                uri: item.image?.file_path || 
+                     item.image?.uri ||
+                     (item.file && item.file.url && item.file.url.startsWith('http') ? 
+                       item.file.url : 
+                       (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
+              }}
+              style={styles.messageImage}
+              resizeMode="cover"
+              onError={(error) => {
+                console.log('Image load error:', error.nativeEvent?.error || error);
+              }}
+              onLoad={() => {
+                console.log('Image loaded successfully');
+              }}
+            />
+          ) : (
+            <View style={[styles.messageImage, styles.brokenImageContainer]}>
+              <Text style={styles.brokenImageText}>📷</Text>
+              <Text style={styles.brokenImageSubText}>รูปภาพไม่พร้อมใช้งาน</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
       
@@ -197,6 +223,27 @@ const styles = StyleSheet.create({
   },
   otherReadStatusBottom: {
     color: '#666',
+  },
+  brokenImageContainer: {
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderStyle: 'dashed',
+    minHeight: 120,
+    paddingVertical: 15,
+    borderRadius: 8,
+  },
+  brokenImageText: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  brokenImageSubText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 

@@ -20,40 +20,37 @@ const tabData = [
     label: 'ค้นหา',
     icon: 'search-outline',
   },
-  {
-    key: 'Settings',
-    label: 'ตั้งค่า',
-    icon: 'settings-outline',
-  },
 ];
 
 const TabBar = ({ navigation, activeTab }) => {
   const handleTabPress = (tabKey) => {
     if (tabKey === 'Chat') navigation.navigate('Chat');
     else if (tabKey === 'Profile') navigation.navigate('Profile');
-    else if (tabKey === 'SearchUser') navigation.navigate('SearchUser');
-    // 'Other' tab can be customized
+    else if (tabKey === 'Search') navigation.navigate('SearchUser');
   };
 
   return (
     <View style={styles.tabBarContainer}>
-      {tabData.map(tab => (
-                <TouchableOpacity
-          key={item.key}
-          style={[styles.tab, isActive && styles.activeTab]}
-          onPress={() => handleTabPress(item.key)}
-        >
-          <Ionicons 
-            name={item.icon} 
-            size={24} 
-            color={isActive ? '#007AFF' : '#8E8E93'} 
-            style={styles.tabIcon}
-          />
-          <Text style={[styles.tabText, isActive && styles.activeText]}>
-            {item.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+      {tabData.map(tab => {
+        const isActive = activeTab === tab.key;
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabItem, isActive && styles.activeTab]}
+            onPress={() => handleTabPress(tab.key)}
+          >
+            <Ionicons 
+              name={tab.icon} 
+              size={24} 
+              color={isActive ? '#007AFF' : '#8E8E93'} 
+              style={styles.tabIcon}
+            />
+            <Text style={[styles.tabLabel, isActive && styles.activeText]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
@@ -64,8 +61,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: {
@@ -74,11 +71,13 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+    justifyContent: 'space-around',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   tabIcon: {
     marginBottom: 4,
@@ -87,6 +86,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.text,
     fontWeight: '500',
+  },
+  activeTab: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderRadius: 8,
+  },
+  activeText: {
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
 

@@ -17,7 +17,16 @@ const TextMessage = ({
   formatDateTime,
   shouldShowTime
 }) => {
-  const isMyMessage = item.sender._id === currentUser._id;
+  // Handle both object and string sender formats
+  const isMyMessage = (
+    (typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
+    (typeof item.sender === 'string' && (
+      item.sender === currentUser?.firstName ||
+      item.sender === currentUser?.firstName?.split(' ')[0] ||
+      currentUser?.firstName?.startsWith(item.sender) ||
+      item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+    ))
+  );
   const showTime = shouldShowTime(item, index);
 
   return (
