@@ -5,6 +5,7 @@ const Messages = require('../models/MessagesModel');
 const Chatrooms = require('../models/ChatroomsModel');
 const Notification = require('../models/NotificationModel');
 const { deleteOldAvatar } = require('../config/cloudinary');
+const cloudinary = require('../config/cloudinary');
 
 // @desc    สร้างกลุ่มใหม่
 // @route   POST /api/groups
@@ -552,13 +553,15 @@ const searchGroups = asyncHandler(async (req, res) => {
 // @access  Private
 const sendGroupMessage = asyncHandler(async (req, res) => {
     const groupId = req.params.id;
-    const { content } = req.body;
+    const { content, fileData, messageType } = req.body; // เพิ่ม fileData และ messageType สำหรับ base64
     const userId = req.user._id;
 
     console.log('📨 Group message request received:', {
         groupId,
         content: content ? content.substring(0, 50) : 'No content',
         hasFile: !!req.file,
+        hasFileData: !!fileData,
+        messageType,
         fileInfo: req.file ? {
             originalname: req.file.originalname,
             mimetype: req.file.mimetype,
@@ -567,11 +570,20 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         } : null
     });
 
+    if (fileData) {
+        console.log('🚀 Got fileData:', {
+            name: fileData.name,
+            type: fileData.type,
+            base64Length: fileData.base64?.length
+        });
+    }
+
     // ตรวจสอบว่ามีไฟล์อัพโหลดหรือไม่
     const hasFile = req.file;
+    const hasFileData = fileData;
     const hasContent = content && content.trim() !== '';
 
-    if (!hasContent && !hasFile) {
+    if (!hasContent && !hasFile && !hasFileData) {
         res.status(400);
         throw new Error('กรุณาใส่ข้อความหรือไฟล์');
     }
@@ -599,7 +611,7 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         time: new Date()
     };
 
-    // ถ้ามีไฟล์
+    // ถ้ามีไฟล์ (multipart upload)
     if (hasFile) {
         const isImage = req.file.mimetype && req.file.mimetype.startsWith('image/');
         
@@ -624,7 +636,51 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
             fileName: messageData.fileName,
             fileSize: messageData.fileSize
         });
-    } else {
+    } 
+    // ถ้ามี base64 file data
+    else if (hasFileData) {
+        const isImage = fileData.type && fileData.type.startsWith('image/');
+        
+        console.log('🔥 Processing base64 file data for group:', {
+            name: fileData.name,
+            type: fileData.type,
+            base64Length: fileData.base64?.length,
+            isImage: isImage
+        });
+        
+        try {
+            const buffer = Buffer.from(fileData.base64, 'base64');
+            
+            // Upload to Cloudinary
+            const result = await new Promise((resolve, reject) => {
+                cloudinary.uploader.upload_stream(
+                    {
+                        resource_type: 'auto',
+                        folder: 'chat-app-files',
+                    },
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                ).end(buffer);
+            });
+            
+            console.log('☁️ Cloudinary upload result:', result.secure_url);
+            
+            messageData.content = hasContent ? content.trim() : (isImage ? '📷 รูปภาพ' : '📎 ไฟล์');
+            messageData.messageType = isImage ? 'image' : 'file';
+            messageData.fileUrl = result.secure_url;
+            messageData.fileName = fileData.name;
+            messageData.fileSize = buffer.length;
+            messageData.mimeType = fileData.type;
+            
+        } catch (error) {
+            console.error('❌ Error uploading base64 file to Cloudinary:', error);
+            res.status(500);
+            throw new Error('ไม่สามารถอัพโหลดไฟล์ได้');
+        }
+    } 
+    else {
         // ข้อความธรรมดา
         messageData.content = content.trim();
         messageData.messageType = 'text';

@@ -18,6 +18,7 @@ const ChatInputBar = ({
   onSendMessage,
   onPickImage,
   onPickFile,
+  onRemoveFile,
   getFileIcon
 }) => {
   return (
@@ -39,6 +40,13 @@ const ChatInputBar = ({
                 </Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.removeFileButton}
+              onPress={onRemoveFile}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.removeFileText}>×</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -155,6 +163,21 @@ const styles = StyleSheet.create({
   fileSubtitle: {
     fontSize: 14,
     color: '#64748b'
+  },
+  removeFileButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8
+  },
+  removeFileText: {
+    fontSize: 18,
+    color: 'white',
+    fontWeight: 'bold',
+    lineHeight: 18
   },
   verticalAttachmentMenu: {
     position: 'absolute',

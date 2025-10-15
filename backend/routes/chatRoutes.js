@@ -188,6 +188,11 @@ router.delete('/:id', deleteChatroom);
 // @access  Private
 router.delete('/messages/:id', deleteMessage);
 
+// @route   DELETE /api/chats/:chatroomId/messages/:messageId
+// @desc    Delete a message from specific chatroom
+// @access  Private
+router.delete('/:chatroomId/messages/:messageId', deleteMessage);
+
 // @route   PUT /api/chats/messages/:id
 // @desc    Edit a message
 // @access  Private

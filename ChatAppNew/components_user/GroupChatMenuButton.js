@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from '../styles/theme';
 
-const ChatMenuButton = ({
+const GroupChatMenuButton = ({
+  isGroupAdmin = false,
   onManageMessages,
-  onManageChat // รองรับทั้งสองแบบ
+  onManageGroup,
+  onLeaveGroup
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [animation] = useState(new Animated.Value(0));
@@ -77,10 +79,28 @@ const ChatMenuButton = ({
           >
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => handleMenuOption(onManageMessages || onManageChat)}
+              onPress={() => handleMenuOption(onManageMessages)}
             >
               <Text style={styles.menuItemIcon}>📝</Text>
               <Text style={styles.menuItemText}>จัดการข้อความ</Text>
+            </TouchableOpacity>
+
+            {isGroupAdmin && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => handleMenuOption(onManageGroup)}
+              >
+                <Text style={styles.menuItemIcon}>⚙️</Text>
+                <Text style={styles.menuItemText}>จัดการกลุ่ม</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.dangerMenuItem]}
+              onPress={() => handleMenuOption(onLeaveGroup)}
+            >
+              <Text style={styles.menuItemIcon}>🚪</Text>
+              <Text style={[styles.menuItemText, styles.dangerMenuText]}>ออกจากกลุ่ม</Text>
             </TouchableOpacity>
           </Animated.View>
         </TouchableOpacity>
@@ -136,7 +156,15 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.md,
     color: COLORS.textPrimary,
     fontWeight: '500'
+  },
+  dangerMenuItem: {
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    marginTop: SPACING.xs
+  },
+  dangerMenuText: {
+    color: '#ef4444'
   }
 });
 
-export default ChatMenuButton;
+export default GroupChatMenuButton;

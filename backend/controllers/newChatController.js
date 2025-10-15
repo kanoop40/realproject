@@ -839,7 +839,7 @@ const deleteChatroom = asyncHandler(async (req, res) => {
 // @access  Private
 const deleteMessage = asyncHandler(async (req, res) => {
     try {
-        const messageId = req.params.id;
+        const messageId = req.params.id || req.params.messageId;
         const userId = req.user._id;
 
         const message = await Messages.findById(messageId);
