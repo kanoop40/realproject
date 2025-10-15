@@ -57,8 +57,23 @@ const FileMessage = ({
                 // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดไฟล์
                 onMessagePress(item);
               } else {
-                // โหมดปกติ ให้เปิดไฟล์
-                onFilePress(item);
+                // โหมดปกติ ให้เปิดไฟล์ - ส่งข้อมูลไฟล์ที่ถูกต้อง
+                console.log('📂 FileMessage: item data:', item);
+                const fileData = {
+                  // รวมข้อมูลจากทั้ง item.file และ item โดยตรง
+                  file_name: item.file?.file_name || item.fileName || item.file_name,
+                  fileName: item.file?.fileName || item.fileName || item.file_name,
+                  url: item.file?.url || item.fileUrl || item.url,
+                  file_path: item.file?.file_path || item.filePath || item.file_path,
+                  size: item.file?.size || item.fileSize || item.size,
+                  // เพิ่มข้อมูลเดิมทั้งหมด
+                  ...item.file,
+                  // Override ด้วยข้อมูลจาก item หากมี
+                  ...(item.fileName && { fileName: item.fileName }),
+                  ...(item.fileUrl && { url: item.fileUrl })
+                };
+                console.log('📂 FileMessage: calling onFilePress with:', fileData);
+                onFilePress(fileData);
               }
             }}
           >

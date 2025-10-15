@@ -252,7 +252,13 @@ const getMessages = asyncHandler(async (req, res) => {
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
         const aggregationPipeline = [
-            { $match: { chat_id: new mongoose.Types.ObjectId(id) } },
+            { 
+                $match: { 
+                    chat_id: new mongoose.Types.ObjectId(id),
+                    // Filter out messages that the current user has deleted
+                    isDeleted: { $ne: userId }
+                } 
+            },
             { $sort: { time: -1 } },
             { $skip: skip },
             { $limit: parseInt(limit) },

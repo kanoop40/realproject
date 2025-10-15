@@ -179,19 +179,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
           return;
         }
         
-        // ไม่รับข้อความจากตัวเองผ่าน socket (เพราะเราได้จาก API response แล้ว)
-        if (data.message && data.message.sender && data.message.sender._id !== currentUser?._id) {
-          console.log('✅ Message is from other user, processing...');
-          // ตรวจสอบว่าข้อความนี้มีอยู่แล้วหรือไม่
-          setMessages(prevMessages => {
-            const messageExists = prevMessages.some(msg => 
-              msg._id === data.message._id
-            );
-            
-            if (messageExists) {
-              console.log('🔄 Message already exists, skipping...');
-              return prevMessages;
-            }
+        // ตรวจสอบว่าข้อความนี้มีอยู่แล้วหรือไม่ก่อน (ป้องกันการซ้ำ)
+        setMessages(prevMessages => {
+          const messageExists = prevMessages.some(msg => 
+            msg._id === data.message._id
+          );
+          
+          if (messageExists) {
+            console.log('🔄 Message already exists in chat, skipping...');
+            return prevMessages;
+          }
+          
+          // ไม่รับข้อความจากตัวเองผ่าน socket (เพราะเราได้จาก API response แล้ว)
+          if (data.message && data.message.sender && data.message.sender._id !== currentUser?._id) {
+            console.log('✅ Message is from other user, processing...');
             
             console.log('✅ Adding new message to chat');
             const newMessages = [...prevMessages, {
@@ -209,25 +210,26 @@ const PrivateChatScreen = ({ route, navigation }) => {
             }, 100);
             
             return newMessages;
-          });
-          
-          // มาร์คข้อความว่าอ่านแล้วเมื่อผู้ใช้อยู่ในหน้าแชท
-          if (chatroomId) {
-            api.put(`/chats/${chatroomId}/read`).then(() => {
-              // ส่ง socket event เพื่อแจ้งว่าได้อ่านข้อความแล้ว
-              if (socket) {
-                console.log('📖 Emitting messageRead event after new message received');
-                socket.emit('messageRead', {
-                  chatroomId: chatroomId,
-                  userId: currentUser._id
-                });
-              }
-            }).catch(err => {
-              console.log('Error marking message as read:', err);
-            });
+          } else {
+            console.log('❌ Message is from current user, skipping socket event');
+            return prevMessages;
           }
-        } else {
-          console.log('❌ Message is from current user, skipping socket event');
+        });
+        
+        // มาร์คข้อความว่าอ่านแล้วเมื่อผู้ใช้อยู่ในหน้าแชท (เฉพาะข้อความจากคนอื่น)
+        if (chatroomId && data.message && data.message.sender && data.message.sender._id !== currentUser?._id) {
+          api.put(`/chats/${chatroomId}/read`).then(() => {
+            // ส่ง socket event เพื่อแจ้งว่าได้อ่านข้อความแล้ว
+            if (socket) {
+              console.log('📖 Emitting messageRead event after new message received');
+              socket.emit('messageRead', {
+                chatroomId: chatroomId,
+                userId: currentUser._id
+              });
+            }
+          }).catch(err => {
+            console.log('Error marking message as read:', err);
+          });
         }
       };
 
@@ -964,17 +966,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const downloadFile = async (file) => {
     try {
-      console.log('📥 Starting download:', file);
+      console.log('📥 downloadFile called with:', file);
       
-      // ตรวจสอบ URL ให้ถูกต้อง
+      // ตรวจสอบ URL ให้ถูกต้อง - ใช้ URL จาก Cloudinary โดยตรง
       let fileUrl;
       if (file.url && file.url.startsWith('http')) {
         fileUrl = file.url; // ใช้ URL เต็มจาก Cloudinary
+      } else if (file.fileUrl && file.fileUrl.startsWith('http')) {
+        fileUrl = file.fileUrl; // ใช้ fileUrl ถ้าเป็น URL เต็ม
+      } else if (file.file_path && file.file_path.startsWith('http')) {
+        fileUrl = file.file_path; // ใช้ file_path ถ้าเป็น URL เต็ม
       } else {
-        fileUrl = `${API_URL}${file.url || file.file_path}`; // สร้าง URL จาก API_URL
+        fileUrl = `${API_URL}${file.url || file.fileUrl || file.file_path || file.uri || ''}`; // สร้าง URL จาก API_URL
       }
       
-      const fileName = file.file_name || 'downloaded_file';
+      const fileName = file.file_name || file.fileName || file.name || 'downloaded_file';
       const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
       
       console.log('� File info:', { fileName, fileExtension, fileUrl });
@@ -1099,33 +1105,52 @@ const PrivateChatScreen = ({ route, navigation }) => {
   // ฟังก์ชันแสดงตัวอย่างไฟล์
   const previewFile = async (file) => {
     try {
-      // ตรวจสอบ URL ให้ถูกต้อง
+      console.log('👁️ previewFile called with:', file);
+      
+      // ตรวจสอบ URL ให้ถูกต้อง - ใช้ URL จาก Cloudinary โดยตรง
       let fileUrl;
       if (file.url && file.url.startsWith('http')) {
         fileUrl = file.url; // ใช้ URL เต็มจาก Cloudinary
+      } else if (file.fileUrl && file.fileUrl.startsWith('http')) {
+        fileUrl = file.fileUrl; // ใช้ fileUrl ถ้าเป็น URL เต็ม
+      } else if (file.file_path && file.file_path.startsWith('http')) {
+        fileUrl = file.file_path; // ใช้ file_path ถ้าเป็น URL เต็ม
       } else {
-        fileUrl = `${API_URL}${file.url || file.file_path}`; // สร้าง URL จาก API_URL
+        fileUrl = `${API_URL}${file.url || file.fileUrl || file.file_path || file.uri || ''}`; // สร้าง URL จาก API_URL
       }
       
       // ตรวจสอบประเภทไฟล์
-      const fileName = file.file_name || '';
+      const fileName = file.file_name || file.fileName || file.name || '';
       const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(fileName);
       const isPDF = /\.pdf$/i.test(fileName);
       
-      console.log('👁️ Previewing file:', fileUrl, 'Type:', { isImage, isPDF });
+      console.log('👁️ Previewing file:', { fileName, fileUrl, isImage, isPDF });
       
       if (isImage) {
         // ถ้าเป็นรูป ให้เปิดใน modal แทน
         openImageModal(fileUrl);
       } else if (isPDF) {
-        // สำหรับ PDF ให้ลองเปิดใน browser
-        const canOpen = await Linking.canOpenURL(fileUrl);
-        if (canOpen) {
-          await Linking.openURL(fileUrl);
-        } else {
+        // สำหรับ PDF ให้เปิดใน browser หรือ PDF viewer
+        try {
+          console.log('📄 Opening PDF:', fileUrl);
+          
+          // ตรวจสอบว่า URL ถูกต้องหรือไม่
+          if (!fileUrl || fileUrl === API_URL) {
+            throw new Error('Invalid PDF URL');
+          }
+          
+          const canOpen = await Linking.canOpenURL(fileUrl);
+          if (canOpen) {
+            await Linking.openURL(fileUrl);
+            console.log('✅ PDF opened successfully');
+          } else {
+            throw new Error('Cannot open PDF URL');
+          }
+        } catch (error) {
+          console.error('❌ Error opening PDF:', error);
           Alert.alert(
-            'ไม่สามารถเปิดไฟล์ได้',
-            'กรุณาดาวน์โหลดไฟล์เพื่อดูเนื้อหา',
+            'ไม่สามารถเปิด PDF ได้',
+            `ปัญหา: ${error.message}\nURL: ${fileUrl}\n\nกรุณาดาวน์โหลดไฟล์เพื่อดูเนื้อหา`,
             [
               { text: 'ยกเลิก', style: 'cancel' },
               { text: 'ดาวน์โหลด', onPress: () => downloadFile(file) }
@@ -1133,15 +1158,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
           );
         }
       } else {
-        // ไฟล์ประเภทอื่นๆ ให้ดาวน์โหลด
-        Alert.alert(
-          'ไฟล์ประเภทนี้',
-          'ไม่สามารถดูตัวอย่างได้ กรุณาดาวน์โหลดเพื่อเปิดไฟล์',
-          [
-            { text: 'ยกเลิก', style: 'cancel' },
-            { text: 'ดาวน์โหลด', onPress: () => downloadFile(file) }
-          ]
-        );
+        // ไฟล์ประเภทอื่นๆ ให้ลองเปิดด้วยแอพที่เหมาะสม หรือดาวน์โหลด
+        try {
+          // ลองเปิดด้วยแอพที่รองรับไฟล์ประเภทนี้
+          await Linking.openURL(fileUrl);
+        } catch (error) {
+          console.error('❌ Cannot open file, downloading instead:', error);
+          Alert.alert(
+            'ไฟล์ประเภทนี้',
+            'ไม่สามารถดูตัวอย่างได้ กำลังดาวน์โหลดไฟล์...',
+            [
+              { text: 'ตกลง', onPress: () => downloadFile(file) }
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('❌ Error previewing file:', error);
@@ -1151,24 +1181,69 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันแสดงตัวเลือกสำหรับไฟล์
   const showFileOptions = (file) => {
-    Alert.alert(
-      'ตัวเลือกไฟล์',
-      `จัดการไฟล์: ${file.file_name || 'ไฟล์'}`,
-      [
-        {
-          text: 'ดูตัวอย่าง',
-          onPress: () => previewFile(file)
-        },
-        {
-          text: 'ดาวน์โหลด',
-          onPress: () => downloadFile(file)
-        },
-        {
-          text: 'ยกเลิก',
-          style: 'cancel'
-        }
-      ]
-    );
+    console.log('📁 showFileOptions called with:', file);
+    
+    // ตรวจสอบว่ามีข้อมูลไฟล์หรือไม่
+    if (!file) {
+      console.error('❌ No file data provided');
+      Alert.alert('ข้อผิดพลาด', 'ไม่พบข้อมูลไฟล์\n\nกรุณาตรวจสอบ console log เพื่อดูข้อมูลไฟล์');
+      return;
+    }
+    
+    // จัดการข้อมูลไฟล์ที่อาจมาจากหลายแหล่ง
+    const fileName = file.file_name || file.fileName || file.name || '';
+    // ใช้ URL จาก Cloudinary ที่ได้จากไฟล์
+    const fileUrl = file.url || file.fileUrl || file.file_path || file.uri || '';
+    
+    const isPDF = /\.pdf$/i.test(fileName);
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(fileName);
+    const isDocument = /\.(doc|docx|txt|rtf)$/i.test(fileName);
+    const isSpreadsheet = /\.(xls|xlsx|csv)$/i.test(fileName);
+    const isPresentaton = /\.(ppt|pptx)$/i.test(fileName);
+    
+    console.log('📁 File analysis:', { 
+      fileName, 
+      fileUrl,
+      isPDF, 
+      isImage, 
+      isDocument, 
+      isSpreadsheet, 
+      isPresentaton,
+      originalFileData: file
+    });
+    
+    // ตรวจสอบ URL ไฟล์
+    if (!fileUrl || fileUrl === API_URL) {
+      Alert.alert(
+        'ข้อผิดพลาด',
+        `ไม่พบ URL ไฟล์\n\nชื่อไฟล์: ${fileName}\nURL: ${fileUrl}`,
+        [
+          { text: 'ตกลง' }
+        ]
+      );
+      return;
+    }
+    
+    // ตรวจสอบว่ามีชื่อไฟล์หรือไม่
+    if (!fileName) {
+      console.error('❌ No filename found');
+      Alert.alert('ข้อผิดพลาด', `ไม่พบชื่อไฟล์\n\nข้อมูลไฟล์ที่ได้รับ: ${JSON.stringify(file)}`);
+      return;
+    }
+    
+    if (isPDF) {
+      // ถ้าเป็น PDF ให้แสดงตัวอย่างเลย (เปิดในแอพ PDF viewer)
+      console.log('📄 Opening PDF preview for:', fileName);
+      previewFile(file);
+    } else if (isImage) {
+      // ถ้าเป็นรูปภาพให้แสดงตัวอย่างเลย
+      console.log('🖼️ Opening image preview for:', fileName);
+      previewFile(file);
+    } else {
+      // ไฟล์อื่นๆ (เอกสาร, สเปรดชีต, etc.) ให้ดาวน์โหลดเลย
+      console.log('� Auto-downloading file:', fileName);
+      downloadFile(file);
+    }
   };
 
   const handleDeleteMessage = async (messageId) => {
