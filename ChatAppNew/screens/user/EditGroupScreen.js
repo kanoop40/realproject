@@ -630,13 +630,13 @@ const EditGroupScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5C842',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
     marginTop: 16,
@@ -650,20 +650,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#000000',
   },
   backButton: {
     padding: 8,
   },
   backButtonText: {
     fontSize: 24,
-    color: '#333',
+    color: '#ffffff',
     fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffff',
     flex: 1,
     textAlign: 'center',
   },
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#f0f0f0',
     marginBottom: 8,
   },
   cameraOverlay: {
@@ -718,14 +718,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   input: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#f0f0f0',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
+    color: '#000000',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#cccccc',
   },
   membersSection: {
     marginBottom: 24,
