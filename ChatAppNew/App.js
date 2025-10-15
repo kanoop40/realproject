@@ -10,13 +10,13 @@ import LoginScreen from './screens/LoginScreen';
 import AdminScreen from './screens/admin/AdminScreen';
 import AddUserScreen from './screens/admin/AddUserScreen';
 import UserDetailScreen from './screens/admin/UserDetailScreen';
-import ChatScreen from './screens/user/ChatScreen';
+import ChatScreenWithTabBar from './screens/user/ChatScreen';
 import PrivateChatScreen from './screens/user/PrivateChatScreen';
 import GroupChatScreen from './screens/user/GroupChatScreen';
-import ProfileScreen from './screens/user/ProfileScreen';
+import ProfileScreenWithTabBar from './screens/user/ProfileScreen';
 import CreateGroupScreen from './screens/user/CreateGroupScreen';
 import EditGroupScreen from './screens/user/EditGroupScreen';
-import SearchUserScreen from './screens/user/SearchUserScreen';
+import SearchUserScreenWithTabBar from './screens/user/SearchUserScreen';
 import NewSearchUserScreen from './screens/user/NewSearchUserScreen';
 import EditProfileScreen from './screens/user/EditProfileScreen';
 import ChangePasswordScreen from './screens/user/ChangePasswordScreen';
@@ -41,13 +41,13 @@ export default function App() {
               <Stack.Screen name="Admin" component={AdminScreen} />
               <Stack.Screen name="AddUser" component={AddUserScreen} />
               <Stack.Screen name="UserDetail" component={UserDetailScreen} />
-              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="Chat" component={ChatScreenWithTabBar} />
               <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
               <Stack.Screen name="GroupChat" component={GroupChatScreen} />
-              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreenWithTabBar} />
               <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
               <Stack.Screen name="EditGroup" component={EditGroupScreen} />
-              <Stack.Screen name="SearchUser" component={SearchUserScreen} />
+              <Stack.Screen name="SearchUser" component={SearchUserScreenWithTabBar} />
               <Stack.Screen name="NewSearchUser" component={NewSearchUserScreen} />
               <Stack.Screen name="EditProfile" component={EditProfileScreen} />
               <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />

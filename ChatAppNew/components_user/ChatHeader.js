@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
-import { API_URL } from '../../service/api';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
+import { API_URL } from '../service/api';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 
 // SPACING, RADIUS, SHADOWS are now imported from theme
 import ChatMenuButton from './ChatMenuButton';
@@ -42,7 +42,7 @@ const ChatHeader = ({
                 : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
             }}
             style={styles.avatar}
-            defaultSource={require('../../assets/default-avatar.jpg')}
+            defaultSource={require('../assets/default-avatar.jpg')}
           />
         ) : (
           <View style={styles.defaultAvatar}>

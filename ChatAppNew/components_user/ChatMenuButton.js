@@ -8,7 +8,7 @@ import {
   Dimensions,
   StyleSheet 
 } from 'react-native';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
 
 // SPACING, RADIUS, SHADOWS are now imported from theme
 
@@ -62,22 +62,7 @@ const ChatOptionsMenu = ({
       color: COLORS.accent,
       onPress: onManageChat,
     },
-    {
-      id: 'clear',
-      title: 'ล้างประวัติแชท',
-      subtitle: 'ลบข้อความทั้งหมด',
-      icon: '🗑️',
-      color: COLORS.warning,
-      onPress: onClearChat,
-    },
-    {
-      id: 'block',
-      title: 'บล็อกผู้ใช้',
-      subtitle: `บล็อก ${recipientName}`,
-      icon: '🚫',
-      color: COLORS.error,
-      onPress: onBlockUser,
-    },
+   
   ];
 
   if (!visible) return null;

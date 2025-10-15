@@ -163,30 +163,24 @@ const SearchUserScreen = ({ navigation }) => {
         setChatCreationProgress(0);
         
         if (response.existing) {
-          console.log('📱 Using existing chat:', response.chatroomId);
-        } else {
-          console.log('🆕 Created new chat:', response.chatroomId);
-        }
-        
-        console.log('🚀 Navigating to Chat then PrivateChat...');
-        // Navigation สำหรับ iOS - ไปที่ ChatScreen ก่อน แล้วเปิด PrivateChat
-        requestAnimationFrame(() => {
-          // ไปที่ ChatScreen ก่อนพร้อม parameter ที่จะเปิด PrivateChat
-          navigation.navigate('Chat', {
-            openChatId: response.chatroomId,
-            openChatParams: {
-              chatroomId: response.chatroomId,
-              roomName: response.roomName,
-              recipientId: selectedUser._id,
-              recipientName: `${selectedUser.firstName} ${selectedUser.lastName}`,
-              recipientAvatar: selectedUser.avatar,
-              returnChatId: response.chatroomId,
-            }
+          console.log('🚀 Navigating to Chat then PrivateChat...');
+          // Navigation สำหรับ iOS - ไปที่ ChatScreen ก่อน แล้วเปิด PrivateChat
+          requestAnimationFrame(() => {
+            // ไปที่ ChatScreen ก่อนพร้อม parameter ที่จะเปิด PrivateChat
+            navigation.navigate('Chat', {
+              openChatId: response.chatroomId,
+              openChatParams: {
+                chatroomId: response.chatroomId,
+                roomName: response.roomName,
+                recipientId: selectedUser._id,
+                recipientName: `${selectedUser.firstName} ${selectedUser.lastName}`,
+                recipientAvatar: selectedUser.avatar,
+                returnChatId: response.chatroomId,
+              }
+            });
+            console.log('✅ Navigation completed');
           });
-          
-          console.log('✅ Navigation completed');
-        });
-        
+        }
       } catch (error) {
         // หยุด progress interval ถ้ามี error
         if (progressInterval) {
@@ -713,4 +707,13 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SearchUserScreen;
+const SearchUserScreenWithTabBar = (props) => {
+  return (
+    <>
+      <SearchUserScreen {...props} />
+      <TabBar navigation={props.navigation} activeTab="SearchUser" />
+    </>
+  );
+};
+
+export default SearchUserScreenWithTabBar;

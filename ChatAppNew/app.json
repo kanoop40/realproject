@@ -21,7 +21,8 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kanoop60.chatappnew"
     },
     "android": {
       "adaptiveIcon": {

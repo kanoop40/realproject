@@ -1,71 +1,59 @@
+
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
 
-const TabBar = ({ 
-  navigation,
-  handleLogout 
-}) => {
-  const navigateToProfile = () => {
-    navigation.navigate('Profile');
-  };
+const tabData = [
+  {
+    key: 'Chat',
+    label: 'แชท',
+    icon: 'chatbubbles-outline',
+  },
+  {
+    key: 'Profile',
+    label: 'โปรไฟล์',
+    icon: 'person-outline',
+  },
+  {
+    key: 'Search',
+    label: 'ค้นหา',
+    icon: 'search-outline',
+  },
+  {
+    key: 'Settings',
+    label: 'ตั้งค่า',
+    icon: 'settings-outline',
+  },
+];
 
-  const navigateTochat= () => {
-    navigation.navigate('Chat');
-  };
-
-  const navigateToSearch = () => {
-    navigation.navigate('SearchUser');
-  };
-
-  const handleLogoutPress = () => {
-    Alert.alert(
-      'ออกจากระบบ',
-      'คุณต้องการออกจากระบบหรือไม่?',
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        { text: 'ออกจากระบบ', style: 'destructive', onPress: handleLogout }
-      ]
-    );
+const TabBar = ({ navigation, activeTab }) => {
+  const handleTabPress = (tabKey) => {
+    if (tabKey === 'Chat') navigation.navigate('Chat');
+    else if (tabKey === 'Profile') navigation.navigate('Profile');
+    else if (tabKey === 'SearchUser') navigation.navigate('SearchUser');
+    // 'Other' tab can be customized
   };
 
   return (
     <View style={styles.tabBarContainer}>
-
-
-      <TouchableOpacity 
-        style={styles.tabItem}
-        onPress={navigateToSearch}
-      >
-        <Text style={styles.tabIcon}></Text>
-        <Text style={styles.tabLabel}>ค้นหา</Text>
-      </TouchableOpacity>
-
-
-      <TouchableOpacity 
-        style={styles.tabItem}
-        onPress={navigateTochat}
-      >
-        <Text style={styles.tabIcon}></Text>
-        <Text style={styles.tabLabel}>แชท</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={styles.tabItem}
-        onPress={navigateToProfile}
-      >
-        <Text style={styles.tabIcon}></Text>
-        <Text style={styles.tabLabel}>โปรไฟล์</Text>
-      </TouchableOpacity>
-      
-      
-      <TouchableOpacity 
-        style={styles.tabItem}
-        onPress={handleLogoutPress}
-      >
-        <Text style={[styles.tabIcon, styles.logoutIcon]}></Text>
-        <Text style={[styles.tabLabel, styles.logoutLabel]}>ออกจากระบบ</Text>
-      </TouchableOpacity>
+      {tabData.map(tab => (
+                <TouchableOpacity
+          key={item.key}
+          style={[styles.tab, isActive && styles.activeTab]}
+          onPress={() => handleTabPress(item.key)}
+        >
+          <Ionicons 
+            name={item.icon} 
+            size={24} 
+            color={isActive ? '#007AFF' : '#8E8E93'} 
+            style={styles.tabIcon}
+          />
+          <Text style={[styles.tabText, isActive && styles.activeText]}>
+            {item.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 };
@@ -93,19 +81,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   tabIcon: {
-    fontSize: 20,
     marginBottom: 4,
   },
   tabLabel: {
     fontSize: 12,
     color: COLORS.text,
     fontWeight: '500',
-  },
-  logoutIcon: {
-    color: '#ff3b30',
-  },
-  logoutLabel: {
-    color: '#ff3b30',
   },
 });
 

@@ -31,6 +31,7 @@ import { useSocket } from '../../context/SocketContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import ChatMessage from '../../components_user/ChatMessage';
 import ChatInputBar from '../../components_user/ChatInputBar';
+import ChatHeader from '../../components_user/ChatHeader';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -1167,6 +1168,40 @@ const PrivateChatScreen = ({ route, navigation }) => {
     );
   };
 
+  // Header functions for ChatHeader component
+  const handleGoBack = () => {
+    navigation.navigate('Chat', { 
+      chatId: route.params?.returnChatId || route.params?.chatroomId 
+    });
+  };
+
+  const handleManageChat = () => {
+    setSelectionMode(true);
+  };
+
+  const handleClearChat = () => {
+    Alert.alert(
+      'ล้างประวัติแชท',
+      'คุณต้องการล้างข้อความทั้งหมดหรือไม่?',
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ล้าง',
+          style: 'destructive',
+          onPress: () => {
+            setMessages([]);
+            console.log('✅ Chat history cleared');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedMessages([]);
+  };
+
   const saveEditMessage = async () => {
     if (!editText.trim() || !editingMessage) return;
 
@@ -1502,167 +1537,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </View>
       )} */}
       {/* Header */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: 48,
-        paddingBottom: 16,
-        backgroundColor: '#ffffff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#f3f4f6',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 2
-      }}>
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Chat', { 
-            chatId: route.params?.returnChatId || route.params?.chatroomId 
-          })}
-          style={{
-            padding: 8,
-            marginRight: 8
-          }}
-        >
-          <Text style={{
-            fontSize: 18,
-            color: '#3b82f6',
-            fontWeight: 'bold'
-          }}>←</Text>
-        </TouchableOpacity>
-        
-        <View style={{
-          flex: 1,
-          flexDirection: 'row',
-          alignItems: 'center'
-        }}>
-          {recipientAvatar ? (
-            <Image
-              source={{ 
-                uri: recipientAvatar.startsWith('http') 
-                  ? recipientAvatar 
-                  : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-              }}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                marginRight: 12
-              }}
-              defaultSource={require('../../assets/default-avatar.jpg')}
-            />
-          ) : (
-            <View style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              marginRight: 12,
-              backgroundColor: '#e5e7eb',
-              justifyContent: 'center',
-              alignItems: 'center'
-            }}>
-              <Text style={{
-                fontSize: 16,
-                fontWeight: 'bold',
-                color: '#6b7280'
-              }}>
-                {(typeof recipientName === 'string' && recipientName.charAt(0)) 
-                  ? recipientName.charAt(0).toUpperCase() 
-                  : '?'}
-              </Text>
-            </View>
-          )}
-          
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontSize: 18,
-              fontWeight: 'bold',
-              color: '#000000'
-            }}>
-              {(typeof recipientName === 'string' ? recipientName : '') || 
-               (typeof roomName === 'string' ? roomName : '') || 
-               'แชทส่วนตัว'}
-            </Text>
-            <Text style={{
-              fontSize: 12,
-              color: '#10b981'
-            }}>ออนไลน์</Text>
-          </View>
-        </View>
-        
-        {/* ปุ่มขวาบน */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {selectionMode ? (
-            <>
-              {/* ปุ่มยกเลิก - ซ้าย */}
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('� Cancel selection mode');
-                  setSelectionMode(false);
-                  setSelectedMessages([]);
-                }}
-                style={{ 
-                  padding: 8,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#6B7280',
-                  borderRadius: 8,
-                  minWidth: 60,
-                  minHeight: 32,
-                  marginRight: 8
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                  ยกเลิก
-                </Text>
-              </TouchableOpacity>
-              
-              {/* ปุ่มลบ - ขวา */}
-              <TouchableOpacity
-                onPress={deleteSelectedMessages}
-                disabled={selectedMessages.length === 0}
-                style={{ 
-                  padding: 8,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: selectedMessages.length > 0 ? '#FF3B30' : '#9CA3AF',
-                  borderRadius: 8,
-                  minWidth: 50,
-                  minHeight: 32
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                  ลบ ({selectedMessages.length})
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              onPress={() => {
-                console.log('🔄 Turning ON selection mode - BEFORE:', { selectionMode });
-                setSelectionMode(true);
-                console.log('🔄 Turning ON selection mode - AFTER set to true');
-              }}
-              style={{ 
-                padding: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#007AFF',
-                borderRadius: 8,
-                minWidth: 50,
-                minHeight: 40
-              }}
-            >
-              <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>
-                เมนู
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-      </View>
+      <ChatHeader
+        recipientName={recipientName}
+        recipientAvatar={recipientAvatar}
+        roomName={roomName}
+        selectionMode={selectionMode}
+        selectedMessages={selectedMessages}
+        onGoBack={handleGoBack}
+        onManageChat={handleManageChat}
+        onClearChat={handleClearChat}
+        onCancelSelection={handleCancelSelection}
+        onDeleteSelected={deleteSelectedMessages}
+      />
 
       {/* Debug Banner - Always Show */}
       <View style={{

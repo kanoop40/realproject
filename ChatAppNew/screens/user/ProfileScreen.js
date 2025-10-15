@@ -612,13 +612,10 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      <TabBar 
-        navigation={navigation}
-        handleLogout={handleLogout}
-      />
+  {/* TabBar ถูกลบออกเพื่อใช้ TabBar จาก HOC เท่านั้น */}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -1117,4 +1114,13 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProfileScreen;
+const ProfileScreenWithTabBar = (props) => {
+  return (
+    <>
+      <ProfileScreen {...props} />
+      <TabBar navigation={props.navigation} activeTab="Profile" />
+    </>
+  );
+};
+
+export default ProfileScreenWithTabBar;

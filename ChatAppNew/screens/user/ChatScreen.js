@@ -22,11 +22,10 @@ import GroupChatItem from '../../components_user/GroupChatItem';
 import TabBar from '../../components_user/TabBar';
 import ChatItemExpandAnimation from '../../components_user/ChatItemExpandAnimation';
 import ChatManager from '../../components_user/ChatManager';
-// Removed loading imports - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
+// Removed loading imports - no longer using loading functionality
 
 const ChatScreen = ({ route, navigation }) => {
-  const { socket, joinChatroom, reconnectSocket } = useSocket();
   const { user: authUser, loading: authLoading, login } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [chats, setChats] = useState([]);
@@ -116,138 +115,9 @@ const ChatScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (!authLoading) {
-      // ป้องกันการโหลด user บ่อยเกินไป
-      const now = Date.now();
-      if (now - lastLoadUserTimeRef.current > 5000) { // ห่างอย่างน้อย 5 วินาที
-        lastLoadUserTimeRef.current = now;
-        loadCurrentUser();
-      } else {
-        console.log('🚫 Skipping loadCurrentUser - too frequent');
-        // ถ้ามี authUser แล้ว ให้ใช้ข้อมูลนั้นแทน
-        if (authUser) {
-          console.log('✅ Using existing authUser data');
-          setCurrentUser(authUser);
-          setServerStatus('ready');
-        }
-      }
-      // ระบบซ่อนแชทถูกลบออกแล้ว
+      loadChats();
     }
-  }, [authLoading]);
-
-  useEffect(() => {
-    if (currentUser) {
-      if (recipientId) {
-        // ถ้ามี recipientId แสดงว่าต้องเปิดแชทโดยตรง
-        handleDirectChat();
-      } else {
-        // ถ้าไม่มี recipientId ให้โหลดรายการแชท
-        loadChats();
-      }
-    }
-  }, [currentUser, recipientId]);
-
-  // Refresh chats when screen comes into focus (เช่น หลังจากออกจากกลุ่ม)
-  useFocusEffect(
-    React.useCallback(() => {
-      if (currentUser && !recipientId) {
-        console.log('🔄 ChatScreen focused - refreshing chats...');
-        loadChats();
-      }
-    }, [currentUser, recipientId])
-  );
-
-  // Socket listeners สำหรับ real-time updates
-  useEffect(() => {
-    if (socket && currentUser) {
-      console.log('🔌 Setting up ChatScreen socket listeners');
-      console.log('🔌 Socket status:', socket.connected ? 'connected' : 'disconnected');
-      console.log('🔌 Socket ID:', socket.id);
-      
-      // Reset joined chatrooms tracking เมื่อ socket reconnect (สำหรับ iOS)
-      if (socket.connected) {
-        console.log('🔄 Socket connected, resetting joined chatrooms tracking for iOS');
-        joinedChatroomsRef.current.clear();
-      }
-      
-      // ฟังข้อความใหม่จากทุกห้องแชท
-      const handleNewMessage = async (data) => {
-        console.log('💬 ChatScreen received new message:', data);
-        console.log('💬 Message sender:', data.message?.sender);
-        console.log('💬 Current user:', currentUser._id);
-        console.log('💬 Chatroom ID:', data.chatroomId);
-        
-        // ระบบซ่อนแชทถูกลบออกแล้ว
-        
-        // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
-        const isOwnMessage = data.message.sender._id === currentUser._id;
-        
-        if (!isOwnMessage) {
-          // แสดงการแจ้งเตือนสำหรับข้อความใหม่ (เฉพาะข้อความของคนอื่น)
-          const senderName = data.message.sender ? 
-            `${data.message.sender.firstName} ${data.message.sender.lastName}` : 
-            'Unknown';
-          
-          // ตรวจสอบว่าเป็นข้อความจากกลุ่มหรือแชทส่วนตัว
-          const isGroupMessage = data.isGroup || data.groupId;
-          const chatName = data.groupName || data.roomName || 'แชท';
-          
-          console.log('🔔 Showing notification for new message from:', senderName);
-          console.log('🔔 Is group message:', isGroupMessage);
-          console.log('🔔 Chat name:', chatName);
-          
-          // ใช้ NotificationService เพื่อแสดงการแจ้งเตือน
-          const notificationTitle = isGroupMessage ? 
-            `${chatName}: ${senderName}` : 
-            `ข้อความจาก ${senderName}`;
-          
-          NotificationService.showInAppNotification(
-            notificationTitle,
-            data.message.content,
-            { 
-              senderId: data.message.sender._id,
-              chatroomId: data.chatroomId,
-              isGroup: isGroupMessage,
-              groupName: data.groupName
-            }
-          );
-        } else {
-          console.log('👤 Processing own message in ChatScreen (no notification)');
-        }
-        
-        // อัพเดท local state แทนการรีเฟรชจาก server
-        console.log('🔄 Updating local chat list state...');
-        
-        const chatFound = ChatManager.updateChatListOnNewMessage(data, currentUser, setChats);
-        
-        // ถ้าไม่พบแชท ให้รีเฟรชจาก server
-        if (!chatFound) {
-          setTimeout(() => {
-            const refreshChats = async () => {
-              try {
-                await loadChats();
-              } catch (error) {
-                console.error('Error refreshing chats after new message:', error);
-              }
-            };
-            refreshChats();
-          }, 500);
-        }
-      };
-
-      // ฟังการอ่านข้อความ
-      const handleMessageRead = (data) => {
-        ChatManager.updateChatListOnMessageRead(data, setChats);
-      };
-
-      socket.on('newMessage', handleNewMessage);
-      socket.on('messageRead', handleMessageRead); // เปลี่ยนจาก messageReadUpdate เป็น messageRead
-
-      return () => {
-        socket.off('newMessage', handleNewMessage);
-        socket.off('messageRead', handleMessageRead); // เปลี่ยนจาก messageReadUpdate เป็น messageRead
-      };
-    }
-  }, [socket, currentUser]);
+  }, [authLoading, currentUser]);
 
   const handleDirectChat = async () => {
     try {
@@ -618,10 +488,7 @@ const ChatScreen = ({ route, navigation }) => {
         />
       )}
 
-      <TabBar 
-        navigation={navigation}
-        handleLogout={handleLogout}
-      />
+      {/* TabBar ถูกลบออกเพื่อใช้ TabBar จาก HOC เท่านั้น */}
 
       {/* Expand Animation Overlay */}
       {showExpandAnimation && expandingItem && (
@@ -641,7 +508,7 @@ const ChatScreen = ({ route, navigation }) => {
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -787,4 +654,11 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ChatScreen;
+const ChatScreenWithTabBar = (props) => (
+  <>
+    <ChatScreen {...props} />
+    <TabBar navigation={props.navigation} activeTab="Chat" />
+  </>
+);
+
+export default ChatScreenWithTabBar;
