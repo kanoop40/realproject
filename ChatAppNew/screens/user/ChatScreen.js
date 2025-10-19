@@ -24,6 +24,7 @@ import ChatItemExpandAnimation from '../../components_user/ChatItemExpandAnimati
 import ChatManager from '../../components_user/ChatManager';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 // Removed loading imports - no longer using loading functionality
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const ChatScreen = ({ route, navigation }) => {
   const { user: authUser, loading: authLoading, login } = useAuth();
@@ -452,17 +453,17 @@ const ChatScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
+      <LoadingOverlay 
+        visible={authLoading || isLoadingChats} 
+        message={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดแชท..."} 
+      />
+      
       <View style={styles.header}>
         <Text style={styles.headerTitle}>แชท</Text>
       </View>
 
       {/* Content Area - แสดง loading, empty state หรือ chat list */}
-      {authLoading || isLoadingChats ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>กำลังโหลดแชท...</Text>
-        </View>
-      ) : chats.length === 0 ? (
+      {chats.length === 0 && !authLoading && !isLoadingChats ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>

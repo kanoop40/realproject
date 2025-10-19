@@ -14,7 +14,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import api, { API_URL } from '../../service/api';
-import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SHADOWS } from '../../styles/theme';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
+import LoadingOverlay from '../../components/LoadingOverlay';
 import TabBar from '../../components_user/TabBar';
 import ProfileHeader from '../../components_user/ProfileHeader';
 import ProfileSection from '../../components_user/ProfileSection';
@@ -27,6 +28,7 @@ import PasswordChangeModal from '../../components_user/PasswordChangeModal';
 const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // เพิ่ม loading state
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -50,6 +52,7 @@ const ProfileScreen = ({ navigation }) => {
   }, []);
 
   const fetchCurrentUser = async () => {
+    setIsLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
       
@@ -90,6 +93,8 @@ const ProfileScreen = ({ navigation }) => {
       } else {
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -613,6 +618,11 @@ const ProfileScreen = ({ navigation }) => {
       </Modal>
 
   {/* TabBar ถูกลบออกเพื่อใช้ TabBar จาก HOC เท่านั้น */}
+      
+      <LoadingOverlay 
+        visible={isLoading} 
+        message="กำลังโหลดข้อมูลโปรไฟล์..." 
+      />
     </View>
   );
 }

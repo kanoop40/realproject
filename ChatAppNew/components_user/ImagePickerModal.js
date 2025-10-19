@@ -28,7 +28,7 @@ const ImagePickerModal = ({
             style={styles.imagePickerOption}
             onPress={onTakePhoto}
           >
-            <Text style={styles.cameraPickerIcon}>📷</Text>
+            <Text style={styles.cameraPickerIcon}></Text>
             <Text style={styles.imagePickerOptionText}>ถ่ายภาพ</Text>
           </TouchableOpacity>
           
@@ -36,7 +36,7 @@ const ImagePickerModal = ({
             style={styles.imagePickerOption}
             onPress={onSelectFromLibrary}
           >
-            <Text style={styles.libraryIcon}>🖼️</Text>
+            <Text style={styles.libraryIcon}></Text>
             <Text style={styles.imagePickerOptionText}>เลือกจากแกลเลอรี่</Text>
           </TouchableOpacity>
           

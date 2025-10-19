@@ -20,6 +20,7 @@ import ChatInputBar from '../../components_user/ChatInputBar';
 import GroupChatMenuButton from '../../components_user/GroupChatMenuButton';
 import GroupMessageBubble from '../../components_user/GroupMessageBubble';
 import LoadOlderMessagesGroupChat from '../../components_user/LoadOlderMessagesGroupChat';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
@@ -27,6 +28,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [socketStatus, setSocketStatus] = useState('connecting');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   // const [isScrollingToEnd, setIsScrollingToEnd] = useState(false); // ปิดการใช้งาน scroll loading
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -393,6 +395,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const loadGroupData = async (page = 1, append = false) => {
     try {
       if (page === 1) {
+        setIsLoading(true); // เริ่ม loading เมื่อโหลดหน้าแรก
         // setIsScrollingToEnd(true);
       } else {
         setIsLoadingMore(true);
@@ -502,6 +505,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   console.error('Error loading group data:', error);
     } finally {
       if (page === 1) {
+        setIsLoading(false); // สิ้นสุด loading เมื่อโหลดเสร็จ
         // setIsScrollingToEnd(false);
       } else {
         setIsLoadingMore(false);
@@ -2131,6 +2135,10 @@ const GroupChatScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
+      <LoadingOverlay 
+        visible={isLoading} 
+        message="กำลังโหลดแชทกลุ่ม..." 
+      />
 
     </KeyboardAvoidingView>
   );

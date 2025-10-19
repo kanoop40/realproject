@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   myMessageBubble: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#000000ff',
     alignSelf: 'flex-end',
   },
   otherMessageBubble: {

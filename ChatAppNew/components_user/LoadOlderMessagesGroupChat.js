@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../styles/theme';
 
 const LoadOlderMessagesGroupChat = ({
@@ -80,21 +81,21 @@ const LoadOlderMessagesGroupChat = ({
           activeOpacity={0.7}
         >
           <View style={styles.buttonContent}>
-            <Text style={styles.icon}>📜</Text>
+            <LottieView
+              source={require('../assets/Scroll Down Arrow.json')}
+              autoPlay
+              loop
+              style={styles.scrollAnimation}
+            />
             <View style={styles.textContainer}>
               <Text style={styles.buttonText}>โหลดข้อความเก่า</Text>
-              <Text style={styles.subText}>แตะเพื่อโหลดอีก 30 ข้อความ</Text>
+             
             </View>
-            <Text style={styles.arrow}>↑</Text>
           </View>
         </TouchableOpacity>
       )}
       
-      {messagesCount > 0 && (
-        <View style={styles.messageCounter}>
-          <Text style={styles.counterText}>ข้อความทั้งหมด: {messagesCount}</Text>
-        </View>
-      )}
+     
     </Animated.View>
   );
 };
@@ -104,15 +105,15 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.xs,
     marginHorizontal: SPACING.sm,
     borderRadius: 8,
-    backgroundColor: 'rgba(240, 248, 255, 0.9)',
-    shadowColor: '#007AFF',
+    backgroundColor: 'rgba(60, 255, 0, 1)',
+    shadowColor: '#ffffffff',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: 'rgba(0, 122, 255, 0.2)'
+    borderColor: 'rgba(255, 255, 255, 1)'
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -131,28 +132,29 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: SPACING.sm,
     backgroundColor: '#F0F8FF',
-    borderWidth: 0.5,
-    borderColor: '#007AFF',
-    borderRadius: 8,
+    borderWidth: 0,
+    borderColor: '#ffffffff',
+    borderRadius: 0,
     margin: 4
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'center'
   },
-  icon: {
-    fontSize: 14,
-    marginRight: 6
+  scrollAnimation: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    transform: [{ rotate: '180deg' }]
   },
   textContainer: {
-    flex: 1,
     alignItems: 'center'
   },
   buttonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#000000ff',
     textAlign: 'center'
   },
   subText: {
@@ -160,12 +162,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 0
-  },
-  arrow: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontWeight: 'bold',
-    marginLeft: 6
   },
   messageCounter: {
     backgroundColor: '#E8F4FD',

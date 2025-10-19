@@ -14,6 +14,7 @@ import {
   ScrollView
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 import { searchUsers, createPrivateChat } from '../../service/api';
 import { useAuth } from '../../context/AuthContext';
 import api, { API_URL } from '../../service/api';
@@ -286,7 +287,12 @@ const SearchUserScreen = ({ navigation }) => {
     if (!query.trim()) {
       return (
         <View style={styles.emptyState}>
-          <MaterialIcons name="search" size={64} color="#ccc" />
+          <LottieView
+            source={require('../../assets/Free Searching Animation.json')}
+            autoPlay
+            loop
+            style={styles.searchAnimation}
+          />
           <Text style={styles.emptyText}>พิมพ์ชื่อหรือนามสกุลเพื่อค้นหาผู้ใช้</Text>
         </View>
       );
@@ -526,11 +532,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.xl,
   },
+  searchAnimation: {
+    width: 200,
+    height: 200,
+    marginBottom: SPACING.md,
+  },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSize.md,
     color: COLORS.textTertiary,
     marginTop: SPACING.md,
     textAlign: 'center',
+    fontWeight: '500',
   },
   errorText: {
     fontSize: TYPOGRAPHY.fontSize.md,

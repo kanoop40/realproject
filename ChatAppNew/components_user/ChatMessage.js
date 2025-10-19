@@ -186,7 +186,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8
   },
   myMessage: {
-    justifyContent: 'flex-end'
+    justifyContent: 'flex-end',
+   
   },
   otherMessage: {
     justifyContent: 'flex-start'
@@ -199,18 +200,18 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#007AFF',
-    backgroundColor: '#007AFF',
+    borderColor: '#ffffffff',
+    backgroundColor: '#777777ff',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 0.5 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2
   },
   selectionCheckmark: {
-    color: 'white', 
+    color: '#ffffffff', 
     fontSize: 14, 
     fontWeight: 'bold'
   },

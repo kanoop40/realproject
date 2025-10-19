@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login } from '../service/api';
 import { useAuth } from '../context/AuthContext';
+import LoadingOverlay from '../components/LoadingOverlay';
 // Removed styles import - now using Tailwind CSS
 
 const LoginScreen = ({ navigation }) => {
@@ -58,6 +59,11 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <LoadingOverlay 
+        visible={isLoading} 
+        message="กำลังเข้าสู่ระบบ..." 
+      />
+      
       <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ fontSize: 30, fontWeight: 'bold', textAlign: 'center', color: '#000000', marginBottom: 32 }}>
           เข้าสู่ระบบ
@@ -129,13 +135,9 @@ const LoginScreen = ({ navigation }) => {
             onPress={handleLogin}
             disabled={isLoading}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={{ color: '#14028de3', textAlign: 'center', fontSize: 18, fontWeight: '600' }}>
-                เข้าสู่ระบบ
-              </Text>
-            )}
+            <Text style={{ color: '#14028de3', textAlign: 'center', fontSize: 18, fontWeight: '600' }}>
+              เข้าสู่ระบบ
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

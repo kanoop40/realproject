@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 import { COLORS } from '../styles/theme';
 
 const tabData = [
@@ -9,16 +10,19 @@ const tabData = [
     key: 'Chat',
     label: 'แชท',
     icon: 'chatbubbles-outline',
+    animation: require('../assets/Chat Bubbles.json'),
   },
   {
     key: 'Profile',
     label: 'โปรไฟล์',
     icon: 'person-outline',
+    animation: require('../assets/Person - profile.json'),
   },
   {
     key: 'Search',
     label: 'ค้นหา',
     icon: 'search-outline',
+    animation: require('../assets/Interactive Animation _ Search bar _ Menu Buttons.json'),
   },
 ];
 
@@ -39,11 +43,11 @@ const TabBar = ({ navigation, activeTab }) => {
             style={[styles.tabItem, isActive && styles.activeTab]}
             onPress={() => handleTabPress(tab.key)}
           >
-            <Ionicons 
-              name={tab.icon} 
-              size={24} 
-              color={isActive ? '#007AFF' : '#8E8E93'} 
-              style={styles.tabIcon}
+            <LottieView
+              source={tab.animation}
+              autoPlay={isActive}
+              loop={isActive}
+              style={styles.tabAnimation}
             />
             <Text style={[styles.tabLabel, isActive && styles.activeText]}>
               {tab.label}
@@ -82,17 +86,22 @@ const styles = StyleSheet.create({
   tabIcon: {
     marginBottom: 4,
   },
+  tabAnimation: {
+    width: 30,
+    height: 30,
+    marginBottom: 4,
+  },
   tabLabel: {
     fontSize: 12,
     color: COLORS.text,
     fontWeight: '500',
   },
   activeTab: {
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
   },
   activeText: {
-    color: '#007AFF',
+    color: '#e5b61c',
     fontWeight: '600',
   },
 });

@@ -32,11 +32,12 @@ import ChatMessage from '../../components_user/ChatMessage';
 import ChatInputBar from '../../components_user/ChatInputBar';
 import ChatHeader from '../../components_user/ChatHeader';
 import LoadOlderMessagesPrivateChat from '../../components_user/LoadOlderMessagesPrivateChat';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
-  const [localIsLoading, setLocalIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -263,6 +264,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   }, [messages.length, hasScrolledToEnd, isLoadingMore]);
 
   const loadCurrentUser = useCallback(async () => {
+    setIsLoading(true); // เริ่ม loading ตั้งแต่โหลด user
     try {
       console.log('PrivateChatScreen: Loading current user...');
       
@@ -277,6 +279,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('✅ User loaded successfully, messages will load next...');
     } catch (error) {
       console.error('Error loading user:', error);
+      setIsLoading(false); // หยุด loading หากเกิดข้อผิดพลาด
       if (error.response?.status === 401) {
         navigation.replace('Login');
       } else {
@@ -286,6 +289,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
   }, [navigation]);
 
   const loadMessages = useCallback(async (page = 1, isRefresh = false) => {
+    if (page === 1) {
+      setIsLoading(true); // เริ่ม loading เมื่อโหลดหน้าแรก
+    }
+    
     if (isRefresh) {
       setCurrentPage(1);
       setCanLoadMore(true);
@@ -421,7 +428,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
     } finally {
       console.log('✅ Messages loading completed');
-      setLocalIsLoading(false);
+      if (page === 1) {
+        setIsLoading(false); // สิ้นสุด loading เมื่อโหลดเสร็จ
+      }
     }
   }, [chatroomId, currentUser, socket]);
 
@@ -1258,12 +1267,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
         {/* Messages List */}
         <View style={styles.messagesContainer}>
-          {localIsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>กำลังโหลดข้อความ...</Text>
-            </View>
-          ) : messages.length > 0 ? (
+          {messages.length > 0 ? (
             <FlatList
               ref={flatListRef}
               data={groupMessagesByDate(messages)}
@@ -1448,6 +1452,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </Modal>
 
       </KeyboardAvoidingView>
+      
+      <LoadingOverlay 
+        visible={isLoading} 
+        message="กำลังโหลดแชทส่วนตัว..." 
+      />
     </View>
   );
 };
@@ -1486,18 +1495,6 @@ const styles = StyleSheet.create({
   messagesContainer: {
     flex: 1,
     backgroundColor: '#ffffff'
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background
-  },
-  loadingText: {
-    color: COLORS.textPrimary,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    marginTop: SPACING.sm + 2,
-    fontWeight: '600',
   },
   messagesList: {
     flex: 1,

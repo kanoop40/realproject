@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     elevation: 1
   },
   myMessageBubble: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#000000',
     alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
     marginRight: 8
