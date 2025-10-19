@@ -4,8 +4,7 @@ const User = require('../models/UserModel');
 const Messages = require('../models/MessagesModel');
 const Chatrooms = require('../models/ChatroomsModel');
 const Notification = require('../models/NotificationModel');
-const { deleteOldAvatar } = require('../config/cloudinary');
-const cloudinary = require('../config/cloudinary');
+const { deleteOldAvatar, cloudinary } = require('../config/cloudinary');
 
 // @desc    สร้างกลุ่มใหม่
 // @route   POST /api/groups

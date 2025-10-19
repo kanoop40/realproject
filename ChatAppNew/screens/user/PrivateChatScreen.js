@@ -1607,10 +1607,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md
   },
   dateSeparatorBadge: {
-    backgroundColor: '#FFD700',
-    borderRadius: 15,
+    backgroundColor: '#E6B800',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
@@ -1618,7 +1618,7 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   dateSeparatorText: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontSize: 12,
     fontWeight: '600',
     color: '#333',
     textAlign: 'center'

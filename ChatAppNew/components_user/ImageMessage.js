@@ -164,10 +164,10 @@ const styles = StyleSheet.create({
     opacity: 0.7
   },
   selectedMessage: {
-    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     borderWidth: 3,
-    borderColor: '#007AFF',
-    shadowColor: '#007AFF',
+    borderColor: '#000000',
+    shadowColor: '#000000',
     shadowOffset: {
       width: 0,
       height: 0,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   readStatusIconRead: {
-    color: '#007AFF',
+    color: '#000000',
   },
   messageTimeBottom: {
     fontSize: 10,

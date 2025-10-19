@@ -247,14 +247,18 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: COLORS.accent,
-    backgroundColor: COLORS.accent,
+    borderColor: '#ffffffff',
+    backgroundColor: '#777777ff',
     alignItems: 'center',
     justifyContent: 'center',
-    ...SHADOWS.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0.5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2
   },
   checkboxText: {
-    color: 'white',
+    color: '#ffffffff',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -280,7 +284,7 @@ const styles = StyleSheet.create({
   },
   messageContentContainer: {
     flex: 1,
-    maxWidth: '85%',
+    maxWidth: '80%',
     minWidth: 60,
   },
   senderName: {
@@ -305,9 +309,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    maxWidth: '85%',
-    minWidth: 80,
-    minHeight: 44,
+    maxWidth: '80%',
     
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,

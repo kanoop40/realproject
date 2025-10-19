@@ -646,6 +646,11 @@ const GroupChatScreen = ({ route, navigation }) => {
   }, [isLoadingMore, canLoadMore, currentPage, groupId]);
 
   const sendMessage = async () => {
+    console.log('🚀 sendMessage called');
+    console.log('📝 inputText:', inputText);
+    console.log('📎 selectedFile:', selectedFile);
+    console.log('🖼️ selectedImage:', selectedImage);
+    
     if ((!inputText.trim() && !selectedFile && !selectedImage) || !groupId || isSending) return;
 
     setIsSending(true);
@@ -708,9 +713,42 @@ const GroupChatScreen = ({ route, navigation }) => {
           name: originalFileName,
         };
         
-        const base64 = await FileSystem.readAsStringAsync(fileObj.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        console.log('🔄 About to read file URI:', fileObj.uri);
+        console.log('📁 File object details:', JSON.stringify(fileObj, null, 2));
+        
+        // Check if file exists first
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(fileObj.uri);
+          console.log('📋 File info:', fileInfo);
+          
+          if (!fileInfo.exists) {
+            throw new Error(`File does not exist at URI: ${fileObj.uri}`);
+          }
+          
+          if (fileInfo.size === 0) {
+            throw new Error(`File is empty (0 bytes): ${fileObj.uri}`);
+          }
+        } catch (infoError) {
+          console.error('❌ Error getting file info:', infoError);
+          throw new Error(`Cannot access file: ${infoError.message}`);
+        }
+        
+        let base64;
+        try {
+          base64 = await FileSystem.readAsStringAsync(fileObj.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          console.log('✅ Base64 read completed. Length:', base64.length);
+          console.log('🔤 Base64 preview (first 100 chars):', base64.substring(0, 100));
+          
+          if (!base64 || base64.length === 0) {
+            throw new Error('Base64 encoding returned empty string');
+          }
+        } catch (fileError) {
+          console.error('❌ Error reading file as base64:', fileError);
+          throw new Error(`Failed to read file: ${fileError.message}`);
+        }
 
         response = await api.post(`/groups/${groupId}/messages`, {
           content: contentToSend,
@@ -909,11 +947,42 @@ const GroupChatScreen = ({ route, navigation }) => {
       console.log('📁 File object:', fileObject);
       
       // แปลงเป็น base64
-      const base64 = await FileSystem.readAsStringAsync(fileObject.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      console.log('🔄 About to read image URI:', fileObject.uri);
+      console.log('📁 Image object details:', JSON.stringify(fileObject, null, 2));
+      
+      // Check if file exists first
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(fileObject.uri);
+        console.log('📋 Image file info:', fileInfo);
+        
+        if (!fileInfo.exists) {
+          throw new Error(`Image file does not exist at URI: ${fileObject.uri}`);
+        }
+        
+        if (fileInfo.size === 0) {
+          throw new Error(`Image file is empty (0 bytes): ${fileObject.uri}`);
+        }
+      } catch (infoError) {
+        console.error('❌ Error getting image file info:', infoError);
+        throw new Error(`Cannot access image file: ${infoError.message}`);
+      }
+      
+      let base64;
+      try {
+        base64 = await FileSystem.readAsStringAsync(fileObject.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
 
-      console.log('🔤 Base64 conversion completed, length:', base64.length);
+        console.log('🔤 Base64 conversion completed, length:', base64.length);
+        console.log('🔤 Base64 preview (first 100 chars):', base64.substring(0, 100));
+        
+        if (!base64 || base64.length === 0) {
+          throw new Error('Base64 encoding returned empty string');
+        }
+      } catch (fileError) {
+        console.error('❌ Error reading image as base64:', fileError);
+        throw new Error(`Failed to read image: ${fileError.message}`);
+      }
 
       // ส่งไปยัง server
       const response = await api.post(`/groups/${groupId}/messages`, {
