@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import Lottie from 'lottie-react-native';
 import api, { API_URL } from '../../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import LoadingOverlay from '../../components/LoadingOverlay';
@@ -29,6 +30,8 @@ const ProfileScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // เพิ่ม loading state
+  const [showProfileAnimation, setShowProfileAnimation] = useState(false); // สำหรับ profile animation
+  const [showProfileContent, setShowProfileContent] = useState(false); // สำหรับแสดงเนื้อหา
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -81,6 +84,10 @@ const ProfileScreen = ({ navigation }) => {
         groupCode: response.data.groupCode || '',
       });
       
+      // เริ่มเล่น animation หลังจากได้ข้อมูลผู้ใช้แล้ว
+      setIsLoading(false);
+      setShowProfileAnimation(true);
+      
     } catch (error) {
       console.error('Error fetching current user:', error);
       console.error('Error response:', error.response?.data);
@@ -92,9 +99,9 @@ const ProfileScreen = ({ navigation }) => {
         navigation.replace('Login');
       } else {
         Alert.alert('ข้อผิดพลาด', `ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ${error.message}`);
+        // ในกรณีเกิดข้อผิดพลาดก็หยุด loading
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -119,6 +126,12 @@ const ProfileScreen = ({ navigation }) => {
         },
       ]
     );
+  };
+
+  // จัดการเมื่อ profile animation เสร็จ
+  const handleProfileAnimationFinish = () => {
+    setShowProfileAnimation(false);
+    setShowProfileContent(true);
   };
 
   const handleEditProfile = () => {
@@ -306,6 +319,29 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.headerPlaceholder} />
       </View>
 
+      {/* แสดง Loading หรือ Profile Animation หรือเนื้อหา */}
+      {isLoading ? (
+        <LoadingOverlay />
+      ) : showProfileAnimation ? (
+        <View style={styles.animationContainer}>
+          <TouchableOpacity 
+            onPress={handleProfileAnimationFinish}
+            style={styles.animationTouchable}
+            activeOpacity={0.8}
+          >
+            <Lottie
+              source={require('../../assets/Profile Avatar for Child.json')}
+              autoPlay={true}
+              loop={false}
+              speed={2.0}
+              style={styles.profileAnimation}
+              onAnimationFinish={handleProfileAnimationFinish}
+            />
+          </TouchableOpacity>
+          <Text style={styles.skipHintText}>แตะเพื่อข้าม</Text>
+        </View>
+      ) : showProfileContent ? (
+
       <ScrollView style={styles.content}>
         {/* Profile Section */}
         <View style={styles.profileSection}>
@@ -345,7 +381,12 @@ const ProfileScreen = ({ navigation }) => {
               {isUpdating ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.cameraIcon}>📷</Text>
+                <Lottie
+                  source={require('../../assets/FaceID.json')}
+                  autoPlay={true}
+                  loop={true}
+                  style={styles.faceIdIcon}
+                />
               )}
             </View>
           </TouchableOpacity>
@@ -401,7 +442,7 @@ const ProfileScreen = ({ navigation }) => {
             style={styles.actionButton} 
             onPress={handleEditProfile}
           >
-            <Text style={styles.actionIcon}>✏️</Text>
+            <Text style={styles.actionIcon}></Text>
             <Text style={styles.actionButtonText}>แก้ไขข้อมูล</Text>
           </TouchableOpacity>
           
@@ -409,7 +450,7 @@ const ProfileScreen = ({ navigation }) => {
             style={styles.actionButton} 
             onPress={() => setShowPasswordModal(true)}
           >
-            <Text style={styles.actionIcon}>🔒</Text>
+            <Text style={styles.actionIcon}></Text>
             <Text style={styles.actionButtonText}>เปลี่ยนรหัสผ่าน</Text>
           </TouchableOpacity>
           
@@ -417,11 +458,12 @@ const ProfileScreen = ({ navigation }) => {
             style={[styles.actionButton, styles.logoutActionButton]} 
             onPress={handleLogout}
           >
-            <Text style={styles.actionIcon}>🚪</Text>
+            <Text style={styles.actionIcon}></Text>
             <Text style={[styles.actionButtonText, styles.logoutActionText]}>ออกจากระบบ</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+      ) : null}
 
       {/* Edit Profile Modal */}
       <Modal
@@ -632,6 +674,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  // Animation styles
+  animationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+  },
+  animationTouchable: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileAnimation: {
+    width: 350,
+    height: 350,
+  },
+  skipHintText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  faceIdIcon: {
+    width: 24,
+    height: 24,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -707,7 +775,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
