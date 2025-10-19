@@ -680,7 +680,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'Images',
         allowsEditing: false,
         quality: 0.8,
         allowsMultipleSelection: false,
@@ -818,7 +818,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // Helper functions
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Time';
+    
     return date.toLocaleTimeString('th-TH', {
       hour: '2-digit',
       minute: '2-digit'
@@ -866,7 +869,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -884,6 +890,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const formatDateTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid DateTime';
+    
     return `${formatDate(timestamp)} ${formatTime(timestamp)}`;
   };
 
@@ -923,7 +933,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันสำหรับแสดงวันที่แบบสั้น
   const formatDateShort = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);

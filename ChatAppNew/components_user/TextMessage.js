@@ -156,10 +156,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   selectedMessage: {
-    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+    backgroundColor: '#000000',
     borderWidth: 3,
-    borderColor: '#007AFF',
-    shadowColor: '#007AFF',
+    borderColor: '#ffffff',
+    shadowColor: '#ffffff',
     shadowOffset: {
       width: 0,
       height: 0,

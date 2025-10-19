@@ -65,6 +65,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     refresh, 
     updatedMembers,
     forceRefresh,
+    avatarUpdated,
     showInitialLoading = false,
     fromCreate = false
   } = route.params || {};
@@ -81,11 +82,19 @@ const GroupChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (refresh && updatedMembers !== undefined) {
       console.log('🔄 Refreshing group data from EditGroupScreen with updated members:', updatedMembers);
+      if (avatarUpdated) {
+        console.log('🖼️ Avatar was updated, forcing complete refresh');
+      }
       loadGroupData();
       // Reset navigation params หลังจาก refresh
-      navigation.setParams({ refresh: false, updatedMembers: undefined, forceRefresh: undefined });
+      navigation.setParams({ 
+        refresh: false, 
+        updatedMembers: undefined, 
+        forceRefresh: undefined, 
+        avatarUpdated: undefined 
+      });
     }
-  }, [refresh, updatedMembers, forceRefresh]);
+  }, [refresh, updatedMembers, forceRefresh, avatarUpdated]);
 
   // Debug selection mode
   useEffect(() => {
@@ -238,9 +247,62 @@ const GroupChatScreen = ({ route, navigation }) => {
         console.log('💬 Message sender ID:', data.message?.sender?._id);
         console.log('💬 Current user ID:', authUser._id);
         
-        // ไม่รับข้อความจากตัวเองผ่าน socket
+        // เพิ่มข้อความทุกข้อความที่มาจาก socket
+        setMessages(prevMessages => {
+          // ตรวจสอบว่าข้อความนี้มีอยู่แล้วหรือไม่
+          const messageExists = prevMessages.some(msg => msg._id === data.message._id);
+          console.log('💬 Socket message - exists check:', messageExists, 'Message ID:', data.message._id);
+          
+          if (messageExists) {
+            console.log('💬 Socket message already exists, skipping');
+            return prevMessages;
+          }
+          
+          // ตรวจสอบว่ามี optimistic message ที่ควรแทนที่หรือไม่
+          // (ข้อความที่ส่งจากตัวเองและยังเป็น temporary หรือ sent: true)
+          const optimisticIndex = prevMessages.findIndex(msg => 
+            msg.isTemporary || 
+            (msg.sent && msg.sender?._id === authUser._id && !msg._id.includes('-'))
+          );
+          
+          if (optimisticIndex !== -1 && data.message?.sender?._id === authUser._id) {
+            console.log('💬 Replacing optimistic message with real socket message');
+            const updatedMessages = [...prevMessages];
+            updatedMessages[optimisticIndex] = {
+              ...data.message,
+              isTemporary: false,
+              sent: false
+            };
+            return updatedMessages;
+          }
+          
+          console.log('💬 Adding new socket message to state');
+          const newMessages = [...prevMessages, data.message];
+          
+          // ปรับปรุงการ scroll ให้ใช้ scrollToIndex
+          setTimeout(() => {
+            try {
+              if (newMessages.length > 0) {
+                flatListRef.current?.scrollToIndex({ 
+                  index: newMessages.length - 1, 
+                  animated: true,
+                  viewPosition: 1
+                });
+              }
+            } catch (error) {
+              console.error('Error scrolling to new message:', error);
+              // Fallback to scrollToEnd if scrollToIndex fails
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+            }
+          }, 100);
+          
+          return newMessages;
+        });
+
+        // แสดงการแจ้งเตือนเฉพาะข้อความจากคนอื่น
         if (data.message?.sender?._id !== authUser._id) {
-          // แสดงการแจ้งเตือนสำหรับข้อความจากคนอื่น
           const senderName = data.message?.sender ? 
             `${data.message.sender.firstName} ${data.message.sender.lastName}` : 
             'สมาชิกในกลุ่ม';
@@ -265,31 +327,6 @@ const GroupChatScreen = ({ route, navigation }) => {
           } catch (error) {
             console.error('❌ Error showing notification:', error);
           }
-          
-          setMessages(prevMessages => {
-            const messageExists = prevMessages.some(msg => msg._id === data.message._id);
-            if (messageExists) return prevMessages;
-            
-            const newMessages = [...prevMessages, data.message];
-            
-            // ปรับปรุงการ scroll ให้ใช้ scrollToIndex
-            setTimeout(() => {
-              try {
-                if (newMessages.length > 0) {
-                  flatListRef.current?.scrollToIndex({ 
-                    index: newMessages.length - 1, 
-                    animated: true,
-                    viewPosition: 1
-                  });
-                }
-              } catch (error) {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }
-
-            }, 100);
-            
-            return newMessages;
-          });
         }
       };
 
@@ -857,7 +894,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         }
         
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: 'Images',
           allowsEditing: false,
           aspect: undefined,
           quality: 0.8, // ลดคุณภาพเล็กน้อยเพื่อลดขนาดไฟล์
@@ -997,30 +1034,49 @@ const GroupChatScreen = ({ route, navigation }) => {
 
       // อัปเดตข้อความด้วยข้อมูลจาก server
       setMessages(prev => {
-        const filteredMessages = prev.filter(msg => msg._id !== tempId);
+        console.log('📋 Raw server response:', response.data);
+        console.log('📋 Response type:', typeof response.data);
         
-        // ตรวจสอบว่าข้อความจาก server มีอยู่แล้วหรือไม่ (จาก socket)
-        const messageExists = filteredMessages.some(msg => 
-          msg._id === response.data._id || 
-          (response.data.message && msg._id === response.data.message._id)
-        );
-        
-        if (!messageExists) {
-          // ใช้ข้อมูลจาก response.data หรือ response.data.message
-          const serverMessage = response.data.message || response.data;
-          const updatedMessages = [...filteredMessages, {
-            ...serverMessage,
-            isTemporary: false
-          }];
-          
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-          
-          return updatedMessages;
+        // ตรวจสอบว่า response เป็น object หรือ string
+        if (typeof response.data === 'string') {
+          console.log('⚠️ Server returned string instead of message object, keeping optimistic message');
+          // ถ้า server ส่งแค่ string กลับมา ให้เก็บ optimistic message ไว้ก่อน
+          // และจะถูกแทนที่เมื่อ socket ส่งข้อความจริงมา
+          return prev.map(msg => 
+            msg._id === tempId 
+              ? { ...msg, isTemporary: false, sent: true }
+              : msg
+          );
         }
         
-        return filteredMessages;
+        const filteredMessages = prev.filter(msg => msg._id !== tempId);
+        
+        // ใช้ข้อมูลจาก response.data หรือ response.data.message
+        const serverMessage = response.data.message || response.data;
+        console.log('📋 Server message data:', serverMessage);
+        
+        if (!serverMessage || !serverMessage._id) {
+          console.log('⚠️ Invalid server message data, keeping optimistic message');
+          return prev.map(msg => 
+            msg._id === tempId 
+              ? { ...msg, isTemporary: false, sent: true }
+              : msg
+          );
+        }
+        
+        // เพิ่มข้อความใหม่จาก server
+        const updatedMessages = [...filteredMessages, {
+          ...serverMessage,
+          isTemporary: false
+        }];
+        
+        console.log('📋 Updated messages count:', updatedMessages.length);
+        
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        
+        return updatedMessages;
       });
 
       console.log('✅ Image sent successfully');
@@ -1379,13 +1435,20 @@ const GroupChatScreen = ({ route, navigation }) => {
   }, [groupInfo?.admin, groupInfo?.creator, groupMembers, authUser?._id]);
 
   const formatTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString('th-TH', {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Time';
+    
+    return date.toLocaleTimeString('th-TH', {
       hour: '2-digit', minute: '2-digit'
     });
   };
 
   const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -1403,6 +1466,10 @@ const GroupChatScreen = ({ route, navigation }) => {
   };
 
   const formatDateTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid DateTime';
+    
     return `${formatDate(timestamp)} ${formatTime(timestamp)}`;
   };
 
@@ -1583,7 +1650,8 @@ const GroupChatScreen = ({ route, navigation }) => {
     // แสดงวันที่หากข้อความก่อนหน้าเป็นวันอื่น
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDate = !prevMessage || 
-      new Date(item.timestamp).toDateString() !== new Date(prevMessage.timestamp).toDateString();
+      (item.timestamp && prevMessage.timestamp && 
+       new Date(item.timestamp).toDateString() !== new Date(prevMessage.timestamp).toDateString());
 
     const handleMessagePress = () => {
       console.log('👆 GROUP handleMessagePress called:', { 

@@ -117,11 +117,18 @@ const GroupMessageBubble = ({
         ) && (
           <TouchableOpacity 
             style={styles.imageContainer}
-            onPress={() => onImagePress && onImagePress(
-              item.fileUrl || 
-              item.image || 
-              `${API_URL}${item.file?.url || item.file?.file_path}`
-            )}
+            onPress={() => {
+              if (selectionMode) {
+                onMessagePress();
+              } else if (onImagePress) {
+                onImagePress(
+                  item.fileUrl || 
+                  item.image || 
+                  `${API_URL}${item.file?.url || item.file?.file_path}`
+                );
+              }
+            }}
+            disabled={false}
           >
             <Image
               source={{
@@ -145,7 +152,13 @@ const GroupMessageBubble = ({
               styles.fileMessageBubble,
               isMyMessage ? styles.myFileBubble : styles.otherFileBubble
             ]}
-            onPress={() => onFilePress && onFilePress(item.fileUrl, item.fileName)}
+            onPress={() => {
+              if (selectionMode) {
+                onMessagePress && onMessagePress();
+              } else {
+                onFilePress && onFilePress(item.fileUrl, item.fileName);
+              }
+            }}
           >
             <View style={styles.fileAttachment}>
               <View style={styles.fileIcon}>
@@ -184,9 +197,7 @@ const GroupMessageBubble = ({
             <Text style={[
               styles.messageText,
               isMyMessage ? styles.myMessageText : styles.otherMessageText,
-              item.isTemporary && styles.optimisticMessageText,
-              // Temporary debugging style
-              { backgroundColor: 'rgba(255,0,0,0.1)' }
+              item.isTemporary && styles.optimisticMessageText
             ]}>
               {(item?.content && typeof item.content === 'string' && item.content.trim() !== '') 
                 ? item.content 
@@ -208,7 +219,11 @@ const GroupMessageBubble = ({
         {showTime && (
           <View style={styles.timeContainer}>
             <Text style={styles.timeText}>
-              {item.isTemporary ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}
+              {item.isTemporary ? 'กำลังส่ง...' : 
+               item.sent ? 'ส่งแล้ว' :
+               formatDateTime(item.timestamp) === 'N/A' || formatDateTime(item.timestamp) === 'Invalid DateTime' 
+                 ? new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+                 : formatDateTime(item.timestamp)}
             </Text>
             {isMyMessage && getGroupReadStatus && (() => {
               const readStatus = getGroupReadStatus(item);
@@ -330,7 +345,17 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   selectedMessage: {
-    backgroundColor: COLORS.accentLight,
+    backgroundColor: '#000000',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#ffffff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
   },
   messageText: {
     fontSize: 16,

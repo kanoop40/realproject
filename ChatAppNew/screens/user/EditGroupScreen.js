@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import api, { updateGroup, updateGroupAvatar, addGroupMembers, getGroupDetails, API_URL } from '../../service/api';
 import * as ImagePicker from 'expo-image-picker';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const EditGroupScreen = ({ route, navigation }) => {
   const { groupId } = route.params;
@@ -175,7 +176,7 @@ const EditGroupScreen = ({ route, navigation }) => {
 
       console.log('📸 Launching image picker...');
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'Images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -258,6 +259,8 @@ const EditGroupScreen = ({ route, navigation }) => {
         try {
           const avatarResponse = await updateGroupAvatar(groupId, formData);
           console.log('✅ Group avatar updated successfully:', avatarResponse.data);
+          // รีเซ็ต state หลังอัปเดตสำเร็จ
+          setGroupAvatar(null);
         } catch (avatarError) {
           console.error('❌ Avatar update error:', avatarError);
           console.error('❌ Avatar error response:', avatarError.response?.data);
@@ -299,7 +302,8 @@ const EditGroupScreen = ({ route, navigation }) => {
         }
       }
 
-      // โหลดข้อมูลกลุ่มใหม่หลังจากอัปเดต
+      // โหลดข้อมูลกลุ่มใหม่หลังจากอัปเดต (บังคับ refresh)
+      console.log('🔄 Force refreshing group data...');
       await loadGroupData();
 
       Alert.alert('สำเร็จ', 'อัปเดตข้อมูลกลุ่มเรียบร้อยแล้ว', [
@@ -311,7 +315,8 @@ const EditGroupScreen = ({ route, navigation }) => {
               groupId, 
               refresh: true,
               updatedMembers: selectedUsers.length,
-              forceRefresh: Date.now() // เพิ่ม timestamp เพื่อบังคับ refresh
+              forceRefresh: Date.now(), // เพิ่ม timestamp เพื่อบังคับ refresh
+              avatarUpdated: true // บอกว่ามีการอัปเดตรูปภาพ
             });
           }
         }
@@ -356,17 +361,12 @@ const EditGroupScreen = ({ route, navigation }) => {
     );
   };
 
-  if (isLoadingGroup) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>กำลังโหลดข้อมูลกลุ่ม...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
+      <LoadingOverlay 
+        visible={isLoadingGroup} 
+        message="กำลังโหลดข้อมูลกลุ่ม..." 
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -506,20 +506,18 @@ const EditGroupScreen = ({ route, navigation }) => {
             onChangeText={setSearchQuery}
           />
 
-          {loadingUsers ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text>กำลังโหลดรายชื่อผู้ใช้...</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredUsers}
-              keyExtractor={(item) => item._id?.toString()}
-              renderItem={renderUserItem}
-              style={styles.usersList}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+          <FlatList
+            data={filteredUsers}
+            keyExtractor={(item) => item._id?.toString()}
+            renderItem={renderUserItem}
+            style={styles.usersList}
+            showsVerticalScrollIndicator={false}
+          />
+          
+          <LoadingOverlay 
+            visible={loadingUsers} 
+            message="กำลังโหลดรายชื่อผู้ใช้..." 
+          />
         </View>
       </Modal>
 
@@ -541,32 +539,30 @@ const EditGroupScreen = ({ route, navigation }) => {
             <View style={styles.placeholder} />
           </View>
 
-          {loadingMajors ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text>กำลังโหลดรายชื่อสาขา...</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={majors}
-              keyExtractor={(item, index) => `major-${index}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.majorItem}
-                  onPress={() => loadClassCodesByMajor(item.major)}
-                >
-                  <View style={styles.majorTextContainer}>
-                    <Text style={styles.majorText}>{item.major}</Text>
-                    <Text style={styles.majorSubText}>
-                      {item.userCount} คน • {item.classCodeCount} กลุ่มเรียน
-                    </Text>
-                  </View>
-                  <Text style={styles.arrowText}>→</Text>
-                </TouchableOpacity>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+          <FlatList
+            data={majors}
+            keyExtractor={(item, index) => `major-${index}`}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.majorItem}
+                onPress={() => loadClassCodesByMajor(item.major)}
+              >
+                <View style={styles.majorTextContainer}>
+                  <Text style={styles.majorText}>{item.major}</Text>
+                  <Text style={styles.majorSubText}>
+                    {item.userCount} คน • {item.classCodeCount} กลุ่มเรียน
+                  </Text>
+                </View>
+                <Text style={styles.arrowText}>→</Text>
+              </TouchableOpacity>
+            )}
+            showsVerticalScrollIndicator={false}
+          />
+          
+          <LoadingOverlay 
+            visible={loadingMajors} 
+            message="กำลังโหลดรายชื่อสาขา..." 
+          />
         </View>
       </Modal>
 
@@ -593,34 +589,32 @@ const EditGroupScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {loadingClassCodes ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text>กำลังโหลดกลุ่มเรียน...</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={classCodes}
-              keyExtractor={(item, index) => `class-${index}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.classItem}
-                  onPress={() => addUsersByClassCode(item.classCode)}
-                >
-                  <View style={styles.classTextContainer}>
-                    <Text style={styles.classText}>
-                      {item.classCode || 'ไม่มีรหัสกลุ่มเรียน'}
-                    </Text>
-                    <Text style={styles.classSubText}>
-                      {item.userCount} คน
-                    </Text>
-                  </View>
-                  <Text style={styles.addText}>+ เพิ่ม</Text>
-                </TouchableOpacity>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+          <FlatList
+            data={classCodes}
+            keyExtractor={(item, index) => `class-${index}`}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.classItem}
+                onPress={() => addUsersByClassCode(item.classCode)}
+              >
+                <View style={styles.classTextContainer}>
+                  <Text style={styles.classText}>
+                    {item.classCode || 'ไม่มีรหัสกลุ่มเรียน'}
+                  </Text>
+                  <Text style={styles.classSubText}>
+                    {item.userCount} คน
+                  </Text>
+                </View>
+                <Text style={styles.addText}>+ เพิ่ม</Text>
+              </TouchableOpacity>
+            )}
+            showsVerticalScrollIndicator={false}
+          />
+          
+          <LoadingOverlay 
+            visible={loadingClassCodes} 
+            message="กำลังโหลดกลุ่มเรียน..." 
+          />
         </View>
       </Modal>
     </View>
@@ -631,17 +625,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
   },
   header: {
     flexDirection: 'row',
@@ -778,13 +761,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   addMemberButton: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#000000ff',
     flex: 1,
   },
   addMemberButtonText: {
@@ -794,7 +777,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   updateButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#000000ff',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -823,7 +806,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#000000ff',
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
   },
   modalHeader: {
@@ -832,12 +815,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 16,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#000000ff',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffffff',
   },
   closeButton: {
     width: 40,
@@ -847,7 +830,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 16,
-    color: '#333',
+    color: '#ffffffff',
     fontWeight: '600',
   },
   searchInput: {
@@ -857,7 +840,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     margin: 16,
     fontSize: 16,
-    color: '#333',
+    color: '#0e0d0dff',
     borderWidth: 1,
     borderColor: '#D4A500',
   },
@@ -871,7 +854,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 8,
   },
   selectedUserItem: {
@@ -907,7 +890,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 8,
     marginBottom: 8,
     marginHorizontal: 16,
@@ -936,7 +919,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#fffffeff',
     borderRadius: 8,
     marginBottom: 8,
     marginHorizontal: 16,

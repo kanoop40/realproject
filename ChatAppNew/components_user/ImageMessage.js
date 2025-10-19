@@ -164,10 +164,10 @@ const styles = StyleSheet.create({
     opacity: 0.7
   },
   selectedMessage: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: '#000000',
     borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
+    borderColor: '#ffffff',
+    shadowColor: '#ffffff',
     shadowOffset: {
       width: 0,
       height: 0,
