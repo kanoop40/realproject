@@ -207,18 +207,17 @@ const CreateGroupScreen = ({ navigation }) => {
       const createdGroupName = response.data.groupName || response.data.group?.groupName;
       
       if (groupId) {
-        console.log('Navigating to created group:', groupId, createdGroupName);
+        console.log('Navigating to chat list with new group:', groupId, createdGroupName);
         
         // หยุด loading ก่อน navigate เพื่อป้องกัน iOS freeze
         setIsLoading(false);
         
-        // Navigate ทันทีโดยไม่แสดง Alert สำหรับ iOS
+        // Navigate กลับไปหน้า Chat พร้อมรีเฟรช
         if (Platform.OS === 'ios') {
-          navigation.replace('GroupChat', {
-            groupId: groupId,
-            groupName: createdGroupName,
-            groupImage: response.data.groupAvatar || response.data.group?.groupAvatar,
-            fromCreate: true
+          navigation.navigate('Chat', {
+            newGroupId: groupId,
+            refresh: true,
+            showGroup: true
           });
         } else {
           // สำหรับ Android ยังคงแสดง Alert
@@ -229,11 +228,10 @@ const CreateGroupScreen = ({ navigation }) => {
               {
                 text: 'ตกลง',
                 onPress: () => {
-                  navigation.replace('GroupChat', {
-                    groupId: groupId,
-                    groupName: createdGroupName,
-                    groupImage: response.data.groupAvatar || response.data.group?.groupAvatar,
-                    fromCreate: true
+                  navigation.navigate('Chat', {
+                    newGroupId: groupId,
+                    refresh: true,
+                    showGroup: true
                   });
                 }
               }
@@ -602,7 +600,7 @@ const CreateGroupScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000ff',
+    backgroundColor: '#ffffffff',
   },
   header: {
     flexDirection: 'row',
@@ -611,20 +609,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#ffffffff',
+    backgroundColor: '#000000ff',
   },
   backButton: {
     padding: 8,
   },
   backButtonText: {
     fontSize: 24,
-    color: '#333',
+    color: '#ffffffff',
     fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffffff',
     flex: 1,
     textAlign: 'center',
   },
@@ -693,7 +691,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#000000ff',
   },
   membersSection: {
     marginBottom: 24,
@@ -716,7 +714,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#000000ff',
     flex: 1,
   },
   addClassButton: {
@@ -736,7 +734,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   addMemberIconText: {
-    color: '#fff',
+    color: '#ffffffff',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -816,13 +814,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#000000ff',
     height: 80,
     textAlignVertical: 'top',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#000000ff',
+    backgroundColor: '#ffffffff',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -869,12 +867,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#d6d5d5ff',
     borderRadius: 8,
     marginBottom: 8,
   },
   userItemSelected: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#ffffffff',
   },
   userAvatar: {
     width: 40,
@@ -928,7 +926,7 @@ const styles = StyleSheet.create({
   classCodeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#ffffffff',
     marginBottom: 2,
   },
   classCodeCount: {

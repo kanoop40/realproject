@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#000000ff',
+    backgroundColor: '#ffffffff',
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
   },
   modalHeader: {
@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 16,
-    backgroundColor: '#000000ff',
+    backgroundColor: '#2e2c2cff',
   },
   modalTitle: {
     fontSize: 18,
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#0e0d0dff',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#000000ff',
   },
   usersList: {
     flex: 1,
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#ffffffff',
+    backgroundColor: '#cacacaff',
     borderRadius: 8,
   },
   selectedUserItem: {

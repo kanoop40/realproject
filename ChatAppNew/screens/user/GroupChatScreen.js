@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
   Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated
 } from 'react-native';
-import Lottie from 'lottie-react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -43,8 +42,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [groupInfo, setGroupInfo] = useState(null);
-  const [showChatAnimation, setShowChatAnimation] = useState(false); // สำหรับ chat animation
-  const [showChatContent, setShowChatContent] = useState(false); // สำหรับแสดงเนื้อหาแชท
+  const [showChatContent, setShowChatContent] = useState(true); // แสดงเนื้อหาแชททันที
   const [editingMessage, setEditingMessage] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
@@ -546,9 +544,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   console.error('Error loading group data:', error);
     } finally {
       if (page === 1) {
-        // เริ่มเล่น animation หลังจากโหลดข้อมูลเสร็จแล้ว
         setIsLoading(false);
-        setShowChatAnimation(true);
         // setIsScrollingToEnd(false);
       } else {
         setIsLoadingMore(false);
@@ -1113,12 +1109,6 @@ const GroupChatScreen = ({ route, navigation }) => {
   const openImageModal = (imageUri) => {
     setSelectedModalImage(imageUri);
     setImageModalVisible(true);
-  };
-
-  // จัดการเมื่อ chat animation เสร็จ
-  const handleChatAnimationFinish = () => {
-    setShowChatAnimation(false);
-    setShowChatContent(true);
   };
 
   // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จที่หายไปเอง

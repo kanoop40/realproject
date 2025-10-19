@@ -48,6 +48,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [showDropdown, setShowDropdown] = useState(false); // สำหรับ dropdown menu
   const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
   const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
+  const [skipAnimation, setSkipAnimation] = useState(false); // สำหรับข้าม animation เมื่อมาจากการสร้างกลุ่ม
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
   const { 
@@ -55,9 +56,11 @@ const ChatScreen = ({ route, navigation }) => {
     recipientName, 
     recipientAvatar, 
     newChatId, 
+    newGroupId,
     refresh, 
     openChatId, 
-    openChatParams 
+    openChatParams,
+    showGroup
   } = route.params || {};
 
   // Effect สำหรับเปิดแชทอัตโนมัติ
@@ -92,10 +95,18 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [openChatId, openChatParams, currentUser, navigation]);
 
-  // Effect สำหรับรีเฟรชเมื่อมี newChatId
+  // Effect สำหรับรีเฟรชเมื่อมี newChatId หรือ newGroupId
   useEffect(() => {
-    if (newChatId && refresh && currentUser) {
-      console.log('🔄 New chat detected, refreshing chat list:', newChatId);
+    if ((newChatId || newGroupId) && refresh && currentUser) {
+      console.log('🔄 New chat/group detected, refreshing chat list:', newChatId || newGroupId);
+      
+      // ถ้ามาจากการสร้างกลุ่ม ให้ข้าม animation
+      if (newGroupId || showGroup) {
+        setSkipAnimation(true);
+        setShowChatListAnimation(false);
+        setShowChatListContent(true);
+      }
+      
       // รีเฟรชรายการแชท
       const refreshChats = async () => {
         try {
@@ -108,11 +119,13 @@ const ChatScreen = ({ route, navigation }) => {
       
       // เคลียร์ params หลังจากใช้แล้ว
       navigation.setParams({ 
-        newChatId: undefined, 
-        refresh: undefined 
+        newChatId: undefined,
+        newGroupId: undefined,
+        refresh: undefined,
+        showGroup: undefined
       });
     }
-  }, [newChatId, refresh, currentUser, navigation]);
+  }, [newChatId, newGroupId, refresh, currentUser, navigation, showGroup]);
 
   // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount
   useEffect(() => {
@@ -585,7 +598,7 @@ const ChatScreen = ({ route, navigation }) => {
           visible={true} 
           message={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดแชท..."} 
         />
-      ) : showChatListAnimation && !showChatListContent ? (
+      ) : (!skipAnimation && showChatListAnimation && !showChatListContent) ? (
         <View style={styles.animationContainer}>
           {console.log('🎭 Rendering animation component', { showChatListAnimation, showChatListContent })}
           <TouchableOpacity 

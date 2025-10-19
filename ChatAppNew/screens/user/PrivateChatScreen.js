@@ -18,7 +18,6 @@ import {
   Dimensions,
   RefreshControl
 } from 'react-native';
-import Lottie from 'lottie-react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -53,8 +52,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [canLoadMore, setCanLoadMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showChatAnimation, setShowChatAnimation] = useState(false); // สำหรับ chat animation
-  const [showChatContent, setShowChatContent] = useState(false); // สำหรับแสดงเนื้อหาแชท
+  const [showChatContent, setShowChatContent] = useState(true); // แสดงเนื้อหาแชททันที
   const [currentPage, setCurrentPage] = useState(1);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
@@ -433,9 +431,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     } finally {
       console.log('✅ Messages loading completed');
       if (page === 1) {
-        // เริ่มเล่น animation หลังจากโหลดข้อมูลเสร็จแล้ว
         setIsLoading(false);
-        setShowChatAnimation(true);
       }
     }
   }, [chatroomId, currentUser, socket]);
@@ -1134,12 +1130,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
     // Implementation will be added
   };
 
-  // จัดการเมื่อ chat animation เสร็จ
-  const handleChatAnimationFinish = () => {
-    setShowChatAnimation(false);
-    setShowChatContent(true);
-  };
-
   // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จที่หายไปเอง
   const showSuccessNotification = (message) => {
     setSuccessNotification({ visible: true, message });
@@ -1564,30 +1554,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* แสดง Loading หรือ Chat Animation หรือเนื้อหา */}
+      {/* แสดง Loading หรือเนื้อหา */}
       {isLoading ? (
         <LoadingOverlay 
           visible={true} 
           message="กำลังโหลดแชทส่วนตัว..." 
         />
-      ) : showChatAnimation ? (
-        <View style={styles.animationContainer}>
-          <TouchableOpacity 
-            onPress={handleChatAnimationFinish}
-            style={styles.animationTouchable}
-            activeOpacity={0.8}
-          >
-            <Lottie
-              source={require('../../assets/Texting.json')}
-              autoPlay={true}
-              loop={false}
-              speed={2.0}
-              style={styles.chatAnimation}
-              onAnimationFinish={handleChatAnimationFinish}
-            />
-          </TouchableOpacity>
-          <Text style={styles.skipHintText}>แตะเพื่อข้าม</Text>
-        </View>
       ) : (
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}

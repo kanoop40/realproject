@@ -59,9 +59,18 @@ const GroupChatItem = ({
         ]}>
           {item.roomName} ({item.participants?.length || 0})
         </Text>
-        <Text style={styles.groupSubtitle}>
-          {item.participants?.length || 0} สมาชิก
+        
+        {/* แสดงรายชื่อสมาชิก */}
+        <Text style={styles.membersList} numberOfLines={1}>
+          {item.participants?.slice(0, 3).map((member, index) => {
+            const name = member.user ? 
+              `${member.user.firstName} ${member.user.lastName}` : 
+              `${member.firstName} ${member.lastName}`;
+            return index === 0 ? name : `, ${name}`;
+          }).join('') || 'ไม่มีสมาชิก'}
+          {item.participants?.length > 3 && ` และอีก ${item.participants.length - 3} คน`}
         </Text>
+        
         {item.lastMessage && (
           <Text style={[
             styles.lastMessage,
@@ -156,6 +165,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginBottom: 4,
+  },
+  membersList: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+    fontStyle: 'italic',
   },
   lastMessage: {
     fontSize: 14,
