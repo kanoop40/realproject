@@ -149,6 +149,54 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading, currentUser]);
 
+  // Real-time socket listeners
+  useEffect(() => {
+    if (!socket || !currentUser) return;
+
+    console.log('🔌 Setting up real-time listeners for ChatScreen');
+
+    // Listen for new messages
+    const handleNewMessage = (data) => {
+      console.log('📨 New message received in ChatScreen:', data);
+      // รีเฟรชรายการแชทเมื่อมีข้อความใหม่
+      loadChats();
+    };
+
+    // Listen for new groups
+    const handleNewGroup = (data) => {
+      console.log('👥 New group notification received:', data);
+      // รีเฟรชรายการแชทเมื่อมีกลุ่มใหม่
+      loadChats();
+    };
+
+    // Listen for group updates
+    const handleGroupUpdate = (data) => {
+      console.log('📝 Group update received:', data);
+      loadChats();
+    };
+
+    // Listen for chat list updates
+    const handleChatListUpdate = (data) => {
+      console.log('📋 Chat list update received:', data);
+      loadChats();
+    };
+
+    // Set up listeners
+    socket.on('newMessage', handleNewMessage);
+    socket.on('newGroup', handleNewGroup);
+    socket.on('groupUpdated', handleGroupUpdate);
+    socket.on('chatListUpdate', handleChatListUpdate);
+
+    // Cleanup listeners
+    return () => {
+      console.log('🧹 Cleaning up real-time listeners');
+      socket.off('newMessage', handleNewMessage);
+      socket.off('newGroup', handleNewGroup);
+      socket.off('groupUpdated', handleGroupUpdate);
+      socket.off('chatListUpdate', handleChatListUpdate);
+    };
+  }, [socket, currentUser]);
+
   const handleDirectChat = async () => {
     try {
       console.log('🔄 Handling direct chat with recipientId:', recipientId);

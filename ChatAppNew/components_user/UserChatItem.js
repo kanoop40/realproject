@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/theme';
 
@@ -10,18 +10,24 @@ const UserChatItem = ({
   API_URL,
   onPressWithAnimation 
 }) => {
-  const otherParticipant = item.participants?.find(p => p._id !== currentUser._id);
+  const [chatData, setChatData] = useState(item);
+  const otherParticipant = chatData.participants?.find(p => p._id !== currentUser._id);
   const itemRef = useRef(null);
+
+  // Update local state เมื่อ props เปลี่ยน
+  useEffect(() => {
+    setChatData(item);
+  }, [item]);
 
   const handlePress = () => {
     if (onPressWithAnimation && itemRef.current) {
       // Measure layout และเรียก animation
       itemRef.current.measure((x, y, width, height, pageX, pageY) => {
         const layout = { x: pageX, y: pageY, width, height };
-        onPressWithAnimation(item, layout);
+        onPressWithAnimation(chatData, layout);
       });
     } else {
-      onPress(item);
+      onPress(chatData);
     }
   };
 
@@ -30,7 +36,7 @@ const UserChatItem = ({
       ref={itemRef}
       style={[
         styles.chatItem,
-        item.unreadCount > 0 && styles.chatItemUnread
+        chatData.unreadCount > 0 && styles.chatItemUnread
       ]}
       onPress={handlePress}
     >
@@ -62,10 +68,10 @@ const UserChatItem = ({
           </View>
         )}
         {/* แสดงจำนวนข้อความที่ยังไม่อ่าน */}
-        {item.unreadCount > 0 && (
+        {chatData.unreadCount > 0 && (
           <View style={styles.unreadBadge}>
             <Text style={styles.unreadText}>
-              {item.unreadCount > 99 ? '99+' : item.unreadCount.toString()}
+              {chatData.unreadCount > 99 ? '99+' : chatData.unreadCount.toString()}
             </Text>
           </View>
         )}
@@ -74,30 +80,30 @@ const UserChatItem = ({
       <View style={styles.chatInfo}>
         <Text style={[
           styles.chatName,
-          item.unreadCount > 0 && styles.chatNameUnread
+          chatData.unreadCount > 0 && styles.chatNameUnread
         ]}>
           {otherParticipant ? 
             `${otherParticipant.firstName} ${otherParticipant.lastName}` :
             'แชทส่วนตัว'
           }
         </Text>
-        {item.lastMessage && (
+        {chatData.lastMessage && (
           <Text style={[
             styles.lastMessage,
-            item.unreadCount > 0 && styles.lastMessageUnread
+            chatData.unreadCount > 0 && styles.lastMessageUnread
           ]} numberOfLines={1}>
-            {item.lastMessage.content}
+            {chatData.lastMessage.content}
           </Text>
         )}
       </View>
       
       <View style={styles.chatMeta}>
-        {item.lastMessage && (
+        {chatData.lastMessage && (
           <Text style={[
             styles.timestamp,
-            item.unreadCount > 0 && styles.timestampUnread
+            chatData.unreadCount > 0 && styles.timestampUnread
           ]}>
-            {formatTime(item.lastMessage.timestamp)}
+            {formatTime(chatData.lastMessage.timestamp)}
           </Text>
         )}
       </View>

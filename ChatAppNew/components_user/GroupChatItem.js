@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/theme';
 
@@ -8,32 +8,39 @@ const GroupChatItem = ({
   formatTime, 
   API_URL 
 }) => {
+  const [groupData, setGroupData] = useState(item);
+
+  // Update local state เมื่อ props เปลี่ยน
+  useEffect(() => {
+    setGroupData(item);
+  }, [item]);
+
   return (
     <TouchableOpacity 
       style={[
         styles.chatItem,
-        item.unreadCount > 0 && styles.chatItemUnread
+        groupData.unreadCount > 0 && styles.chatItemUnread
       ]}
-      onPress={() => onPress(item)}
+      onPress={() => onPress(groupData)}
     >
       <View style={styles.avatarContainer}>
-        {item.groupAvatar ? (
+        {groupData.groupAvatar ? (
           <Image
             source={{ 
-              uri: item.groupAvatar.startsWith('http') 
-                ? item.groupAvatar 
-                : `${API_URL}/${item.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
+              uri: groupData.groupAvatar.startsWith('http') 
+                ? groupData.groupAvatar 
+                : `${API_URL}/${groupData.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
             }}
             style={styles.avatar}
             defaultSource={require('../assets/default-avatar.jpg')}
             onError={(error) => {
               console.log('❌ Group avatar load error:', error.nativeEvent);
-              console.log('❌ Group avatar URL:', item.groupAvatar.startsWith('http') 
-                ? item.groupAvatar 
-                : `${API_URL}/${item.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
+              console.log('❌ Group avatar URL:', groupData.groupAvatar.startsWith('http') 
+                ? groupData.groupAvatar 
+                : `${API_URL}/${groupData.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
             }}
             onLoad={() => {
-              console.log('✅ Group avatar loaded successfully:', item.groupAvatar);
+              console.log('✅ Group avatar loaded successfully:', groupData.groupAvatar);
             }}
           />
         ) : (
@@ -43,10 +50,10 @@ const GroupChatItem = ({
             </Text>
           </View>
         )}
-        {item.unreadCount > 0 && (
+        {groupData.unreadCount > 0 && (
           <View style={styles.unreadBadge}>
             <Text style={styles.unreadText}>
-              {item.unreadCount > 99 ? '99+' : item.unreadCount.toString()}
+              {groupData.unreadCount > 99 ? '99+' : groupData.unreadCount.toString()}
             </Text>
           </View>
         )}
@@ -55,42 +62,42 @@ const GroupChatItem = ({
       <View style={styles.chatInfo}>
         <Text style={[
           styles.chatName,
-          item.unreadCount > 0 && styles.chatNameUnread
+          groupData.unreadCount > 0 && styles.chatNameUnread
         ]}>
-          {item.roomName} ({item.participants?.length || 0})
+          {groupData.roomName} ({groupData.participants?.length || 0})
         </Text>
         
         {/* แสดงรายชื่อสมาชิก */}
         <Text style={styles.membersList} numberOfLines={1}>
-          {item.participants?.slice(0, 3).map((member, index) => {
+          {groupData.participants?.slice(0, 3).map((member, index) => {
             const name = member.user ? 
               `${member.user.firstName} ${member.user.lastName}` : 
               `${member.firstName} ${member.lastName}`;
             return index === 0 ? name : `, ${name}`;
           }).join('') || 'ไม่มีสมาชิก'}
-          {item.participants?.length > 3 && ` และอีก ${item.participants.length - 3} คน`}
+          {groupData.participants?.length > 3 && ` และอีก ${groupData.participants.length - 3} คน`}
         </Text>
         
-        {item.lastMessage && (
+        {groupData.lastMessage && (
           <Text style={[
             styles.lastMessage,
-            item.unreadCount > 0 && styles.lastMessageUnread
+            groupData.unreadCount > 0 && styles.lastMessageUnread
           ]} numberOfLines={1}>
-            {item.lastMessage.sender?.firstName ? 
-              `${item.lastMessage.sender.firstName}: ${item.lastMessage.content}` : 
-              item.lastMessage.content
+            {groupData.lastMessage.sender?.firstName ? 
+              `${groupData.lastMessage.sender.firstName}: ${groupData.lastMessage.content}` : 
+              groupData.lastMessage.content
             }
           </Text>
         )}
       </View>
       
       <View style={styles.chatMeta}>
-        {item.lastMessage && (
+        {groupData.lastMessage && (
           <Text style={[
             styles.timestamp,
-            item.unreadCount > 0 && styles.timestampUnread
+            groupData.unreadCount > 0 && styles.timestampUnread
           ]}>
-            {formatTime(item.lastMessage.timestamp)}
+            {formatTime(groupData.lastMessage.timestamp)}
           </Text>
         )}
       </View>

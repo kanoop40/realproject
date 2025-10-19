@@ -78,6 +78,27 @@ const createGroup = asyncHandler(async (req, res) => {
         await processAutoInvite(group);
     }
 
+    // ส่ง socket event ไปยังสมาชิกทั้งหมดในกลุ่ม
+    const io = req.app.get('io');
+    if (io) {
+        console.log('📢 Emitting newGroup event for group:', group._id);
+        
+        // ส่งไปยังสมาชิกทั้งหมดในกลุ่ม
+        group.members.forEach(member => {
+            io.to(member.user._id.toString()).emit('newGroup', {
+                group: group
+            });
+        });
+        
+        // ส่งไปยัง general chatListUpdate event สำหรับการอัปเดตรายการแชท
+        group.members.forEach(member => {
+            io.to(member.user._id.toString()).emit('chatListUpdate', {
+                type: 'newGroup',
+                group: group
+            });
+        });
+    }
+
     res.status(201).json({
         success: true,
         data: group,

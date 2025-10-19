@@ -622,6 +622,16 @@ const sendMessage = asyncHandler(async (req, res) => {
                 console.log('📡 Message broadcasted via SSE to room:', id);
                 console.log('📡 Sent to', sentCount, 'users in room');
                 console.log('📡 Broadcasted message sender:', populatedMessage.user_id.firstName, populatedMessage.user_id.lastName);
+                
+                // ส่งผ่าน Socket.io ด้วย
+                const io = req.app.get('io');
+                if (io) {
+                    io.to(id).emit('newMessage', {
+                        chatroomId: id,
+                        message: messageData
+                    });
+                    console.log('📤 Private message emitted via Socket.io to room:', id);
+                }
             } else {
                 console.warn('⚠️ SSE Manager instance not found');
             }

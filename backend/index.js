@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const http = require('http');
-// const socketIo = require('socket.io'); // ลบ Socket.io
+const socketIo = require('socket.io'); // คืน Socket.io
 const { sseManager, setupSSERoutes } = require('./sse'); // เพิ่ม SSE
 
 // Load environment variables
@@ -24,6 +24,86 @@ const { errorHandler } = require('./Middleware/errorMiddleware');
 
 const app = express();
 const server = http.createServer(app);
+
+// Socket.IO setup
+const io = socketIo(server, {
+    cors: {
+        origin: function (origin, callback) {
+            console.log('🌐 Socket.IO CORS request from origin:', origin);
+            
+            // อนุญาตทุกคำขอใน development
+            if (NODE_ENV === 'development') {
+                console.log('✅ Development mode - allowing all origins');
+                return callback(null, true);
+            }
+            
+            // ใน production ตรวจสอบ origin
+            if (!origin) {
+                console.log('✅ No origin (same-origin) - allowing');
+                return callback(null, true);
+            }
+            
+            // ตรวจสอบ allowed origins (ใช้ตัวแปรที่จะประกาศภายหลัง)
+            const allowedOrigins = [
+                'http://localhost:19006', 
+                'http://localhost:8081', 
+                'http://localhost:8082',
+                'https://localhost:19006',
+                'https://localhost:8081',
+                'https://localhost:8082',
+                'exp://192.168.1.34:8081',
+                'exp://192.168.1.34:8082',
+                'http://192.168.1.34:8081',
+                'http://192.168.1.34:8082',
+                'https://realproject-mg25.onrender.com'
+            ];
+            
+            const isAllowed = allowedOrigins.some(allowedOrigin => {
+                return origin === allowedOrigin || 
+                       origin.includes('exp://') || 
+                       origin.includes('.exp.direct') || 
+                       /^https?:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin) || 
+                       /^https?:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) || 
+                       /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/.test(origin);
+            });
+            
+            if (isAllowed) {
+                console.log('✅ Socket.IO Origin allowed:', origin);
+                return callback(null, true);
+            } else {
+                console.log('❌ Socket.IO Origin not allowed:', origin);
+                return callback(new Error('Not allowed by CORS'), false);
+            }
+        },
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log('🔌 New socket connection:', socket.id);
+    
+    // Join chatroom event
+    socket.on('join_chatroom', (chatroomId) => {
+        console.log('🏠 Socket joining chatroom:', chatroomId);
+        socket.join(chatroomId);
+    });
+    
+    // Leave chatroom event
+    socket.on('leave_chatroom', (chatroomId) => {
+        console.log('🚪 Socket leaving chatroom:', chatroomId);
+        socket.leave(chatroomId);
+    });
+    
+    // Disconnect event
+    socket.on('disconnect', () => {
+        console.log('❌ Socket disconnected:', socket.id);
+    });
+});
+
+// ทำให้ io สามารถเข้าถึงได้จาก routes
+app.set('io', io);
 
 // Environment variables with defaults
 const NODE_ENV = process.env.NODE_ENV || 'development';
