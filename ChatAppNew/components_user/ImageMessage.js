@@ -54,11 +54,10 @@ const ImageMessage = ({
           } else {
             // โหมดปกติ แสดงเวลา และเปิดรูป
             onMessagePress && onMessagePress(item._id);
-            const imageUri = item.image?.file_path || 
-                            item.image?.uri ||
-                            (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                              item.file.url : 
-                              (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''));
+            const imageUri = item.fileUrl ||
+                           (item.image && item.image.startsWith && item.image.startsWith('http') 
+                             ? item.image 
+                             : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`);
             setTimeout(() => onImagePress && onImagePress(imageUri), 200);
           }
         }}
@@ -68,22 +67,29 @@ const ImageMessage = ({
       >
         <View style={styles.imageContainer}>
           {/* Check if we have actual image data */}
-          {(item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path) ? (
+          {(item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path || item.fileUrl || item.image) ? (
             <Image
               source={{ 
-                uri: item.image?.file_path || 
-                     item.image?.uri ||
-                     (item.file && item.file.url && item.file.url.startsWith('http') ? 
-                       item.file.url : 
-                       (item.file ? `${API_URL}${item.file.url || item.file.file_path}` : ''))
+                uri: item.fileUrl ||
+                     (item.image && item.image.startsWith && item.image.startsWith('http') 
+                       ? item.image 
+                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`)
               }}
               style={styles.messageImage}
               resizeMode="cover"
               onError={(error) => {
                 console.log('Image load error:', error.nativeEvent?.error || error);
+                console.log('Failed URI:', item.fileUrl ||
+                     (item.image && item.image.startsWith && item.image.startsWith('http') 
+                       ? item.image 
+                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`));
               }}
               onLoad={() => {
                 console.log('Image loaded successfully');
+                console.log('Loaded URI:', item.fileUrl ||
+                     (item.image && item.image.startsWith && item.image.startsWith('http') 
+                       ? item.image 
+                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`));
               }}
             />
           ) : (

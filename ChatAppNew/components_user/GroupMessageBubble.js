@@ -139,6 +139,16 @@ const GroupMessageBubble = ({
               }}
               style={styles.messageImage}
               resizeMode="cover"
+              onError={(error) => {
+                console.log('GroupMessageBubble Image load error:', error.nativeEvent?.error || error);
+                console.log('Failed URI:', item.fileUrl ||
+                     (item.image && item.image.startsWith && item.image.startsWith('http') 
+                       ? item.image 
+                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`));
+              }}
+              onLoad={() => {
+                console.log('GroupMessageBubble Image loaded successfully');
+              }}
             />
           </TouchableOpacity>
         )}

@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
   Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated
 } from 'react-native';
+import Lottie from 'lottie-react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -42,6 +43,8 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [groupInfo, setGroupInfo] = useState(null);
+  const [showChatAnimation, setShowChatAnimation] = useState(false); // สำหรับ chat animation
+  const [showChatContent, setShowChatContent] = useState(false); // สำหรับแสดงเนื้อหาแชท
   const [editingMessage, setEditingMessage] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
@@ -50,6 +53,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [messageReadCount, setMessageReadCount] = useState({}); // เก็บจำนวนคนที่อ่านข้อความแต่ละข้อความ
   const [selectionMode, setSelectionMode] = useState(false); // โหมดเลือกข้อความ
   const [selectedMessages, setSelectedMessages] = useState([]); // ข้อความที่เลือก
+  const [successNotification, setSuccessNotification] = useState({ visible: false, message: '' }); // แจ้งเตือนสำเร็จ
   
   // States สำหรับโหลดข้อความเก่า
   const [showLoadOlderButton, setShowLoadOlderButton] = useState(false);
@@ -542,7 +546,9 @@ const GroupChatScreen = ({ route, navigation }) => {
   console.error('Error loading group data:', error);
     } finally {
       if (page === 1) {
-        setIsLoading(false); // สิ้นสุด loading เมื่อโหลดเสร็จ
+        // เริ่มเล่น animation หลังจากโหลดข้อมูลเสร็จแล้ว
+        setIsLoading(false);
+        setShowChatAnimation(true);
         // setIsScrollingToEnd(false);
       } else {
         setIsLoadingMore(false);
@@ -1109,22 +1115,44 @@ const GroupChatScreen = ({ route, navigation }) => {
     setImageModalVisible(true);
   };
 
+  // จัดการเมื่อ chat animation เสร็จ
+  const handleChatAnimationFinish = () => {
+    setShowChatAnimation(false);
+    setShowChatContent(true);
+  };
+
+  // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จที่หายไปเอง
+  const showSuccessNotification = (message) => {
+    setSuccessNotification({ visible: true, message });
+    setTimeout(() => {
+      setSuccessNotification({ visible: false, message: '' });
+    }, 3000); // หายไปใน 3 วินาที
+  };
+
   const downloadFile = async (fileUrl, fileName) => {
     try {
-      console.log('📥 Downloading file:', fileUrl);
+      console.log('📥 Starting download process...');
+      console.log('📥 File URL:', fileUrl);
       console.log('📁 File name:', fileName);
       
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('ข้อผิดพลาด', 'กรุณาเข้าสู่ระบบใหม่');
+      // ตรวจสอบว่า FileSystem work หรือไม่
+      console.log('📂 Document directory:', FileSystem.documentDirectory);
+      
+      // ตรวจสอบว่า FileSystem.documentDirectory มีค่าหรือไม่
+      if (!FileSystem.documentDirectory) {
+        console.error('❌ FileSystem.documentDirectory is not available');
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเข้าถึงระบบไฟล์ได้');
         return;
       }
+      
+      // ไม่ต้องใช้ token สำหรับ Cloudinary files
+      const token = await AsyncStorage.getItem('token');
 
       let fullUrl = fileUrl;
       
       // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
       if (fileUrl.includes('cloudinary.com')) {
-        // ใช้ URL โดยตรงสำหรับ Cloudinary
+        // ใช้ URL โดยตรงสำหรับ Cloudinary (ไม่ต้องใช้ token)
         fullUrl = fileUrl;
         console.log('🌤️ Using Cloudinary URL directly:', fullUrl);
       } else if (!fileUrl.startsWith('http')) {
@@ -1136,13 +1164,18 @@ const GroupChatScreen = ({ route, navigation }) => {
       const finalFileName = fileName || `file_${new Date().getTime()}`;
       const fileExtension = finalFileName.split('.').pop()?.toLowerCase() || '';
       
+      console.log('🔍 File extension detected:', fileExtension);
+      
       // ตรวจสอบประเภทไฟล์
       const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
       const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', '3gp'].includes(fileExtension);
       const isMedia = isImage || isVideo;
 
+      console.log('📷 Is media file:', isMedia, '(Image:', isImage, ', Video:', isVideo, ')');
+
       // สำหรับ Cloudinary ไม่ต้องใช้ Authorization header
       const headers = fileUrl.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
+      console.log('📋 Headers:', headers);
       
       if (isMedia) {
         // สำหรับรูปภาพและวิดีโอ - บันทึกไปที่ Gallery/Photos
@@ -1154,25 +1187,53 @@ const GroupChatScreen = ({ route, navigation }) => {
             return;
           }
           
-          Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
+          // สำหรับ Cloudinary URL ลองใช้วิธีอื่น
+          if (fileUrl.includes('cloudinary.com')) {
+            console.log('🌤️ Attempting direct Cloudinary download...');
+            
+            // ลองใช้ MediaLibrary.createAssetAsync โดยตรงจาก URL
+            try {
+              const asset = await MediaLibrary.createAssetAsync(fullUrl);
+              
+              // แสดงการแจ้งเตือนที่หายไปเอง
+              showSuccessNotification(
+                isImage ? 
+                  `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
+                  `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
+              );
+              
+              console.log('✅ Media saved to gallery directly:', asset);
+              return; // สำเร็จแล้ว ออกจาก function
+              
+            } catch (directError) {
+              console.log('⚠️ Direct download failed, trying temp file method:', directError.message);
+              // ถ้าไม่ได้ ให้ fallback ไปใช้วิธี temp file
+            }
+          }
           
-          // ดาวน์โหลดไฟล์ชั่วคราว
+          // ดาวน์โหลดไฟล์ชั่วคราว (fallback method)
           const timestamp = new Date().getTime();
           const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
+          
+          console.log('📍 Temp file path:', tempUri);
+          console.log('🔄 Starting download with headers:', headers);
           
           const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {
             headers: headers
           });
 
+          console.log('📊 Download result:', downloadResult);
+
           if (downloadResult.status === 200) {
+            console.log('✅ Download successful, saving to gallery...');
             // บันทึกไปที่ MediaLibrary (Gallery/Photos)
             const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
             
             // ลบไฟล์ชั่วคราว
             await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
             
-            Alert.alert(
-              'บันทึกสำเร็จ!',
+            // แสดงการแจ้งเตือนที่หายไปเอง
+            showSuccessNotification(
               isImage ? 
                 `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
                 `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
@@ -1180,18 +1241,23 @@ const GroupChatScreen = ({ route, navigation }) => {
             
             console.log('✅ Media saved to gallery:', asset);
           } else {
+            console.error('❌ Download failed with status:', downloadResult.status);
             throw new Error(`HTTP ${downloadResult.status}`);
           }
           
         } catch (mediaError) {
           console.error('❌ Error saving to gallery:', mediaError);
-          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกไฟล์ไปที่แกลเลอรี่ได้');
+          console.error('Error details:', {
+            url: fullUrl,
+            fileName: finalFileName,
+            headers: headers,
+            error: mediaError.message
+          });
+          Alert.alert('ข้อผิดพลาด', `ไม่สามารถบันทึกไฟล์ไปที่แกลเลอรี่ได้: ${mediaError.message}`);
         }
       } else {
         // สำหรับไฟล์อื่นๆ - บันทึกไปที่ Downloads folder
         try {
-          Alert.alert('กำลังดาวน์โหลด', 'กรุณารอสักครู่...');
-          
           if (Platform.OS === 'ios') {
             // iOS: ใช้ Sharing API เหมือนเดิม
             const timestamp = new Date().getTime();
@@ -1210,11 +1276,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                   dialogTitle: `บันทึกไฟล์: ${finalFileName}`
                 });
               } else {
-                Alert.alert(
-                  'ดาวน์โหลดสำเร็จ',
-                  `ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`,
-                  [{ text: 'ตกลง', style: 'default' }]
-                );
+                showSuccessNotification(`ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`);
               }
             } else {
               throw new Error(`HTTP ${downloadResult.status}`);
@@ -1239,10 +1301,8 @@ const GroupChatScreen = ({ route, navigation }) => {
 
             if (downloadResult.status === 200) {
               console.log('✅ Download successful');
-              Alert.alert(
-                'ดาวน์โหลดสำเร็จ!',
-                `ไฟล์ถูกบันทึกไปที่ Downloads folder แล้ว\nชื่อไฟล์: ${cleanFileName}_${timestamp}\n\nคุณสามารถหาไฟล์ได้ใน File Manager > Downloads`,
-                [{ text: 'ตกลง', style: 'default' }]
+              showSuccessNotification(
+                `ไฟล์ถูกบันทึกไปที่ Downloads folder แล้ว\nชื่อไฟล์: ${cleanFileName}_${timestamp}\n\nคุณสามารถหาไฟล์ได้ใน File Manager > Downloads`
               );
             } else {
               throw new Error(`HTTP ${downloadResult.status}`);
@@ -2199,7 +2259,14 @@ const GroupChatScreen = ({ route, navigation }) => {
                   flexDirection: 'row',
                   alignItems: 'center'
                 }}
-                onPress={() => downloadFile(selectedModalImage, `image_${Date.now()}.jpg`)}
+                onPress={() => {
+                  // ปิด Modal ก่อน
+                  setImageModalVisible(false);
+                  // รอให้ Modal ปิดแล้วค่อยดาวน์โหลด
+                  setTimeout(() => {
+                    downloadFile(selectedModalImage, `image_${Date.now()}.jpg`);
+                  }, 300);
+                }}
               >
                 <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>📥 ดาวน์โหลด</Text>
               </TouchableOpacity>
@@ -2272,6 +2339,15 @@ const GroupChatScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
+      {/* Success Notification */}
+      {successNotification.visible && (
+        <View style={styles.successNotification}>
+          <Text style={styles.successNotificationText}>
+            ✅ {successNotification.message}
+          </Text>
+        </View>
+      )}
+
       <LoadingOverlay 
         visible={isLoading} 
         message="กำลังโหลดแชทกลุ่ม..." 
@@ -2285,6 +2361,30 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5C842' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5C842' },
   loadingText: { color: '#333', fontSize: 16, marginTop: 10 },
+  
+  // Success Notification Styles
+  successNotification: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: '#4CAF50',
+    padding: 16,
+    borderRadius: 8,
+    zIndex: 10000,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  successNotificationText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  
   scrollLoadingOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: '#F5C842', justifyContent: 'center', alignItems: 'center', zIndex: 9999

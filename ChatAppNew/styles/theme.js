@@ -9,12 +9,14 @@ export const COLORS = {
   background: '#FFFFFF',   // Pure white background
   backgroundSecondary: '#F8F9FA', // Light gray for cards/sections
   backgroundTertiary: '#F5F5F5',  // Slightly darker for subtle sections
+  surface: '#FFFFFF',      // White surface color for TabBar และ cards
   
   // Text colors
   textPrimary: '#000000',    // Black text for high contrast
   textSecondary: '#6C757D',  // Gray text for secondary information
   textTertiary: '#9E9E9E',   // Light gray for subtle text
   textInverse: '#FFFFFF',    // White text for dark backgrounds
+  text: '#000000',           // Default text color (เพิ่มสำหรับ TabBar)
   
   // Accent colors
   accent: '#007AFF',       // Keep iOS blue for links/actions

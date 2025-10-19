@@ -9,8 +9,10 @@ import {
   FlatList,
   Image,
   Alert,
-  Animated
+  Animated,
+  Platform
 } from 'react-native';
+import Lottie from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createPrivateChat } from '../../service/api';
 import api, { API_URL } from '../../service/api';
@@ -41,6 +43,8 @@ const ChatScreen = ({ route, navigation }) => {
   const lastLoadUserTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่โหลด user ครั้งล่าสุด
   const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
   // Removed loading hook - no longer using loading functionality
+  const [showChatListAnimation, setShowChatListAnimation] = useState(false); // สำหรับ chat list animation
+  const [showChatListContent, setShowChatListContent] = useState(false); // สำหรับแสดงเนื้อหารายการแชท
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
   const { 
@@ -339,7 +343,16 @@ const ChatScreen = ({ route, navigation }) => {
         ]);
       }
     } finally {
-      setIsLoadingChats(false); // จบ loading
+      // เริ่มเล่น animation หลังจากโหลดข้อมูลเสร็จแล้ว
+      console.log('📊 Loading chats finished, setting up animation...');
+      setIsLoadingChats(false);
+      
+      // รอให้ loading overlay หายไปก่อนแล้วค่อยเล่น animation
+      setTimeout(() => {
+        console.log('🎬 Starting chat list animation');
+        setShowChatListContent(false); // รีเซ็ต content state
+        setShowChatListAnimation(true);
+      }, 300); // เพิ่มจาก 100ms เป็น 300ms
     }
   };
 
@@ -367,6 +380,13 @@ const ChatScreen = ({ route, navigation }) => {
 
   const navigateToProfile = () => {
     navigation.navigate('Profile');
+  };
+
+  // จัดการเมื่อ chat list animation เสร็จ
+  const handleChatListAnimationFinish = () => {
+    console.log('🎬 Chat list animation finished, showing content');
+    setShowChatListAnimation(false);
+    setShowChatListContent(true);
   };
 
   const handleChatPress = async (chat) => {
@@ -430,6 +450,9 @@ const ChatScreen = ({ route, navigation }) => {
     chatsCount: chats.length,
     recipientId,
     authLoading,
+    isLoadingChats,
+    showChatListAnimation,
+    showChatListContent,
     socketConnected: socket ? 'connected' : 'disconnected',
     socketId: socket?.id || 'no-id'
   });
@@ -453,57 +476,79 @@ const ChatScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <LoadingOverlay 
-        visible={authLoading || isLoadingChats} 
-        message={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดแชท..."} 
-      />
-      
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>แชท</Text>
-      </View>
-
-      {/* Content Area - แสดง loading, empty state หรือ chat list */}
-      {chats.length === 0 && !authLoading && !isLoadingChats ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>💬</Text>
-          <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
-          <Text style={styles.subText}>
-            ค้นหาเพื่อนเพื่อเริ่มแชท
-          </Text>
-         
-          <TouchableOpacity
-            style={styles.searchButton}
-            onPress={navigateToSearch}
+      {/* แสดง Loading หรือ Chat List Animation หรือเนื้อหา */}
+      {authLoading || isLoadingChats ? (
+        <LoadingOverlay 
+          visible={true} 
+          message={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดแชท..."} 
+        />
+      ) : showChatListAnimation && !showChatListContent ? (
+        <View style={styles.animationContainer}>
+          {console.log('🎭 Rendering animation component', { showChatListAnimation, showChatListContent })}
+          <TouchableOpacity 
+            onPress={handleChatListAnimationFinish}
+            style={styles.animationTouchable}
+            activeOpacity={0.8}
           >
-            <Text style={styles.searchIcon}>🔍</Text>
-            <Text style={styles.searchButtonText}>ค้นหาเพื่อน</Text>
+            <Lottie
+              source={require('../../assets/Community V2.json')}
+              autoPlay={true}
+              loop={true}
+              speed={0.8}
+              style={styles.chatListAnimation}
+              onAnimationFinish={handleChatListAnimationFinish}
+            />
           </TouchableOpacity>
+          <Text style={styles.skipHintText}>แตะเพื่อข้าม</Text>
         </View>
       ) : (
-        <FlatList
-          data={chats}
-          keyExtractor={(item) => item._id}
-          renderItem={renderChatItem}
-          style={styles.chatsList}
-          contentContainerStyle={styles.chatsListContent}
-          showsVerticalScrollIndicator={true}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={20}
-          windowSize={10}
-          initialNumToRender={15}
-          scrollEnabled={true}
-          nestedScrollEnabled={false}
-          keyboardShouldPersistTaps="handled"
-          bounces={true}
-          alwaysBounceVertical={true}
-          decelerationRate="normal"
-          scrollEventThrottle={16}
-          getItemLayout={null}
-          onScrollToIndexFailed={() => {}}
-        />
-      )}
+        <>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>แชท</Text>
+          </View>
 
-      {/* TabBar ถูกลบออกเพื่อใช้ TabBar จาก HOC เท่านั้น */}
+          {/* Content Area - แสดง empty state หรือ chat list */}
+          {chats.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>💬</Text>
+              <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
+              <Text style={styles.subText}>
+                ค้นหาเพื่อนเพื่อเริ่มแชท
+              </Text>
+             
+              <TouchableOpacity
+                style={styles.searchButton}
+                onPress={navigateToSearch}
+              >
+                <Text style={styles.searchIcon}>🔍</Text>
+                <Text style={styles.searchButtonText}>ค้นหาเพื่อน</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={chats}
+            keyExtractor={(item) => item._id}
+            renderItem={renderChatItem}
+            style={styles.chatsList}
+            contentContainerStyle={styles.chatsListContent}
+            showsVerticalScrollIndicator={true}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            initialNumToRender={15}
+            scrollEnabled={true}
+            nestedScrollEnabled={false}
+            keyboardShouldPersistTaps="handled"
+            bounces={true}
+            alwaysBounceVertical={true}
+            decelerationRate="normal"
+            scrollEventThrottle={16}
+            getItemLayout={null}
+            onScrollToIndexFailed={() => {}}
+          />
+          )}
+        </>
+      )}
 
       {/* Expand Animation Overlay */}
       {showExpandAnimation && expandingItem && (
@@ -578,7 +623,7 @@ const styles = StyleSheet.create({
   },
   chatsListContent: {
     flexGrow: 1,
-    paddingBottom: 90,
+    paddingBottom: Platform.OS === 'android' ? 100 : 90, // เพิ่มพื้นที่สำหรับ Android
   },
 
 
@@ -666,6 +711,36 @@ const styles = StyleSheet.create({
   menuIcon: {
     fontSize: 20,
     marginRight: 12,
+  },
+
+  // Animation Styles
+  animationContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    minHeight: '100%', // ให้เต็มหน้าจอ
+  },
+  animationTouchable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20, // เพิ่ม padding เพื่อให้คลิกง่าย
+  },
+  chatListAnimation: {
+    width: 350, // เพิ่มจาก 300
+    height: 350, // เพิ่มจาก 300
+  },
+  skipHintText: {
+    fontSize: TYPOGRAPHY.fontSize.md, // เพิ่มจาก sm
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: SPACING.xl, // เพิ่มจาก lg
+    fontWeight: '500',
+    backgroundColor: 'rgba(255,255,255,0.9)', // เพิ่มพื้นหลัง
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
 });
 
