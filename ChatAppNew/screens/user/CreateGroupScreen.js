@@ -602,7 +602,7 @@ const CreateGroupScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#000000ff',
   },
   header: {
     flexDirection: 'row',
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#ffffffff',
   },
   backButton: {
     padding: 8,
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   groupNameInput: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   addMemberButton: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -809,7 +809,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   descriptionInput: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ffffffff',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -822,7 +822,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#000000ff',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#F5C842',
+    backgroundColor: '#ffffffff',
   },
   modalHeaderTitle: {
     fontSize: 18,
@@ -851,14 +851,14 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   searchInput: {
-    backgroundColor: '#E6B800',
+    backgroundColor: '#ecececff',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
     color: '#333',
     borderWidth: 1,
-    borderColor: '#D4A500',
+    borderColor: '#000000ff',
   },
   usersList: {
     flex: 1,
@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#E6B800',
+    backgroundColor: '#000000ff',
     borderRadius: 8,
     marginBottom: 8,
   },

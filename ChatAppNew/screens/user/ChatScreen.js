@@ -43,8 +43,11 @@ const ChatScreen = ({ route, navigation }) => {
   const lastLoadUserTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่โหลด user ครั้งล่าสุด
   const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
   // Removed loading hook - no longer using loading functionality
-  const [showChatListAnimation, setShowChatListAnimation] = useState(false); // สำหรับ chat list animation
+  const [showChatListAnimation, setShowChatListAnimation] = useState(true); // เริ่มต้นด้วย animation เสมอ
   const [showChatListContent, setShowChatListContent] = useState(false); // สำหรับแสดงเนื้อหารายการแชท
+  const [showDropdown, setShowDropdown] = useState(false); // สำหรับ dropdown menu
+  const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
+  const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
   
   // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
   const { 
@@ -343,16 +346,10 @@ const ChatScreen = ({ route, navigation }) => {
         ]);
       }
     } finally {
-      // เริ่มเล่น animation หลังจากโหลดข้อมูลเสร็จแล้ว
-      console.log('📊 Loading chats finished, setting up animation...');
+      // เสร็จสิ้นการโหลดข้อมูลแชท
+      console.log('📊 Loading chats finished');
       setIsLoadingChats(false);
-      
-      // รอให้ loading overlay หายไปก่อนแล้วค่อยเล่น animation
-      setTimeout(() => {
-        console.log('🎬 Starting chat list animation');
-        setShowChatListContent(false); // รีเซ็ต content state
-        setShowChatListAnimation(true);
-      }, 300); // เพิ่มจาก 100ms เป็น 300ms
+      // ไม่ต้องเริ่ม animation ที่นี่ เพราะเริ่มไว้แล้วตั้งแต่ต้น
     }
   };
 
@@ -382,6 +379,64 @@ const ChatScreen = ({ route, navigation }) => {
     navigation.navigate('Profile');
   };
 
+  // จัดการ dropdown menu
+  const toggleDropdown = () => {
+    setShowDropdown(!showDropdown);
+  };
+
+  const handleCreateGroup = () => {
+    setShowDropdown(false);
+    navigation.navigate('CreateGroup');
+  };
+
+  const handleSelectChatsToDelete = () => {
+    setShowDropdown(false);
+    setIsSelectMode(true);
+    setSelectedChats(new Set());
+  };
+
+  const cancelSelectMode = () => {
+    setIsSelectMode(false);
+    setSelectedChats(new Set());
+  };
+
+  const toggleChatSelection = (chatId) => {
+    const newSelected = new Set(selectedChats);
+    if (newSelected.has(chatId)) {
+      newSelected.delete(chatId);
+    } else {
+      newSelected.add(chatId);
+    }
+    setSelectedChats(newSelected);
+  };
+
+  const hideSelectedChats = async () => {
+    if (selectedChats.size === 0) {
+      Alert.alert('แจ้งเตือน', 'กรุณาเลือกแชทที่ต้องการลบ');
+      return;
+    }
+
+    try {
+      // สร้าง array ของ chat IDs ที่จะซ่อน
+      const chatIdsToHide = Array.from(selectedChats);
+      
+      // API call เพื่อซ่อนแชท (ไม่ลบข้อมูลจริง)
+      await api.post('/chats/hide', { chatIds: chatIdsToHide });
+      
+      // อัพเดท state เพื่อลบแชทที่เลือกออกจากการแสดงผล
+      const updatedChats = chats.filter(chat => !selectedChats.has(chat._id));
+      setChats(updatedChats);
+      
+      // รีเซ็ต select mode
+      cancelSelectMode();
+      
+      Alert.alert('สำเร็จ', `ลบแชท ${selectedChats.size} รายการแล้ว`);
+    } catch (error) {
+      console.error('Error hiding chats:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบแชทได้');
+    }
+  };
+
   // จัดการเมื่อ chat list animation เสร็จ
   const handleChatListAnimationFinish = () => {
     console.log('🎬 Chat list animation finished, showing content');
@@ -390,7 +445,13 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const handleChatPress = async (chat) => {
-    await ChatManager.handleChatPress(chat, currentUser, setChats, navigation);
+    if (isSelectMode) {
+      // ถ้าอยู่ในโหมดเลือก ให้เลือก/ยกเลิกแชท
+      toggleChatSelection(chat._id);
+    } else {
+      // ถ้าไม่ได้อยู่ในโหมดเลือก ให้เปิดแชทปกติ
+      await ChatManager.handleChatPress(chat, currentUser, setChats, navigation);
+    }
   };
 
   const handleChatPressWithAnimation = (chat, layout) => {
@@ -420,25 +481,59 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const renderChatItem = ({ item }) => {
+    const isSelected = selectedChats.has(item._id);
+    
     if (item.isGroup) {
       return (
-        <GroupChatItem
-          item={item}
-          onPress={handleChatPress}
-          formatTime={formatTime}
-          API_URL={API_URL}
-        />
+        <View style={[
+          isSelectMode && styles.selectModeItem,
+          isSelected && styles.selectedItem
+        ]}>
+          {isSelectMode && (
+            <TouchableOpacity 
+              style={styles.checkbox}
+              onPress={() => toggleChatSelection(item._id)}
+            >
+              <Text style={styles.checkboxText}>
+                {isSelected ? '✓' : '○'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          <GroupChatItem
+            item={item}
+            onPress={handleChatPress}
+            formatTime={formatTime}
+            API_URL={API_URL}
+            style={isSelectMode ? { flex: 1 } : {}}
+          />
+        </View>
       );
     } else {
       return (
-        <UserChatItem
-          item={item}
-          currentUser={currentUser}
-          onPress={handleChatPress}
-          onPressWithAnimation={handleChatPressWithAnimation}
-          formatTime={formatTime}
-          API_URL={API_URL}
-        />
+        <View style={[
+          isSelectMode && styles.selectModeItem,
+          isSelected && styles.selectedItem
+        ]}>
+          {isSelectMode && (
+            <TouchableOpacity 
+              style={styles.checkbox}
+              onPress={() => toggleChatSelection(item._id)}
+            >
+              <Text style={styles.checkboxText}>
+                {isSelected ? '✓' : '○'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          <UserChatItem
+            item={item}
+            currentUser={currentUser}
+            onPress={handleChatPress}
+            onPressWithAnimation={handleChatPressWithAnimation}
+            formatTime={formatTime}
+            API_URL={API_URL}
+            style={isSelectMode ? { flex: 1 } : {}}
+          />
+        </View>
       );
     }
   };
@@ -475,7 +570,15 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <TouchableOpacity 
+      style={styles.container}
+      activeOpacity={1}
+      onPress={() => {
+        if (showDropdown) {
+          setShowDropdown(false);
+        }
+      }}
+    >
       {/* แสดง Loading หรือ Chat List Animation หรือเนื้อหา */}
       {authLoading || isLoadingChats ? (
         <LoadingOverlay 
@@ -504,7 +607,58 @@ const ChatScreen = ({ route, navigation }) => {
       ) : (
         <>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>แชท</Text>
+            <Text style={styles.headerTitle}>
+              {isSelectMode ? `เลือกแล้ว ${selectedChats.size} รายการ` : 'แชท'}
+            </Text>
+            
+            {/* ปุ่ม dropdown หรือปุ่มยกเลิก/ลบ */}
+            {isSelectMode ? (
+              <View style={styles.selectModeButtons}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={cancelSelectMode}
+                >
+                  <Text style={styles.cancelButtonText}>ยกเลิก</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.deleteButton, selectedChats.size === 0 && styles.deleteButtonDisabled]}
+                  onPress={hideSelectedChats}
+                  disabled={selectedChats.size === 0}
+                >
+                  <Text style={styles.deleteButtonText}>ลบ</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity 
+                  style={styles.dropdownButton}
+                  onPress={toggleDropdown}
+                >
+                  <Text style={styles.dropdownIcon}>⋮</Text>
+                </TouchableOpacity>
+                
+                {showDropdown && (
+                  <View style={styles.dropdownMenu}>
+                    <TouchableOpacity 
+                      style={styles.dropdownItem}
+                      onPress={handleCreateGroup}
+                    >
+                      <Text style={styles.dropdownItemIcon}>👥</Text>
+                      <Text style={styles.dropdownItemText}>สร้างกลุ่ม</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.dropdownItem}
+                      onPress={handleSelectChatsToDelete}
+                    >
+                      <Text style={styles.dropdownItemIcon}>🗑️</Text>
+                      <Text style={styles.dropdownItemText}>เลือกแชทเพื่อลบ</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Content Area - แสดง empty state หรือ chat list */}
@@ -566,7 +720,7 @@ const ChatScreen = ({ route, navigation }) => {
           />
         </ChatItemExpandAnimation>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -741,6 +895,105 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+
+  // Dropdown Styles
+  dropdownContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  dropdownButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.backgroundSecondary,
+  },
+  dropdownIcon: {
+    fontSize: 20,
+    color: COLORS.textPrimary,
+    fontWeight: 'bold',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 40,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1001,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dropdownItemIcon: {
+    fontSize: 16,
+    marginRight: 12,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: '#333',
+  },
+
+  // Select Mode Styles
+  selectModeButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: '#f0f0f0',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  deleteButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: '#ff4444',
+  },
+  deleteButtonDisabled: {
+    backgroundColor: '#cccccc',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  selectModeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+  },
+  selectedItem: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 });
 
