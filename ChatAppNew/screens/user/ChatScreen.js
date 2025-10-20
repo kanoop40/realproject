@@ -48,20 +48,47 @@ const ChatScreen = ({ route, navigation }) => {
   const [showDropdown, setShowDropdown] = useState(false); // สำหรับ dropdown menu
   const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
   const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
-  const [skipAnimation, setSkipAnimation] = useState(false); // สำหรับข้าม animation เมื่อมาจากการสร้างกลุ่ม
   
-  // ตรวจสอบว่ามี params สำหรับเปิดแชทโดยตรงหรือไม่
+  // รับ params เฉพาะที่จำเป็น
   const { 
     recipientId, 
     recipientName, 
-    recipientAvatar, 
-    newChatId, 
-    newGroupId,
-    refresh, 
+    recipientAvatar,
     openChatId, 
-    openChatParams,
-    showGroup
+    openChatParams
   } = route.params || {};
+
+  // Effect สำหรับเปิดแชทอัตโนมัติ (รักษาไว้เพราะยังใช้)
+  useEffect(() => {
+    if (openChatId && openChatParams && currentUser) {
+      console.log('🔄 Auto opening chat:', openChatId);
+      
+      // รีเฟรชรายการแชทก่อน
+      const openChatDirectly = async () => {
+        try {
+          await loadChats();
+          
+          // รอให้ข้อมูลโหลดเสร็จแล้วเปิดแชท
+          setTimeout(() => {
+            navigation.navigate('PrivateChat', openChatParams);
+          }, 500);
+          
+        } catch (error) {
+          console.error('Error loading chats before opening:', error);
+          // ถ้าโหลดไม่ได้ก็เปิดแชทต่อไป
+          navigation.navigate('PrivateChat', openChatParams);
+        }
+      };
+      
+      openChatDirectly();
+      
+      // เคลียร์ params หลังจากใช้แล้ว
+      navigation.setParams({ 
+        openChatId: undefined, 
+        openChatParams: undefined 
+      });
+    }
+  }, [openChatId, openChatParams, currentUser, navigation]);
 
   // Effect สำหรับเปิดแชทอัตโนมัติ
   useEffect(() => {
@@ -95,37 +122,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [openChatId, openChatParams, currentUser, navigation]);
 
-  // Effect สำหรับรีเฟรชเมื่อมี newChatId หรือ newGroupId
-  useEffect(() => {
-    if ((newChatId || newGroupId) && refresh && currentUser) {
-      console.log('🔄 New chat/group detected, refreshing chat list:', newChatId || newGroupId);
-      
-      // ถ้ามาจากการสร้างกลุ่ม ให้ข้าม animation
-      if (newGroupId || showGroup) {
-        setSkipAnimation(true);
-        setShowChatListAnimation(false);
-        setShowChatListContent(true);
-      }
-      
-      // รีเฟรชรายการแชท
-      const refreshChats = async () => {
-        try {
-          await loadChats();
-        } catch (error) {
-          console.error('Error refreshing chats:', error);
-        }
-      };
-      refreshChats();
-      
-      // เคลียร์ params หลังจากใช้แล้ว
-      navigation.setParams({ 
-        newChatId: undefined,
-        newGroupId: undefined,
-        refresh: undefined,
-        showGroup: undefined
-      });
-    }
-  }, [newChatId, newGroupId, refresh, currentUser, navigation, showGroup]);
+  // ลบ complex logic ทั้งหมด - ใช้ Force Refresh แทน
 
   // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount
   useEffect(() => {
@@ -149,53 +146,30 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading, currentUser]);
 
-  // Real-time socket listeners
+    // ลบ complex logic ทั้งหมด - ใช้ Force Refresh แทน
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!authLoading && currentUser) {
+        console.log('� ChatScreen focused - Force refresh chat list');
+        loadChats();
+      }
+    }, [authLoading, currentUser])
+  );
+
+  // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount
   useEffect(() => {
-    if (!socket || !currentUser) return;
-
-    console.log('🔌 Setting up real-time listeners for ChatScreen');
-
-    // Listen for new messages
-    const handleNewMessage = (data) => {
-      console.log('📨 New message received in ChatScreen:', data);
-      // รีเฟรชรายการแชทเมื่อมีข้อความใหม่
-      loadChats();
-    };
-
-    // Listen for new groups
-    const handleNewGroup = (data) => {
-      console.log('👥 New group notification received:', data);
-      // รีเฟรชรายการแชทเมื่อมีกลุ่มใหม่
-      loadChats();
-    };
-
-    // Listen for group updates
-    const handleGroupUpdate = (data) => {
-      console.log('📝 Group update received:', data);
-      loadChats();
-    };
-
-    // Listen for chat list updates
-    const handleChatListUpdate = (data) => {
-      console.log('📋 Chat list update received:', data);
-      loadChats();
-    };
-
-    // Set up listeners
-    socket.on('newMessage', handleNewMessage);
-    socket.on('newGroup', handleNewGroup);
-    socket.on('groupUpdated', handleGroupUpdate);
-    socket.on('chatListUpdate', handleChatListUpdate);
-
-    // Cleanup listeners
     return () => {
-      console.log('🧹 Cleaning up real-time listeners');
-      socket.off('newMessage', handleNewMessage);
-      socket.off('newGroup', handleNewGroup);
-      socket.off('groupUpdated', handleGroupUpdate);
-      socket.off('chatListUpdate', handleChatListUpdate);
+      console.log('🧹 ChatScreen unmounting, clearing joined chatrooms tracking');
+      joinedChatroomsRef.current.clear();
     };
-  }, [socket, currentUser]);
+  }, []);
+
+  // Load current user when auth is ready
+  useEffect(() => {
+    if (!authLoading && !currentUser) {
+      loadCurrentUser();
+    }
+  }, [authLoading]);
 
   const handleDirectChat = async () => {
     try {
@@ -646,7 +620,7 @@ const ChatScreen = ({ route, navigation }) => {
           visible={true} 
           message={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดแชท..."} 
         />
-      ) : (!skipAnimation && showChatListAnimation && !showChatListContent) ? (
+      ) : (showChatListAnimation && !showChatListContent) ? (
         <View style={styles.animationContainer}>
           {console.log('🎭 Rendering animation component', { showChatListAnimation, showChatListContent })}
           <TouchableOpacity 

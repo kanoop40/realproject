@@ -202,60 +202,34 @@ const CreateGroupScreen = ({ navigation }) => {
       
       console.log('Group created successfully:', response.data);
       
-      // ในสร้างกลุ่มสำเร็จ - ให้หยุด loading และทำ navigation ทันที
-      const groupId = response.data._id || response.data.group?._id;
-      const createdGroupName = response.data.groupName || response.data.group?.groupName;
+      // หยุด loading ก่อน navigate
+      setIsLoading(false);
       
-      if (groupId) {
-        console.log('Navigating to chat list with new group:', groupId, createdGroupName);
-        
-        // หยุด loading ก่อน navigate เพื่อป้องกัน iOS freeze
-        setIsLoading(false);
-        
-        // Navigate กลับไปหน้า Chat พร้อมรีเฟรช
-        if (Platform.OS === 'ios') {
-          navigation.navigate('Chat', {
-            newGroupId: groupId,
-            refresh: true,
-            showGroup: true
-          });
-        } else {
-          // สำหรับ Android ยังคงแสดง Alert
-          Alert.alert(
-            'สำเร็จ',
-            'สร้างกลุ่มสำเร็จแล้ว',
-            [
-              {
-                text: 'ตกลง',
-                onPress: () => {
-                  navigation.navigate('Chat', {
-                    newGroupId: groupId,
-                    refresh: true,
-                    showGroup: true
-                  });
-                }
-              }
-            ]
-          );
-        }
-      } else {
-        // หยุด loading และกลับไปหน้าแชท
-        setIsLoading(false);
-        console.log('No groupId found, navigating to Chat screen');
-        navigation.navigate('Chat', { refresh: true });
-      }
+      // แสดง success message
+      Alert.alert(
+        'สำเร็จ!',
+        `สร้างกลุ่ม "${groupName.trim()}" เรียบร้อยแล้ว`,
+        [
+          {
+            text: 'ตกลง',
+            onPress: () => {
+              // Navigate กลับไปหน้า Chat ธรรมดา - ให้ useFocusEffect จัดการ refresh
+              navigation.navigate('Chat');
+            }
+          }
+        ]
+      );
 
     } catch (error) {
       console.error('Error creating group:', error);
       console.error('Error response:', error.response?.data);
       
-      // หยุด loading เมื่อเกิดข้อผิดพลาด
       setIsLoading(false);
-      
-      const errorMessage = error.response?.data?.message || 'ไม่สามารถสร้างกลุ่มได้';
-      Alert.alert('ข้อผิดพลาด', errorMessage);
+      Alert.alert(
+        'ข้อผิดพลาด', 
+        error.response?.data?.message || 'ไม่สามารถสร้างกลุ่มได้ กรุณาลองใหม่อีกครั้ง'
+      );
     } finally {
-      // ใส่ finally เป็น safety net
       console.log('Create group process completed, ensuring loading is stopped');
       setIsLoading(false);
     }

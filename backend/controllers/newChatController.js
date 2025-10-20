@@ -1133,6 +1133,38 @@ const editMessage = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Check for new messages without loading all messages (Smart Heartbeat)
+// @route   GET /api/chats/:id/check-new
+// @access  Private
+const checkNewMessages = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { since, count } = req.query;
+    
+    try {
+        // ตรวจสอบจำนวนข้อความปัจจุบัน
+        const currentCount = await Messages.countDocuments({ chat_id: id });
+        
+        // ตรวจสอบข้อความล่าสุด
+        const latestMessage = await Messages.findOne({ chat_id: id })
+            .sort({ time: -1 })
+            .select('time');
+        
+        const hasNew = since ? 
+            (latestMessage && new Date(latestMessage.time) > new Date(since)) :
+            (currentCount > parseInt(count || 0));
+        
+        res.json({
+            hasNew,
+            currentCount,
+            latestTimestamp: latestMessage?.time || new Date().toISOString(),
+            newCount: currentCount
+        });
+    } catch (error) {
+        console.error('Error checking new messages:', error);
+        res.status(500).json({ message: 'ไม่สามารถตรวจสอบข้อความใหม่ได้' });
+    }
+});
+
 module.exports = {
     getChats,
     getMessages,
@@ -1146,5 +1178,6 @@ module.exports = {
     markMessageAsRead,
     getUnreadCount,
     markAllAsRead,
-    getChatParticipants
+    getChatParticipants,
+    checkNewMessages
 };

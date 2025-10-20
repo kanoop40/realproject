@@ -13,7 +13,8 @@ const {
     markMessageAsRead,
     getUnreadCount,
     markAllAsRead,
-    getChatParticipants
+    getChatParticipants,
+    checkNewMessages
 } = require('../controllers/newChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
@@ -167,6 +168,11 @@ router.get('/:id/participants', getChatParticipants);
 // @desc    Get unread messages count
 // @access  Private
 router.get('/:id/unread-count', getUnreadCount);
+
+// @route   GET /api/chats/:id/check-new
+// @desc    Check for new messages (Smart Heartbeat)
+// @access  Private
+router.get('/:id/check-new', checkNewMessages);
 
 // @route   PUT /api/chats/:id/read
 // @desc    Mark messages as read

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -64,6 +65,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [showTimeForMessages, setShowTimeForMessages] = useState(new Set());
   const [timeAnimations, setTimeAnimations] = useState({});
   const [successNotification, setSuccessNotification] = useState({ visible: false, message: '' }); // แจ้งเตือนสำเร็จ
+  const [hasNewMessages, setHasNewMessages] = useState(false); // แสดง badge เมื่อมีข้อความใหม่
+  const [isConnected, setIsConnected] = useState(true); // สถานะการเชื่อมต่อ
   const flatListRef = React.useRef(null);
 
   // ข้อมูลแชทจาก route params
@@ -221,6 +224,56 @@ const PrivateChatScreen = ({ route, navigation }) => {
       };
     }
   }, [socket, chatroomId, currentUser]);
+
+  // Force refresh messages เมื่อกลับมาหน้าแชท
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentUser && chatroomId) {
+        console.log('🔄 PrivateChatScreen focused - Refreshing messages');
+        loadMessages(1, true); // รีเฟรชข้อความทุกครั้งที่กลับมา
+      }
+    }, [currentUser, chatroomId, loadMessages])
+  );
+
+  // Smart WebSocket Heartbeat (วิธีที่แอปแชทใหญ่ใช้)
+  useEffect(() => {
+    let heartbeatInterval;
+    let lastMessageCount = messages.length;
+    let lastMessageTime = messages[0]?.timestamp || new Date().toISOString();
+    
+    if (socket && currentUser && chatroomId) {
+      console.log('💓 Starting WebSocket heartbeat...');
+      
+      heartbeatInterval = setInterval(async () => {
+        try {
+          // เช็คแค่ว่ามีข้อความใหม่หรือไม่ (ไม่โหลดทั้งหมด)
+          const response = await api.get(`/chats/${chatroomId}/check-new?since=${lastMessageTime}&count=${lastMessageCount}`);
+          
+          if (response.data.hasNew) {
+            console.log('📩 New messages detected, refreshing...');
+            loadMessages(1, true);
+            lastMessageCount = response.data.newCount || messages.length;
+            lastMessageTime = response.data.latestTimestamp || new Date().toISOString();
+          } else {
+            console.log('💓 Heartbeat: No new messages');
+          }
+        } catch (error) {
+          console.log('💔 Heartbeat failed:', error.message);
+          // หาก API ล้มเหลว ให้ fallback เป็น socket ping
+          if (socket.connected) {
+            socket.emit('ping', { chatroomId });
+          }
+        }
+      }, 10000); // เช็คทุก 10 วินาที (น้อยกว่าเดิม)
+    }
+
+    return () => {
+      if (heartbeatInterval) {
+        console.log('💓 Stopping heartbeat...');
+        clearInterval(heartbeatInterval);
+      }
+    };
+  }, [socket, currentUser, chatroomId, messages.length]);
 
   // Auto-scroll to latest message on first load - Multiple attempts
   useEffect(() => {
@@ -1598,6 +1651,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
               style={styles.messagesList}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              
+              // Pull-to-refresh (แบบ Instagram, WhatsApp)
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefreshing}
+                  onRefresh={() => {
+                    console.log('🔄 Pull-to-refresh triggered');
+                    loadMessages(1, true);
+                  }}
+                  tintColor={COLORS.primary}
+                  title="กำลังอัปเดต..."
+                  titleColor={COLORS.textSecondary}
+                />
+              }
 
               inverted={false}
 

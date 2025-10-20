@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
   Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated
@@ -430,6 +431,73 @@ const GroupChatScreen = ({ route, navigation }) => {
       }
     }
   }, [socket, groupId, authUser]);
+
+  // Force refresh messages เมื่อกลับมาหน้าแชทกลุ่ม
+  useFocusEffect(
+    React.useCallback(() => {
+      if (authUser && groupId) {
+        console.log('🔄 GroupChatScreen focused - Refreshing group messages');
+        loadGroupData(1, false); // รีเฟรชข้อความทุกครั้งที่กลับมา
+      }
+    }, [authUser, groupId])
+  );
+
+  // Smart WebSocket Heartbeat สำหรับกลุ่ม
+  useEffect(() => {
+    let heartbeatInterval;
+    let lastMessageCount = messages.length;
+    let lastMessageTime = messages[0]?.timestamp || new Date().toISOString();
+    
+    if (socket && authUser && groupId) {
+      console.log('💓 Starting group WebSocket heartbeat...');
+      
+      heartbeatInterval = setInterval(async () => {
+        try {
+          // เช็คข้อความใหม่ในกลุ่ม
+          const response = await api.get(`/groups/${groupId}/check-new?since=${lastMessageTime}&count=${lastMessageCount}`);
+          
+          if (response.data.hasNew) {
+            console.log('📩 New group messages detected, refreshing...');
+            loadGroupData(1, false);
+            lastMessageCount = response.data.newCount || messages.length;
+            lastMessageTime = response.data.latestTimestamp || new Date().toISOString();
+          } else {
+            console.log('💓 Group heartbeat: No new messages');
+          }
+        } catch (error) {
+          console.log('💔 Group heartbeat failed:', error.message);
+          if (socket.connected) {
+            socket.emit('ping', { groupId });
+          }
+        }
+      }, 10000); // เช็คทุก 10 วินาที
+    }
+
+    return () => {
+      if (heartbeatInterval) {
+        console.log('💓 Stopping group heartbeat...');
+        clearInterval(heartbeatInterval);
+      }
+    };
+  }, [socket, authUser, groupId, messages.length]);
+
+  // Polling สำหรับข้อความใหม่ทุก 5 วินาที (เพิ่ม real-time)
+  useEffect(() => {
+    let pollInterval;
+    
+    if (authUser && groupId) {
+      pollInterval = setInterval(() => {
+        console.log('🔄 Polling for new group messages...');
+        loadGroupData(1, false);
+      }, 5000); // Poll ทุก 5 วินาที
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [authUser, groupId]);
 
   const loadGroupData = async (page = 1, append = false) => {
     try {
