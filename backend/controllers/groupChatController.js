@@ -1291,6 +1291,74 @@ const markGroupMessagesAsRead = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Check for new group messages (Real-time sync)
+// @route   GET /api/groups/:id/check-new
+// @access  Private
+const checkNewGroupMessages = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { lastId } = req.query;
+    const userId = req.user._id;
+    
+    try {
+        // ตรวจสอบว่าผู้ใช้เป็นสมาชิกของกลุ่ม
+        const group = await GroupChat.findById(id);
+        if (!group) {
+            return res.status(404).json({ message: 'ไม่พบกลุ่ม' });
+        }
+        
+        const isMember = group.members.some(member => 
+            member.user.toString() === userId.toString()
+        );
+        
+        if (!isMember) {
+            return res.status(403).json({ message: 'คุณไม่ได้เป็นสมาชิกของกลุ่มนี้' });
+        }
+        
+        let newMessages = [];
+        
+        if (lastId) {
+            // หาข้อความใหม่ที่มี ID มากกว่า lastId
+            const lastMessage = await Messages.findById(lastId);
+            
+            if (lastMessage) {
+                newMessages = await Messages.find({ 
+                    group_id: id,
+                    time: { $gt: lastMessage.time }
+                })
+                .populate('sender_id', 'firstName lastName username avatar')
+                .populate('file_id')
+                .sort({ time: -1 })
+                .limit(20);
+            }
+        }
+        
+        // แปลงรูปแบบข้อความ
+        const formattedMessages = newMessages.map(message => ({
+            _id: message._id,
+            content: message.message,
+            sender: {
+                _id: message.sender_id._id,
+                username: message.sender_id.username,
+                firstName: message.sender_id.firstName,
+                lastName: message.sender_id.lastName,
+                avatar: message.sender_id.avatar
+            },
+            timestamp: message.time,
+            type: message.file_id ? 'file' : 'text'
+        }));
+        
+        res.json({
+            hasNewMessages: newMessages.length > 0,
+            newMessages: formattedMessages,
+            count: newMessages.length
+        });
+        
+    } catch (error) {
+        console.error('Error checking new group messages:', error);
+        res.status(500).json({ message: 'ไม่สามารถตรวจสอบข้อความใหม่ได้' });
+    }
+});
+
 module.exports = {
     createGroup,
     getUserGroups,
@@ -1309,5 +1377,6 @@ module.exports = {
     getGroupMessages,
     deleteGroupMessage,
     editGroupMessage,
-    markGroupMessagesAsRead
+    markGroupMessagesAsRead,
+    checkNewGroupMessages
 };

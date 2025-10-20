@@ -21,7 +21,8 @@ const {
     getGroupMessages,
     deleteGroupMessage,
     editGroupMessage,
-    markGroupMessagesAsRead
+    markGroupMessagesAsRead,
+    checkNewGroupMessages
 } = require('../controllers/groupChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
@@ -113,6 +114,10 @@ router.post('/:id/messages', multerFileUpload.single('file'), sendGroupMessage);
 // @route   GET /api/groups/:id/messages
 // @desc    ดึงข้อความในกลุ่ม
 router.get('/:id/messages', getGroupMessages);
+
+// @route   GET /api/groups/:id/check-new
+// @desc    เช็คข้อความใหม่ในกลุ่ม (Real-time sync)
+router.get('/:id/check-new', checkNewGroupMessages);
 
 // @route   DELETE /api/groups/:id/messages/:messageId
 // @desc    ลบข้อความในกลุ่ม

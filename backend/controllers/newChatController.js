@@ -1133,32 +1133,66 @@ const editMessage = asyncHandler(async (req, res) => {
     }
 });
 
-// @desc    Check for new messages without loading all messages (Smart Heartbeat)
+// @desc    Check for new messages and return only new ones (Real-time sync)
 // @route   GET /api/chats/:id/check-new
 // @access  Private
 const checkNewMessages = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { since, count } = req.query;
+    const { lastId } = req.query;
     
     try {
-        // ตรวจสอบจำนวนข้อความปัจจุบัน
-        const currentCount = await Messages.countDocuments({ chat_id: id });
+        let newMessages = [];
         
-        // ตรวจสอบข้อความล่าสุด
-        const latestMessage = await Messages.findOne({ chat_id: id })
-            .sort({ time: -1 })
-            .select('time');
+        if (lastId) {
+            // หาข้อความใหม่ที่มี ID มากกว่า lastId
+            const lastMessage = await Messages.findById(lastId);
+            
+            if (lastMessage) {
+                newMessages = await Messages.find({ 
+                    chat_id: id,
+                    time: { $gt: lastMessage.time }
+                })
+                .populate('sender_id', 'firstName lastName username avatar')
+                .populate('file_id')
+                .sort({ time: -1 })
+                .limit(20); // จำกัดข้อความใหม่สูงสุด 20 ข้อความ
+            }
+        } else {
+            // ถ้าไม่มี lastId ให้ส่งข้อความล่าสุด 5 ข้อความ
+            newMessages = await Messages.find({ chat_id: id })
+                .populate('sender_id', 'firstName lastName username avatar')
+                .populate('file_id')
+                .sort({ time: -1 })
+                .limit(5);
+        }
         
-        const hasNew = since ? 
-            (latestMessage && new Date(latestMessage.time) > new Date(since)) :
-            (currentCount > parseInt(count || 0));
+        // แปลงรูปแบบข้อความให้ตรงกับ frontend
+        const formattedMessages = newMessages.map(message => ({
+            _id: message._id,
+            content: message.message,
+            sender: {
+                _id: message.sender_id._id,
+                username: message.sender_id.username,
+                firstName: message.sender_id.firstName,
+                lastName: message.sender_id.lastName,
+                avatar: message.sender_id.avatar
+            },
+            timestamp: message.time,
+            type: message.file_id ? 'file' : 'text',
+            file: message.file_id ? {
+                filename: message.file_id.filename,
+                url: message.file_id.url,
+                size: message.file_id.size,
+                mimetype: message.file_id.mimetype
+            } : null
+        }));
         
         res.json({
-            hasNew,
-            currentCount,
-            latestTimestamp: latestMessage?.time || new Date().toISOString(),
-            newCount: currentCount
+            hasNewMessages: newMessages.length > 0,
+            newMessages: formattedMessages,
+            count: newMessages.length
         });
+        
     } catch (error) {
         console.error('Error checking new messages:', error);
         res.status(500).json({ message: 'ไม่สามารถตรวจสอบข้อความใหม่ได้' });

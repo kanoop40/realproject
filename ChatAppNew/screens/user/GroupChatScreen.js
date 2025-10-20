@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
-  Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated
+  Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated, RefreshControl
 } from 'react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,6 +58,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [showLoadOlderButton, setShowLoadOlderButton] = useState(false);
   const [canLoadMore, setCanLoadMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // สำหรับ pull-to-refresh
   const [currentPage, setCurrentPage] = useState(1);
   const flatListRef = useRef(null);
 
@@ -118,36 +119,10 @@ const GroupChatScreen = ({ route, navigation }) => {
   // เพิ่ม useEffect เพื่อตรวจสอบ Socket status เมื่อเข้าหน้า
   useEffect(() => {
     
-    // ตรวจสอบสถานะ Socket และอัปเดต UI
-    if (socket) {
-      if (socket.connected) {
-        setSocketStatus('connected');
-      } else {
-        setSocketStatus('connecting');
-      }
-      
-      // Listen for socket status changes
-      const handleConnect = () => {
-        setSocketStatus('connected');
-        console.log('🔌 GroupChat: Socket connected');
-      };
-      
-      const handleDisconnect = () => {
-        setSocketStatus('connecting');
-        console.log('🔌 GroupChat: Socket disconnected, will retry...');
-      };
-      
-      socket.on('connect', handleConnect);
-      socket.on('disconnect', handleDisconnect);
-      
-      return () => {
-        socket.off('connect', handleConnect);
-        socket.off('disconnect', handleDisconnect);
-      };
-    } else {
-      setSocketStatus('connecting');
-    }
-  }, [socket]);
+    // HTTP API mode - no socket connection needed
+    setSocketStatus('http-mode');
+    console.log('🔌 GroupChat: HTTP API mode - stable connection');
+  }, []);
 
   // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด)
   useEffect(() => {
@@ -432,54 +407,51 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   }, [socket, groupId, authUser]);
 
-  // Force refresh messages เมื่อกลับมาหน้าแชทกลุ่ม
+  // Force refresh messages เมื่อกลับมาหน้าแชทกลุ่ม (เฉพาะครั้งแรก)
   useFocusEffect(
     React.useCallback(() => {
-      if (authUser && groupId) {
-        console.log('🔄 GroupChatScreen focused - Refreshing group messages');
-        loadGroupData(1, false); // รีเฟรชข้อความทุกครั้งที่กลับมา
+      if (authUser && groupId && messages.length === 0) {
+        console.log('� GroupChat first time load');
+        loadGroupData(1, false);
       }
     }, [authUser, groupId])
   );
 
-  // Smart WebSocket Heartbeat สำหรับกลุ่ม
+  // Smart Background Sync สำหรับกลุ่ม (ไม่รีเฟรชหน้าจอ)
   useEffect(() => {
-    let heartbeatInterval;
-    let lastMessageCount = messages.length;
-    let lastMessageTime = messages[0]?.timestamp || new Date().toISOString();
+    let backgroundSync;
     
-    if (socket && authUser && groupId) {
-      console.log('💓 Starting group WebSocket heartbeat...');
+    if (authUser && groupId) {
+      console.log('� Starting group background sync...');
       
-      heartbeatInterval = setInterval(async () => {
+      backgroundSync = setInterval(async () => {
         try {
-          // เช็คข้อความใหม่ในกลุ่ม
-          const response = await api.get(`/groups/${groupId}/check-new?since=${lastMessageTime}&count=${lastMessageCount}`);
+          const response = await api.get(`/groups/${groupId}/check-new?lastId=${messages[0]?._id}`);
           
-          if (response.data.hasNew) {
-            console.log('📩 New group messages detected, refreshing...');
-            loadGroupData(1, false);
-            lastMessageCount = response.data.newCount || messages.length;
-            lastMessageTime = response.data.latestTimestamp || new Date().toISOString();
-          } else {
-            console.log('💓 Group heartbeat: No new messages');
+          if (response.data.newMessages && response.data.newMessages.length > 0) {
+            console.log('📩 New group messages detected, adding to existing list...');
+            
+            // เพิ่มข้อความใหม่โดยไม่รีเฟรช
+            setMessages(prev => [...response.data.newMessages, ...prev]);
+            
+            // Auto scroll เฉพาะถ้าผู้ใช้อยู่ล่างสุด
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
           }
         } catch (error) {
-          console.log('💔 Group heartbeat failed:', error.message);
-          if (socket.connected) {
-            socket.emit('ping', { groupId });
-          }
+          console.log('� Group background sync failed:', error.message);
         }
-      }, 10000); // เช็คทุก 10 วินาที
+      }, 5000); // เช็คทุก 5 วินาที แต่ไม่รีเฟรช
     }
 
     return () => {
-      if (heartbeatInterval) {
-        console.log('💓 Stopping group heartbeat...');
-        clearInterval(heartbeatInterval);
+      if (backgroundSync) {
+        console.log('� Stopping group background sync...');
+        clearInterval(backgroundSync);
       }
     };
-  }, [socket, authUser, groupId, messages.length]);
+  }, [authUser, groupId, messages.length]);
 
   // Polling สำหรับข้อความใหม่ทุก 5 วินาที (เพิ่ม real-time)
   useEffect(() => {
@@ -620,7 +592,12 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   };
 
-
+  // Pull-to-refresh function (แทน auto refresh ที่รบกวน)
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadGroupData(1, false);
+    setIsRefreshing(false);
+  }, []);
 
   const removeMember = async (memberId) => {
     try {
@@ -2112,6 +2089,15 @@ const GroupChatScreen = ({ route, navigation }) => {
             ]}
             showsVerticalScrollIndicator={false}
             removeClippedSubviews={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={onRefresh}
+                colors={[COLORS.primary]}
+                title="ดึงข้อความใหม่..."
+                tintColor={COLORS.primary}
+              />
+            }
             maxToRenderPerBatch={15}
             windowSize={15}
             initialNumToRender={15}
