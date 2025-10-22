@@ -17,7 +17,7 @@ const MessageBubble = ({
   onLongPress,
   formatDateTime
 }) => {
-  const isMyMessage = item.sender === currentUser?._id;
+  const isMyMessage = item.sender && item.sender === currentUser?._id;
 
   return (
     <TouchableOpacity
@@ -117,7 +117,7 @@ const MessageBubble = ({
         )}
 
         {/* แสดงเวลา */}
-        {showTimeForMessages.has(item._id) && (
+        {(typeof showTimeForMessages === 'function' ? showTimeForMessages(item._id) : showTimeForMessages?.has?.(item._id)) && (
           <View style={styles.timeContainer}>
             <Text style={styles.timeText}>
               {item.isOptimistic ? 'กำลังส่ง...' : formatDateTime(item.timestamp)}

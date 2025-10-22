@@ -25,7 +25,7 @@ class ChatManager {
   }
 
   static updateChatListOnNewMessage(data, currentUser, setChats) {
-    const isOwnMessage = data.message.sender._id === currentUser._id;
+    const isOwnMessage = data.message.sender && data.message.sender._id === currentUser._id;
     
     setChats(prevChats => {
       let chatFound = false;

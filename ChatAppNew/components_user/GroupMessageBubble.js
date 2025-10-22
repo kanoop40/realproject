@@ -22,10 +22,10 @@ const GroupMessageBubble = ({
   index,
   getGroupReadStatus
 }) => {
-  // Handle both object and string sender formats
+  // Handle both object and string sender formats with null safety
   const isMyMessage = (
-    (typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
-    (typeof item.sender === 'string' && currentUser?.firstName && (
+    (item.sender && typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
+    (item.sender && typeof item.sender === 'string' && currentUser?.firstName && (
       item.sender === currentUser.firstName ||
       item.sender === currentUser.firstName.split(' ')[0] ||
       currentUser.firstName.startsWith(item.sender) ||
@@ -34,11 +34,11 @@ const GroupMessageBubble = ({
   );
 
   const showTime = shouldShowTime(item, index);
-  const senderName = typeof item.sender === 'object' 
+  const senderName = (item.sender && typeof item.sender === 'object') 
     ? (item.sender?.firstName || item.sender?.name || 'Unknown')
-    : item.sender;
+    : (item.sender || 'Unknown');
 
-  const senderAvatar = typeof item.sender === 'object' 
+  const senderAvatar = (item.sender && typeof item.sender === 'object') 
     ? item.sender?.avatar 
     : null;
 

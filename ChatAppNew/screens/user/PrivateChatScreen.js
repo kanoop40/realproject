@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -13,6 +13,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Alert,
+  Modal,
   Linking,
   Modal,
   Animated,
@@ -62,7 +63,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [editingMessage, setEditingMessage] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showTimeForMessages, setShowTimeForMessages] = useState(new Set());
+  const [showTimeForMessages, setShowTimeForMessages] = useState(() => new Set());
+  const showTimeForMessagesRef = useRef(new Set());
   const [timeAnimations, setTimeAnimations] = useState({});
   const [successNotification, setSuccessNotification] = useState({ visible: false, message: '' });
   const [hasNewMessages, setHasNewMessages] = useState(false);
@@ -86,6 +88,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
   }, []);
 
   // Load messages when user and chatroom are ready
+  // Sync ref with state
+  useEffect(() => {
+    showTimeForMessagesRef.current = showTimeForMessages;
+  }, [showTimeForMessages]);
+
   useEffect(() => {
     if (currentUser && chatroomId) {
       console.log('🚀 Loading initial 30 messages and scrolling to latest');
@@ -94,6 +101,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
       setCurrentPage(1);
     }
   }, [currentUser, chatroomId]);
+
+  // Mark messages as read when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentUser && chatroomId) {
+        console.log('📖 Marking private chat as read:', chatroomId);
+        
+        // Mark messages as read
+        const markAsRead = async () => {
+          try {
+            await api.put(`/chats/${chatroomId}/read`);
+            console.log('✅ Marked private chat as read:', chatroomId);
+          } catch (error) {
+            console.error('❌ Error marking private chat as read:', error);
+          }
+        };
+
+        markAsRead();
+      }
+    }, [currentUser, chatroomId])
+  );
 
   // Initial load only - ไม่รีเฟรชเมื่อกลับมา
   useEffect(() => {
@@ -118,8 +146,39 @@ const PrivateChatScreen = ({ route, navigation }) => {
           if (response.data.newMessages && response.data.newMessages.length > 0) {
             console.log('📨 New messages detected, adding to existing list...');
             
+            // Add comprehensive safety checks to new messages too
+            const safeNewMessages = response.data.newMessages
+              .filter((msg, index) => {
+                if (!msg.sender && !msg.sender_id && !msg.user_id) {
+                  console.warn(`⚠️ Filtering out new message ${index} - no sender info:`, msg);
+                  return false;
+                }
+                return true;
+              })
+              .map((msg, index) => {
+                const safeSender = msg.sender ? {
+                  ...msg.sender,
+                  _id: msg.sender._id || null,
+                  firstName: msg.sender.firstName || 'Unknown',
+                  lastName: msg.sender.lastName || '',
+                  username: msg.sender.username || msg.sender.firstName || 'Unknown'
+                } : {
+                  _id: msg.sender_id || msg.user_id || 'unknown',
+                  firstName: 'Unknown User',
+                  lastName: '',
+                  username: 'unknown'
+                };
+                
+                return {
+                  ...msg,
+                  sender: safeSender,
+                  sender_id: msg.sender_id || (msg.sender?._id) || null,
+                  user_id: msg.user_id || (msg.sender?._id) || null
+                };
+              });
+            
             // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช
-            setMessages(prev => [...response.data.newMessages, ...prev]);
+            setMessages(prev => [...safeNewMessages, ...prev]);
             
             // Auto scroll เฉพาะถ้าผู้ใช้อยู่ล่างสุด
             setTimeout(() => {
@@ -166,10 +225,75 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log(`📥 Loading messages page ${page}`);
       const response = await api.get(`/chats/${chatroomId}/messages?page=${page}&limit=30`);
       
+      // Filter out messages with problematic data and add safety checks
+      const rawMessages = response.data.messages || [];
+      console.log('📨 Raw messages from API:', rawMessages.length, 'messages');
+      if (rawMessages.length > 0) {
+        console.log('📨 First message structure:', {
+          id: rawMessages[0]._id,
+          sender: rawMessages[0].sender,
+          sender_id: rawMessages[0].sender_id,
+          user_id: rawMessages[0].user_id,
+          content: rawMessages[0].content?.substring(0, 50)
+        });
+      }
+      
+      const safeMessages = rawMessages
+        .filter((msg, index) => {
+          // Filter out messages that have no way to identify sender
+          if (!msg.sender && !msg.sender_id && !msg.user_id) {
+            console.warn(`⚠️ Filtering out message ${index} - no sender info:`, msg);
+            return false;
+          }
+          return true;
+        })
+        .map((msg, index) => {
+          try {
+            // Ensure all sender-related fields are properly defined
+            const safeSender = msg.sender ? {
+              ...msg.sender,
+              _id: msg.sender._id || null,
+              firstName: msg.sender.firstName || 'Unknown',
+              lastName: msg.sender.lastName || '',
+              username: msg.sender.username || msg.sender.firstName || 'Unknown'
+            } : {
+              _id: msg.sender_id || msg.user_id || 'unknown',
+              firstName: 'Unknown User',
+              lastName: '',
+              username: 'unknown'
+            };
+            
+            const processedMsg = {
+              ...msg,
+              sender: safeSender, // Always provide a valid sender object
+              sender_id: msg.sender_id || (msg.sender?._id) || null,
+              user_id: msg.user_id || (msg.sender?._id) || null
+            };
+            
+            // Debug log removed for performance
+            
+            return processedMsg;
+          } catch (error) {
+            console.error(`❌ Error processing message ${index}:`, error, msg);
+            // Return a safe fallback message
+            return {
+              ...msg,
+              sender: {
+                _id: 'unknown',
+                firstName: 'Error User',
+                lastName: '',
+                username: 'error'
+              },
+              sender_id: null,
+              user_id: null
+            };
+          }
+        });
+      
       if (refresh || page === 1) {
-        setMessages(response.data.messages || []);
+        setMessages(safeMessages);
       } else {
-        setMessages(prev => [...prev, ...(response.data.messages || [])]);
+        setMessages(prev => [...prev, ...safeMessages]);
       }
       
       setCanLoadMore(response.data.hasMore || false);
@@ -203,7 +327,38 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
       
       if (olderMessages.length > 0) {
-        setMessages(prev => [...prev, ...olderMessages]);
+        // Add comprehensive safety checks to older messages too
+        const safeOlderMessages = olderMessages
+          .filter((msg, index) => {
+            if (!msg.sender && !msg.sender_id && !msg.user_id) {
+              console.warn(`⚠️ Filtering out older message ${index} - no sender info:`, msg);
+              return false;
+            }
+            return true;
+          })
+          .map((msg, index) => {
+            const safeSender = msg.sender ? {
+              ...msg.sender,
+              _id: msg.sender._id || null,
+              firstName: msg.sender.firstName || 'Unknown',
+              lastName: msg.sender.lastName || '',
+              username: msg.sender.username || msg.sender.firstName || 'Unknown'
+            } : {
+              _id: msg.sender_id || msg.user_id || 'unknown',
+              firstName: 'Unknown User',
+              lastName: '',
+              username: 'unknown'
+            };
+            
+            return {
+              ...msg,
+              sender: safeSender,
+              sender_id: msg.sender_id || (msg.sender?._id) || null,
+              user_id: msg.user_id || (msg.sender?._id) || null
+            };
+          });
+        
+        setMessages(prev => [...prev, ...safeOlderMessages]);
         setCurrentPage(nextPage);
       }
       
@@ -215,86 +370,128 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [isLoadingMore, canLoadMore, currentPage, chatroomId]);
 
-  const sendMessage = useCallback(async () => {
-    if (!newMessage.trim() && !selectedFile && !selectedImage) return;
-    if (!currentUser || !chatroomId) return;
-
-    const tempId = Date.now().toString();
-    const optimisticMessage = {
-      _id: tempId,
-      content: newMessage.trim(),
-      sender: {
-        _id: currentUser._id,
-        username: currentUser.username,
-        avatar: currentUser.avatar
-      },
-      timestamp: new Date().toISOString(),
-      type: selectedFile ? 'file' : selectedImage ? 'image' : 'text',
-      status: 'sending' // แสดงสถานะกำลังส่ง
-    };
-
-    // เพิ่มข้อความทันที (Optimistic Update)
-    setMessages(prev => [optimisticMessage, ...prev]);
-    
-    // เคลียร์ input ทันที
-    const messageContent = newMessage.trim();
-    setNewMessage('');
-    setSelectedFile(null);
-    setSelectedImage(null);
-
-    // Auto scroll
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+  const sendMessage = async () => {
+    if ((!newMessage.trim() && !selectedFile) || !chatroomId || isSending) return;
 
     setIsSending(true);
+    const messageToSend = newMessage.trim();
+    const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
+    
+    let messageType = 'text';
+    let displayContent = messageToSend;
+    
+    if (selectedFile) {
+      messageType = 'file';
+      displayContent = displayContent || 'ไฟล์แนบ';
+    }
+    
+    const optimisticMessage = {
+      _id: tempId,
+      content: displayContent,
+      sender: currentUser,
+      timestamp: new Date().toISOString(),
+      messageType: messageType,
+      fileName: selectedFile ? (selectedFile.name || selectedFile.fileName) : null,
+      fileSize: selectedFile ? (selectedFile.size || selectedFile.fileSize) : null,
+      mimeType: selectedFile ? (selectedFile.mimeType || selectedFile.type) : null,
+      file: selectedFile ? {
+        name: selectedFile.name || selectedFile.fileName,
+        uri: selectedFile.uri,
+        size: selectedFile.size || selectedFile.fileSize
+      } : null,
+      user_id: currentUser,
+      isOptimistic: true
+    };
+    
+    setMessages(prev => {
+      const newMessages = [...prev, optimisticMessage];
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+      return newMessages;
+    });
+    
+    setNewMessage('');
+    const fileToSend = selectedFile;
+    setSelectedFile(null);
+
     try {
-      const formData = new FormData();
-      formData.append('content', messageContent);
-      formData.append('sender_id', currentUser._id);
-
-      if (selectedFile) {
+      const contentToSend = messageToSend || (fileToSend ? 'ไฟล์แนบ' : '');
+      
+      let response;
+      
+      if (fileToSend) {
+        const formData = new FormData();
+        formData.append('content', contentToSend);
+        formData.append('sender_id', currentUser._id);
         formData.append('file', {
-          uri: selectedFile.uri,
-          type: selectedFile.mimeType,
-          name: selectedFile.name
+          uri: fileToSend.uri,
+          type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
+          name: fileToSend.name || fileToSend.fileName || 'file'
+        });
+
+        response = await api.post(`/chats/${chatroomId}/messages`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        response = await api.post(`/chats/${chatroomId}/messages`, {
+          content: contentToSend,
+          sender_id: currentUser._id
         });
       }
 
-      if (selectedImage) {
-        formData.append('image', {
-          uri: selectedImage.uri,
-          type: 'image/jpeg',
-          name: 'image.jpg'
+      console.log('📥 File Server response:', response.data);
+      setMessages(prev => {
+        const updatedMessages = prev.map(msg => {
+          if (msg._id === tempId) {
+            const serverMessage = response.data.message || response.data;
+            return {
+              ...serverMessage,
+              _id: serverMessage._id,
+              content: serverMessage.content,
+              sender: serverMessage.sender || currentUser,
+              timestamp: serverMessage.timestamp || serverMessage.createdAt,
+              messageType: serverMessage.messageType || serverMessage.type,
+              fileName: serverMessage.fileName,
+              fileSize: serverMessage.fileSize,
+              mimeType: serverMessage.mimeType,
+              file: serverMessage.file || (serverMessage.fileName ? {
+                name: serverMessage.fileName,
+                size: serverMessage.fileSize,
+                type: serverMessage.mimeType
+              } : null),
+              user_id: serverMessage.user_id || serverMessage.sender,
+              isOptimistic: false
+            };
+          }
+          return msg;
         });
-      }
-
-      const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        return updatedMessages;
       });
-
-      // อัปเดตข้อความที่ส่งสำเร็จ
-      setMessages(prev => prev.map(msg => 
-        msg._id === tempId 
-          ? { ...response.data.message, status: 'sent' }
-          : msg
-      ));
-
+      
+      console.log('✅ Message sent successfully:', response.data._id);
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('❌ Error sending message:', error);
       
-      // แสดงข้อความ error และลบข้อความที่ส่งไม่สำเร็จ
-      setMessages(prev => prev.map(msg => 
-        msg._id === tempId 
-          ? { ...msg, status: 'failed' }
-          : msg
-      ));
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
+      setNewMessage(messageToSend);
+      setSelectedFile(fileToSend);
+
+      let errorMessage = 'ไม่สามารถส่งข้อความได้';
       
-      Alert.alert('Error', 'ไม่สามารถส่งข้อความได้ กรุณาลองใหม่');
+      if (error.response?.status === 500) {
+        errorMessage = 'เซิร์ฟเวอร์มีปัญหา กรุณาลองใหม่ภายหลัง';
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+      } else {
+        errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsSending(false);
     }
-  }, [newMessage, selectedFile, selectedImage, currentUser, chatroomId]);
+  };
 
   // File picker
   const pickFile = async () => {
@@ -318,6 +515,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   // Image picker
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
+  };
+
   const pickImage = async () => {
     try {
       setShowAttachmentMenu(false);
@@ -337,11 +538,107 @@ const PrivateChatScreen = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setSelectedImage(result.assets[0]);
+        await sendImageDirectly(result.assets[0]);
       }
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเลือกรูปภาพได้');
+    }
+  };
+
+  const sendImageDirectly = async (imageAsset) => {
+    if (!chatroomId || isSending) return;
+    
+    setIsSending(true);
+    const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
+    
+    try {
+      const optimisticMessage = {
+        _id: tempId,
+        content: 'รูปภาพ',
+        sender: currentUser,
+        timestamp: new Date().toISOString(),
+        messageType: 'image',
+        user_id: currentUser,
+        isOptimistic: true
+      };
+
+      setMessages(prev => {
+        const newMessages = [...prev, optimisticMessage];
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return newMessages;
+      });
+      
+      const fileName = imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`;
+      
+      const fileObject = {
+        uri: imageAsset.uri,
+        name: fileName,
+        type: 'image/jpeg'
+      };
+      
+      const base64 = await FileSystem.readAsStringAsync(fileObject.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const response = await api.post(`/chats/${chatroomId}/messages`, {
+        content: 'รูปภาพ',
+        sender_id: currentUser._id,
+        messageType: 'image',
+        fileName: fileName,
+        fileData: base64,
+        mimeType: 'image/jpeg'
+      });
+
+      setMessages(prev => {
+        const updatedMessages = prev.map(msg => {
+          if (msg._id === tempId) {
+            const serverMessage = response.data.message || response.data;
+            return {
+              ...serverMessage,
+              _id: serverMessage._id,
+              content: serverMessage.content,
+              sender: serverMessage.sender || currentUser,
+              timestamp: serverMessage.timestamp || serverMessage.createdAt,
+              messageType: serverMessage.messageType || 'image',
+              fileName: serverMessage.fileName,
+              fileSize: serverMessage.fileSize,
+              mimeType: serverMessage.mimeType || 'image/jpeg',
+              file: serverMessage.file || {
+                name: serverMessage.fileName,
+                size: serverMessage.fileSize,
+                type: serverMessage.mimeType || 'image/jpeg'
+              },
+              user_id: serverMessage.user_id || serverMessage.sender,
+              isOptimistic: false
+            };
+          }
+          return msg;
+        });        
+        return updatedMessages;
+      });
+
+      console.log('✅ Image sent successfully');
+    } catch (error) {
+      console.error('❌ Error sending image:', error);
+      
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
+      
+      let errorMessage = 'ไม่สามารถส่งรูปภาพได้';
+      
+      if (error.response?.status === 500) {
+        errorMessage = 'เซิร์ฟเวอร์มีปัญหา กรุณาเริ่มเซิร์ฟเวอร์ backend';
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์ backend ทำงานอยู่';
+      } else {
+        errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -412,6 +709,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       } else {
         newSet.add(messageId);
       }
+      showTimeForMessagesRef.current = newSet; // Sync ref
       return newSet;
     });
   };
@@ -429,7 +727,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const isMyMessage = (
         message.sender_id?._id === currentUser._id ||
         message.sender_id === currentUser._id ||
-        message.sender?._id === currentUser._id ||
+        (message.sender && message.sender?._id === currentUser._id) ||
         message.user_id?._id === currentUser._id ||
         message.user_id === currentUser._id
       );
@@ -463,7 +761,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const isMyMessage = (
         message.sender_id?._id === currentUser._id ||
         message.sender_id === currentUser._id ||
-        message.sender?._id === currentUser._id ||
+        (message.sender && message.sender?._id === currentUser._id) ||
         message.user_id?._id === currentUser._id ||
         message.user_id === currentUser._id
       );
@@ -475,6 +773,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
         Alert.alert('ไม่สามารถลบได้', 'คุณสามารถลบได้เฉพาะข้อความของตัวเองเท่านั้น');
       }
     }
+  };
+
+  // ยกเลิกการเลือก
+  const cancelSelection = () => {
+    setSelectedMessages([]);
+    setSelectionMode(false);
   };
 
   // Delete selected messages
@@ -491,19 +795,44 @@ const PrivateChatScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('🗑️ Starting to delete selected messages...');
+              console.log('📝 Selected messages:', selectedMessages);
+
+              const token = await AsyncStorage.getItem('token');
+              
+              // ลบข้อความทีละข้อ
               for (const messageId of selectedMessages) {
-                await deleteMessage(messageId);
+                try {
+                  const response = await fetch(`${API_URL}/api/messages/${messageId}`, {
+                    method: 'DELETE',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                  });
+
+                  if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`Failed to delete message ${messageId}: ${response.status} - ${errorData}`);
+                  }
+                  
+                  console.log(`✅ Message ${messageId} deleted successfully`);
+                } catch (messageError) {
+                  console.error(`❌ Error deleting message ${messageId}:`, messageError);
+                  // Continue with other messages even if one fails
+                }
               }
               
               // Remove deleted messages from state
               setMessages(prev => prev.filter(msg => !selectedMessages.includes(msg._id)));
-              setSelectionMode(false);
-              setSelectedMessages([]);
+              cancelSelection();
               
-              Alert.alert('สำเร็จ', 'ลบข้อความแล้ว');
+              showSuccessNotification('ลบข้อความสำเร็จ');
+              console.log('✅ All selected messages processed');
+
             } catch (error) {
-              console.error('Error deleting messages:', error);
-              Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบข้อความได้');
+              console.error('❌ Error deleting messages:', error);
+              Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบข้อความได้: ' + error.message);
             }
           }
         }
@@ -511,19 +840,343 @@ const PrivateChatScreen = ({ route, navigation }) => {
     );
   };
 
-  const renderMessage = useCallback(({ item }) => {
+  const renderMessage = useCallback(({ item, index }) => {
+    // Extra safety check before rendering
+    if (!item) {
+      console.warn('❌ Trying to render null/undefined item');
+      return null;
+    }
+    
+    if (!item.sender) {
+      console.warn('❌ Message has no sender:', item);
+      // Create a fallback sender
+      item.sender = {
+        _id: 'unknown',
+        firstName: 'Unknown User',
+        lastName: '',
+        username: 'unknown'
+      };
+    }
+    
+    // Debug removed for performance
+    
     return (
       <ChatMessage
-        message={item}
+        item={item}
+        index={index}
         currentUser={currentUser}
-        onPress={() => handleMessagePress(item._id)}
+        recipientAvatar={recipientAvatar}
+        recipientName={roomName}
+        showTimeForMessages={(id) => showTimeForMessagesRef.current?.has?.(id) || false}
+        timeAnimations={timeAnimations}
+        selectionMode={selectedMessages && selectedMessages.length > 0}
+        selectedMessages={selectedMessages || []}
+        onMessagePress={(messageItem) => handleMessagePress(messageItem._id)}
         onLongPress={() => handleLongPress(item._id)}
-        showTime={showTimeForMessages.has(item._id)}
-        isSelected={selectedMessages.includes(item._id)}
-        showStatus={true} // แสดงสถานะการส่ง
+        onImagePress={(image) => {
+          setSelectedModalImage(image);
+          setImageModalVisible(true);
+        }}
+        onFilePress={(file) => {
+          console.log('File pressed:', file);
+          if (file && file.url && file.fileName) {
+            showFileOptions(file.url, file.fileName);
+          } else if (file && file.url) {
+            // Fallback for files without proper fileName
+            const fileName = file.url.split('/').pop() || 'unknown_file';
+            showFileOptions(file.url, fileName);
+          }
+        }}
+        formatDateTime={formatDateTime}
+        shouldShowTime={(id) => {
+          try {
+            const timeSet = showTimeForMessagesRef.current;
+            if (!timeSet || typeof timeSet.has !== 'function') {
+              return false;
+            }
+            return timeSet.has(id);
+          } catch (error) {
+            return false;
+          }
+        }}
+        getFileIcon={getFileIcon}
+        decodeFileName={decodeFileName}
+        formatFileSize={formatFileSize}
       />
     );
-  }, [currentUser, showTimeForMessages, selectedMessages]);
+  }, [currentUser, selectedMessages]); // Removed showTimeForMessages since we use ref
+
+  // Utility functions for ChatMessage
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleString('th-TH', { 
+      day: '2-digit',
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const decodeFileName = (filename) => {
+    try {
+      return decodeURIComponent(filename || '');
+    } catch (error) {
+      return filename || 'Unknown File';
+    }
+  };
+
+  // Helper functions
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'วันนี้';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'เมื่อวาน';
+    } else {
+      return date.toLocaleDateString('th-TH', {
+        day: 'numeric',
+        month: 'short'
+      });
+    }
+  };
+
+  const openImageModal = (imageUri) => {
+    setSelectedModalImage(imageUri);
+    setImageModalVisible(true);
+  };
+
+  // ฟังก์ชันดาวน์โหลดรูปภาพจาก Modal
+  const downloadImageFromModal = async () => {
+    if (!selectedModalImage) {
+      Alert.alert('ข้อผิดพลาด', 'ไม่พบรูปภาพที่จะดาวน์โหลด');
+      return;
+    }
+
+    try {
+      console.log('📥 Starting image download from modal...');
+      console.log('🖼️ Image URL:', selectedModalImage);
+      
+      // ตรวจสอบสิทธิ์การเข้าถึงไฟล์
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ');
+        return;
+      }
+
+      // ปิด modal ก่อน
+      setImageModalVisible(false);
+
+      const timestamp = new Date().getTime();
+      const fileName = `image_${timestamp}.jpg`;
+
+      // สำหรับ Cloudinary URL ลองใช้วิธีตรง
+      if (selectedModalImage.includes('cloudinary.com')) {
+        try {
+          console.log('🌤️ Trying direct Cloudinary save...');
+          const asset = await MediaLibrary.saveToLibraryAsync(selectedModalImage);
+          console.log('✅ Direct save successful:', asset);
+          Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
+          return;
+        } catch (directError) {
+          console.log('⚠️ Direct save failed, trying alternative method...');
+        }
+      }
+
+      // วิธี fallback: ดาวน์โหลดไฟล์ชั่วคราว
+      const token = await AsyncStorage.getItem('token');
+      const headers = selectedModalImage.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
+      
+      const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
+      
+      console.log('📍 Temp file path:', tempUri);
+      console.log('🔄 Starting download with headers:', headers);
+      
+      const downloadResult = await FileSystem.downloadAsync(selectedModalImage, tempUri, {
+        headers: headers
+      });
+
+      console.log('📊 Download result:', downloadResult);
+
+      if (downloadResult.status === 200) {
+        const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+        
+        // ลบไฟล์ชั่วคราว
+        try {
+          await FileSystem.deleteAsync(tempUri);
+        } catch (deleteError) {
+          console.log('⚠️ Could not delete temp file:', deleteError);
+        }
+        
+        Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
+        console.log('✅ Image saved to gallery:', asset);
+      } else {
+        throw new Error(`Download failed with status: ${downloadResult.status}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Error downloading image from modal:', error);
+      console.error('Error details:', {
+        message: error.message,
+        selectedModalImage: selectedModalImage,
+        error: error.message
+      });
+      Alert.alert('ข้อผิดพลาด', `ไม่สามารถดาวน์โหลดรูปภาพได้: ${error.message}`);
+    }
+  };
+
+  const downloadFile = async (fileUrl, fileName) => {
+    try {
+      console.log('📥 Starting download process...');
+      console.log('📥 File URL:', fileUrl);
+      console.log('📁 File name:', fileName);
+      
+      // ตรวจสอบว่า FileSystem work หรือไม่
+      console.log('📂 Document directory:', FileSystem.documentDirectory);
+      
+      // ตรวจสอบว่า FileSystem.documentDirectory มีค่าหรือไม่
+      if (!FileSystem.documentDirectory) {
+        throw new Error('FileSystem.documentDirectory is not available');
+      }
+      
+      // ไม่ต้องใช้ token สำหรับ Cloudinary files
+      const token = await AsyncStorage.getItem('token');
+
+      let fullUrl = fileUrl;
+      
+      // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
+      if (fileUrl.includes('cloudinary.com')) {
+        fullUrl = fileUrl;
+        console.log('🌤️ Using Cloudinary URL directly:', fullUrl);
+      } else if (!fileUrl.startsWith('http')) {
+        fullUrl = `${API_URL}/${fileUrl.replace(/^\/+/, '')}`;
+        console.log('🔗 Converted to full URL:', fullUrl);
+      }
+
+      const finalFileName = fileName || `file_${new Date().getTime()}`;
+      const fileExtension = finalFileName.split('.').pop()?.toLowerCase() || '';
+      
+      console.log('🔍 File extension detected:', fileExtension);
+      
+      // ตรวจสอบประเภทไฟล์
+      const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
+      const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', '3gp'].includes(fileExtension);
+      const isMedia = isImage || isVideo;
+
+      console.log('📷 Is media file:', isMedia, '(Image:', isImage, ', Video:', isVideo, ')');
+
+      // สำหรับ Cloudinary ไม่ต้องใช้ Authorization header
+      const headers = fileUrl.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
+      console.log('📋 Headers:', headers);
+      
+      if (isMedia) {
+        // สำหรับไฟล์สื่อ ให้บันทึกลงในแกลเลอรี่
+        console.log('📷 Processing as media file...');
+        
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกสื่อ');
+          return;
+        }
+
+        console.log('🔄 Downloading media to temp location...');
+        
+        const tempFileUri = `${FileSystem.documentDirectory}temp_${finalFileName}`;
+        
+        const downloadResult = await FileSystem.downloadAsync(fullUrl, tempFileUri, {
+          headers: headers
+        });
+
+        console.log('📊 Media download result:', downloadResult);
+
+        if (downloadResult.status === 200) {
+          console.log('💾 Saving to media library...');
+          const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+          
+          // ลบไฟล์ชั่วคราว
+          try {
+            await FileSystem.deleteAsync(tempFileUri);
+          } catch (deleteError) {
+            console.log('⚠️ Could not delete temp file:', deleteError);
+          }
+          
+          Alert.alert('สำเร็จ', isImage ? 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว' : 'บันทึกวิดีโอลงในแกลเลอรี่แล้ว');
+          console.log('✅ Media saved to gallery:', asset);
+        } else {
+          throw new Error(`Download failed with status: ${downloadResult.status}`);
+        }
+      } else {
+        // สำหรับไฟล์ทั่วไป ให้ดาวน์โหลดและแชร์
+        console.log('📁 Processing as regular file...');
+        
+        const localUri = `${FileSystem.documentDirectory}${finalFileName}`;
+        console.log('📍 Target file path:', localUri);
+        
+        console.log('🔄 Starting file download...');
+        const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
+          headers: headers
+        });
+
+        console.log('📊 File download result:', downloadResult);
+
+        if (downloadResult.status === 200) {
+          console.log('📤 Sharing downloaded file...');
+          
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/octet-stream',
+              dialogTitle: 'บันทึกไฟล์'
+            });
+            console.log('✅ File shared successfully');
+          } else {
+            Alert.alert('สำเร็จ', `ดาวน์โหลดไฟล์แล้ว: ${finalFileName}`);
+            console.log('✅ File downloaded (sharing not available)');
+          }
+        } else {
+          throw new Error(`Download failed with status: ${downloadResult.status}`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error downloading file:', error);
+      console.error('Error details:', {
+        message: error.message,
+        fileUrl: fileUrl,
+        fileName: fileName
+      });
+      Alert.alert('ข้อผิดพลาด', `ไม่สามารถดาวน์โหลดได้: ${error.message}`);
+    }
+  };
+
+  const showFileOptions = (fileUrl, fileName) => {
+    Alert.alert(
+      'ไฟล์แนบ',
+      `ชื่อไฟล์: ${fileName || 'ไม่ทราบชื่อ'}`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ดาวน์โหลด',
+          onPress: () => downloadFile(fileUrl, fileName)
+        }
+      ]
+    );
+  };
+
+  // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จที่หายไปเอง
+  const showSuccessNotification = (message) => {
+    setSuccessNotification({ visible: true, message });
+    setTimeout(() => {
+      setSuccessNotification({ visible: false, message: '' });
+    }, 3000); // หายไปใน 3 วินาที
+  };
 
   return (
     <View style={styles.container}>
@@ -643,6 +1296,48 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </KeyboardAvoidingView>
       )}
       
+      {/* Image Modal for Viewing and Downloading */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <View style={styles.imageModalContainer}>
+          <TouchableOpacity
+            style={styles.imageModalCloseArea}
+            activeOpacity={1}
+            onPress={() => setImageModalVisible(false)}
+          >
+            <View style={styles.imageModalContent}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setImageModalVisible(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+
+              {selectedModalImage && (
+                <Image
+                  source={{ uri: selectedModalImage }}
+                  style={styles.modalImage}
+                  resizeMode="contain"
+                />
+              )}
+
+              <View style={styles.imageModalActions}>
+                <TouchableOpacity
+                  style={styles.downloadButton}
+                  onPress={downloadImageFromModal}
+                >
+                  <Text style={styles.downloadButtonText}>📥 บันทึกรูปภาพ</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+      
       {successNotification.visible && (
         <View style={styles.successNotification}>
           <Text style={styles.successNotificationText}>
@@ -730,6 +1425,69 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+  // Image Modal Styles
+  imageModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalCloseArea: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalContent: {
+    width: '95%',
+    height: '80%',
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  imageModalActions: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  downloadButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  downloadButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   }
 });
 

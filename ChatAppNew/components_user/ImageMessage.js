@@ -26,14 +26,14 @@ const ImageMessage = ({
 }) => {
   // Image fallback system working - updated
   
-  // Handle both object and string sender formats
+  // Handle both object and string sender formats with null safety
   const isMyMessage = (
-    (typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
-    (typeof item.sender === 'string' && (
+    (item.sender && typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
+    (item.sender && typeof item.sender === 'string' && (
       item.sender === currentUser?.firstName ||
       item.sender === currentUser?.firstName?.split(' ')[0] ||
       currentUser?.firstName?.startsWith(item.sender) ||
-      item.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+      (item.sender && item.sender.includes && item.sender.includes(currentUser?.firstName?.split(' ')[0] || ''))
     ))
   );
   const showTime = shouldShowTime && shouldShowTime(item._id);
@@ -102,7 +102,7 @@ const ImageMessage = ({
       </TouchableOpacity>
       
       {/* Time and status for images */}
-      {showTimeForMessages.has(item._id) && (
+      {(typeof showTimeForMessages === 'function' ? showTimeForMessages(item._id) : showTimeForMessages?.has?.(item._id)) && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,

@@ -83,7 +83,7 @@ const GroupChatItem = ({
             styles.lastMessage,
             groupData.unreadCount > 0 && styles.lastMessageUnread
           ]} numberOfLines={1}>
-            {groupData.lastMessage.sender?.firstName ? 
+            {groupData.lastMessage.sender && groupData.lastMessage.sender.firstName ? 
               `${groupData.lastMessage.sender.firstName}: ${groupData.lastMessage.content}` : 
               groupData.lastMessage.content
             }
