@@ -129,7 +129,7 @@ router.put('/:id/messages/:messageId', require('../controllers/groupChatControll
 
 // @route   PUT /api/groups/:id/read
 // @desc    มาร์คข้อความในกลุ่มว่าอ่านแล้ว
-router.put('/:id/read', markGroupMessagesAsRead);
+router.put('/:id/read', protect, markGroupMessagesAsRead);
 
 // @route   POST /api/groups/:id/upload
 // @desc    อัพโหลดไฟล์ในกลุ่ม (alias สำหรับ messages endpoint)

@@ -50,6 +50,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
   const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
   const [notificationBanner, setNotificationBanner] = useState(null); // สำหรับแสดง notification banner
+  const recentlyViewedChatsRef = useRef(new Set()); // เก็บ ID ของแชทที่เพิ่งดูมา
   
   // รับ params เฉพาะที่จำเป็น
   const { 
@@ -131,6 +132,7 @@ const ChatScreen = ({ route, navigation }) => {
     return () => {
       console.log('🧹 ChatScreen unmounting, clearing joined chatrooms tracking');
       joinedChatroomsRef.current.clear();
+      recentlyViewedChatsRef.current.clear(); // เคลียร์ recently viewed ด้วย
     };
   }, []);
 
@@ -231,22 +233,33 @@ const ChatScreen = ({ route, navigation }) => {
         console.log(`   New messages: ${newMessageCount}`);
         console.log(`   Chat type: ${chat.isGroup ? 'group' : 'private'}`);
         
-        // แสดง notification banner
-        setNotificationBanner({
-          chatName,
-          newMessages: newMessageCount,
-          chatType: chat.isGroup ? 'group' : 'private',
-          chatId: chatId,
-          timestamp: Date.now()
-        });
+        // ตรวจสอบว่าเพิ่งออกจากแชทนี้มาหรือไม่ (ภายใน 30 วินาที)
+        const isRecentlyViewed = recentlyViewedChatsRef.current.has(chatId);
+        console.log(`🔍 Recently viewed check for ${chatName}: ${isRecentlyViewed}`);
+        console.log(`🔍 Currently recently viewed chats:`, Array.from(recentlyViewedChatsRef.current));
         
-        console.log('📱 Notification banner set!');
-        
-        // ซ่อน banner หลังจาก 4 วินาที
-        setTimeout(() => {
-          console.log('🔇 Auto-hiding notification banner');
-          setNotificationBanner(null);
-        }, 4000);
+        if (isRecentlyViewed) {
+          console.log('🚫 Skipping notification - recently viewed this chat');
+          // ลบออกจาก recently viewed เพื่อให้แจ้งเตือนได้ในครั้งถัดไป
+          recentlyViewedChatsRef.current.delete(chatId);
+        } else {
+          // แสดง notification banner
+          setNotificationBanner({
+            chatName,
+            newMessages: newMessageCount,
+            chatType: chat.isGroup ? 'group' : 'private',
+            chatId: chatId,
+            timestamp: Date.now()
+          });
+          
+          console.log('📱 Notification banner set!');
+          
+          // ซ่อน banner หลังจาก 4 วินาที
+          setTimeout(() => {
+            console.log('🔇 Auto-hiding notification banner');
+            setNotificationBanner(null);
+          }, 4000);
+        }
       }
 
       // อัพเดท previous unread count
@@ -703,6 +716,53 @@ const ChatScreen = ({ route, navigation }) => {
       toggleChatSelection(chat._id);
     } else {
       // ถ้าไม่ได้อยู่ในโหมดเลือก ให้เปิดแชทปกติ
+      
+      // ทำการ mark messages as read ก่อนเปิดแชท
+      if (chat.unreadCount && chat.unreadCount > 0) {
+        try {
+          console.log(`🔇 Marking messages as read for chat: ${chat.roomName || 'Private'}`);
+          
+          if (chat.isGroup) {
+            // สำหรับ Group Chat
+            await api.put(`/groups/${chat._id}/read`);
+          } else {
+            // สำหรับ Private Chat
+            await api.put(`/chats/${chat._id}/read`);
+          }
+          
+          // อัพเดท local state ให้ unread count เป็น 0 ทันที
+          const updatedChats = chats.map(c => 
+            c._id === chat._id 
+              ? { ...c, unreadCount: 0 }
+              : c
+          );
+          setChats(updatedChats);
+          
+          // อัพเดท previousUnreadRef ด้วย
+          previousUnreadRef.current.set(chat._id, 0);
+          
+          // เพิ่มแชทนี้ใน recently viewed พร้อมตั้งเวลาลบออกหลัง 30 วินาที
+          recentlyViewedChatsRef.current.add(chat._id);
+          console.log(`🔒 Added ${chat.roomName || 'Private'} to recently viewed for 30 seconds`);
+          console.log(`🔒 Recently viewed chats now:`, Array.from(recentlyViewedChatsRef.current));
+          
+          setTimeout(() => {
+            recentlyViewedChatsRef.current.delete(chat._id);
+            console.log(`🕐 Removed ${chat.roomName || 'Private'} from recently viewed`);
+          }, 30000); // 30 วินาที
+          
+          // ซ่อน notification banner ถ้ากำลังแสดงสำหรับแชทนี้
+          if (notificationBanner && notificationBanner.chatId === chat._id) {
+            setNotificationBanner(null);
+          }
+          
+          console.log('✅ Messages marked as read and UI updated');
+          
+        } catch (error) {
+          console.error('❌ Error marking messages as read:', error);
+        }
+      }
+      
       await ChatManager.handleChatPress(chat, currentUser, setChats, navigation);
     }
   };

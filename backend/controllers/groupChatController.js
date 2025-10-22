@@ -1234,12 +1234,17 @@ const markGroupMessagesAsRead = asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
     try {
+        console.log(`📖 markGroupMessagesAsRead called for group: ${groupId} by user: ${userId}`);
+        
         // ตรวจสอบว่าเป็นสมาชิกของกลุ่มหรือไม่
         const group = await GroupChat.findById(groupId);
         if (!group) {
+            console.log('❌ Group not found:', groupId);
             res.status(404);
             throw new Error('ไม่พบกลุ่ม');
         }
+
+        console.log(`📖 Found group: ${group.groupName} with ${group.members.length} members`);
 
         const isMember = group.members.some(member => 
             member.user.toString() === userId.toString()
@@ -1253,8 +1258,8 @@ const markGroupMessagesAsRead = asyncHandler(async (req, res) => {
         // อัปเดตข้อความทั้งหมดในกลุ่มที่ยังไม่อ่านให้เป็นอ่านแล้ว
         const result = await Messages.updateMany(
             {
-                chatroomId: groupId,
-                sender: { $ne: userId }, // ไม่รวมข้อความของตัวเอง
+                group_id: groupId, // ใช้ group_id แทน chatroomId
+                user_id: { $ne: userId }, // ใช้ user_id แทน sender (ไม่รวมข้อความของตัวเอง)
                 readBy: { $not: { $elemMatch: { user: userId } } } // ยังไม่อ่าน
             },
             {
@@ -1266,6 +1271,12 @@ const markGroupMessagesAsRead = asyncHandler(async (req, res) => {
                 }
             }
         );
+
+        console.log(`📖 Group mark-as-read query:`, {
+            group_id: groupId,
+            user_id: { $ne: userId },
+            readBy: { $not: { $elemMatch: { user: userId } } }
+        });
 
         console.log(`📖 Marked ${result.modifiedCount} group messages as read for user ${userId} in group ${groupId}`);
 

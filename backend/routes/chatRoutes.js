@@ -177,7 +177,7 @@ router.get('/:id/check-new', checkNewMessages);
 // @route   PUT /api/chats/:id/read
 // @desc    Mark messages as read
 // @access  Private
-router.put('/:id/read', markAsRead);
+router.put('/:id/read', protect, markAsRead);
 
 // @route   POST /api/chats/:id/read-all
 // @desc    Mark all messages in chat as read
