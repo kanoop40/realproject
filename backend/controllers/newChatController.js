@@ -165,10 +165,10 @@ const getChats = asyncHandler(async (req, res) => {
                 const unreadCount = await Messages.countDocuments({
                     chat_id: chatroom._id,
                     user_id: { $ne: userId }, // ข้อความที่ไม่ใช่ของเราเอง (คนอื่นส่งมา)
-                    'readBy.user': { $ne: userId } // และเรายังไม่ได้อ่าน
+                    readBy: { $not: { $elemMatch: { user: userId } } } // และเรายังไม่ได้อ่าน
                 });
 
-                console.log(`📋 Chat ${chatroom._id} unread messages from others:`, unreadCount);
+                console.log(`� Private Chat ${chatroom.roomName || 'unnamed'} (${chatroom._id}): unread count = ${unreadCount}`);
 
                 // ใช้ participants สำหรับ private chats, user_id สำหรับ group chats
                 const participants = chatroom.participants?.length > 0 

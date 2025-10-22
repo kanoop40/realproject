@@ -43,11 +43,13 @@ const ChatScreen = ({ route, navigation }) => {
   const lastLoadUserTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่โหลด user ครั้งล่าสุด
   const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
   // Removed loading hook - no longer using loading functionality
-  const [showChatListAnimation, setShowChatListAnimation] = useState(true); // เริ่มต้นด้วย animation เสมอ
-  const [showChatListContent, setShowChatListContent] = useState(false); // สำหรับแสดงเนื้อหารายการแชท
+  const [hasShownInitialAnimation, setHasShownInitialAnimation] = useState(false); // ตรวจสอบว่าแสดง animation ครั้งแรกแล้วหรือยัง
+  const [showChatListAnimation, setShowChatListAnimation] = useState(false); // เริ่มต้นเป็น false
+  const [showChatListContent, setShowChatListContent] = useState(true); // แสดงเนื้อหาทันทีถ้าไม่มี animation
   const [showDropdown, setShowDropdown] = useState(false); // สำหรับ dropdown menu
   const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
   const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
+  const [notificationBanner, setNotificationBanner] = useState(null); // สำหรับแสดง notification banner
   
   // รับ params เฉพาะที่จำเป็น
   const { 
@@ -139,19 +141,139 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading]);
 
-  // Load chats when user is ready
+  // Load chats when user is ready และจัดการ animation ครั้งแรก
   useEffect(() => {
     if (!authLoading && currentUser) {
+      // ถ้ายังไม่เคยแสดง animation ให้แสดงครั้งเดียว
+      if (!hasShownInitialAnimation) {
+        setShowChatListAnimation(true);
+        setShowChatListContent(false);
+        setHasShownInitialAnimation(true);
+      }
       loadChats();
     }
   }, [authLoading, currentUser]);
+
+  // Real-time polling เพื่อตรวจจับข้อความใหม่ในแชทต่างๆ (ไม่ reload หน้า)
+  useEffect(() => {
+    let pollingInterval;
+
+    if (currentUser && chats.length > 0 && hasShownInitialAnimation) {
+      console.log('🔄 Starting ChatScreen real-time polling...');
+      
+      pollingInterval = setInterval(async () => {
+        try {
+          // โหลดข้อมูลแชทใหม่แบบเงียบๆ ไม่ให้แสดง loading
+          console.log('🔄 ChatScreen: Quietly polling for chat updates...');
+          
+          // โหลดข้อมูลโดยไม่ trigger loading state
+          await loadChatsQuietly(); 
+          
+        } catch (error) {
+          console.log('❌ ChatScreen polling error:', error.message);
+        }
+      }, 10000); // ทุก 10 วินาที
+    }
+
+    return () => {
+      if (pollingInterval) {
+        console.log('🔄 Stopping ChatScreen real-time polling...');
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [currentUser, chats.length, hasShownInitialAnimation]);
+
+  // ตรวจสอบการเปลี่ยนแปลงของ unread count และแจ้งเตือน
+  const previousUnreadRef = useRef(new Map());
+  const checkForNewMessages = React.useCallback((chatsData, isInitialLoad = false) => {
+    if (!chatsData || chatsData.length === 0 || !currentUser) {
+      console.log('❌ Cannot check messages - missing data:', { 
+        chatsData: chatsData?.length, 
+        currentUser: !!currentUser 
+      });
+      return;
+    }
+
+    console.log('🔍 Checking for new messages...', { isInitialLoad, chatCount: chatsData.length });
+    console.log('📋 Current previousUnreadRef size:', previousUnreadRef.current.size);
+    
+    let foundNewMessages = false;
+    
+    // ตรวจสอบการเปลี่ยนแปลงของ unread count
+    chatsData.forEach((chat, index) => {
+      const chatId = chat._id;
+      const currentUnread = chat.unreadCount || 0;
+      const previousUnread = previousUnreadRef.current.get(chatId);
+      
+      const chatName = chat.isGroup 
+        ? chat.roomName 
+        : chat.participants?.find(p => p._id !== currentUser._id)
+          ? `${chat.participants.find(p => p._id !== currentUser._id).firstName} ${chat.participants.find(p => p._id !== currentUser._id).lastName}`
+          : 'แชทส่วนตัว';
+
+      console.log(`📊 [${index + 1}/${chatsData.length}] ${chatName}: ${previousUnread} → ${currentUnread} (ID: ${chatId})`);
+
+      // ถ้าเป็นครั้งแรกที่โหลด ให้เก็บค่า current เป็น baseline
+      if (isInitialLoad || previousUnread === undefined) {
+        previousUnreadRef.current.set(chatId, currentUnread);
+        console.log(`📝 Set baseline for ${chatName}: ${currentUnread}`);
+        return;
+      }
+
+      // ตรวจสอบข้อความใหม่
+      if (currentUnread > previousUnread) {
+        foundNewMessages = true;
+        const newMessageCount = currentUnread - previousUnread;
+        
+        console.log('🔔 NEW MESSAGE DETECTED!');
+        console.log(`   Chat: ${chatName}`);
+        console.log(`   Previous: ${previousUnread}, Current: ${currentUnread}`);
+        console.log(`   New messages: ${newMessageCount}`);
+        console.log(`   Chat type: ${chat.isGroup ? 'group' : 'private'}`);
+        
+        // แสดง notification banner
+        setNotificationBanner({
+          chatName,
+          newMessages: newMessageCount,
+          chatType: chat.isGroup ? 'group' : 'private',
+          chatId: chatId,
+          timestamp: Date.now()
+        });
+        
+        console.log('📱 Notification banner set!');
+        
+        // ซ่อน banner หลังจาก 4 วินาที
+        setTimeout(() => {
+          console.log('🔇 Auto-hiding notification banner');
+          setNotificationBanner(null);
+        }, 4000);
+      }
+
+      // อัพเดท previous unread count
+      previousUnreadRef.current.set(chatId, currentUnread);
+    });
+    
+    if (!foundNewMessages && !isInitialLoad) {
+      console.log('✅ No new messages found in any chats');
+    }
+    
+    console.log('📋 Updated previousUnreadRef size:', previousUnreadRef.current.size);
+  }, [currentUser]);
+
+  useEffect(() => {
+    checkForNewMessages(chats);
+  }, [chats, checkForNewMessages]);
 
     // ลบ complex logic ทั้งหมด - ใช้ Force Refresh แทน
   useFocusEffect(
     React.useCallback(() => {
       if (!authLoading && currentUser) {
         console.log('� ChatScreen focused - Force refresh chat list');
-        loadChats();
+        if (hasShownInitialAnimation) {
+          loadChatsQuietly(); // ใช้ quiet loading แทน
+        } else {
+          loadChats();
+        }
       }
     }, [authLoading, currentUser])
   );
@@ -365,8 +487,18 @@ const ChatScreen = ({ route, navigation }) => {
       
       console.log('🔍 All chats after sorting:', sortedChats.length);
       
+      // Log unread counts สำหรับ debug
+      console.log('📬 Unread counts:', sortedChats.map(chat => ({
+        name: chat.roomName || chat.isGroup ? chat.roomName : `${chat.participants?.[0]?.firstName} ${chat.participants?.[0]?.lastName}`,
+        unreadCount: chat.unreadCount || 0,
+        type: chat.isGroup ? 'group' : 'private'
+      })));
+      
       setChats(sortedChats);
       console.log('✅ Updated chats state with', allChats.length, 'items');
+      
+      // ตรวจสอบข้อความใหม่ (เป็นการโหลดครั้งแรก)
+      checkForNewMessages(sortedChats, true);
       
       // Join ทุกห้องแชทที่ user เป็นสมาชิกเพื่อรับ real-time updates
       ChatManager.joinChatrooms(allChats, joinChatroom, joinedChatroomsRef);
@@ -479,6 +611,92 @@ const ChatScreen = ({ route, navigation }) => {
     setShowChatListContent(true);
   };
 
+  // ฟังก์ชันโหลดแชทแบบเงียบๆ (ไม่แสดง loading)
+  const loadChatsQuietly = async () => {
+    if (!currentUser) {
+      return;
+    }
+    
+    try {
+      console.log('🔇 Quietly loading chats for user:', currentUser._id);
+      const [chatsResponse, groupsResponse] = await Promise.all([
+        api.get('/chats'),
+        api.get('/groups')
+      ]);
+      
+      // รวม private chats และ group chats
+      const privateChats = chatsResponse.data || [];
+      const groupChats = (groupsResponse.data?.data || []).map(group => ({
+        ...group,
+        _id: group._id,
+        roomName: group.groupName,
+        isGroup: true,
+        participants: group.members,
+        lastMessage: group.lastMessage || null,
+        unreadCount: group.unreadCount || 0
+      }));
+      
+      console.log('📊 Raw API responses:');
+      console.log('   Private chats:', privateChats.length, 'items');
+      console.log('   Group chats:', groupChats.length, 'items');
+      
+      // Log unread counts จาก API
+      console.log('📬 Unread counts from API:');
+      privateChats.forEach(chat => {
+        const name = chat.participants?.find(p => p._id !== currentUser._id)
+          ? `${chat.participants.find(p => p._id !== currentUser._id).firstName} ${chat.participants.find(p => p._id !== currentUser._id).lastName}`
+          : 'Unknown';
+        console.log(`   Private: ${name} = ${chat.unreadCount || 0}`);
+      });
+      
+      groupChats.forEach(group => {
+        console.log(`   Group: ${group.roomName} = ${group.unreadCount || 0}`);
+      });
+      
+      // แชทส่วนตัวทั้งหมด
+      const filteredPrivateChats = privateChats;
+      
+      // แชทกลุ่มที่ user เป็นสมาชิก
+      const filteredGroupChats = groupChats.filter(group => {
+        const isMember = group.participants?.some(member => 
+          member.user?._id === currentUser._id || member._id === currentUser._id
+        );
+        return isMember;
+      });
+      
+      const allChats = [...filteredPrivateChats, ...filteredGroupChats];
+      
+      // เรียงตามเวลาล่าสุด
+      const sortedChats = allChats.sort((a, b) => {
+        const aTime = new Date(a.lastMessage?.timestamp || a.lastActivity || a.createdAt || 0);
+        const bTime = new Date(b.lastMessage?.timestamp || b.lastActivity || b.createdAt || 0);
+        return bTime - aTime;
+      });
+      
+      console.log('🔇 Quietly updated chats:', sortedChats.length, 'items');
+      
+      // Log final unread counts ที่จะส่งไปเช็ค
+      console.log('📬 Final chat data for checking:');
+      sortedChats.forEach((chat, index) => {
+        const name = chat.isGroup 
+          ? chat.roomName 
+          : chat.participants?.find(p => p._id !== currentUser._id)
+            ? `${chat.participants.find(p => p._id !== currentUser._id).firstName} ${chat.participants.find(p => p._id !== currentUser._id).lastName}`
+            : 'Unknown';
+        console.log(`   [${index + 1}] ${name}: unread=${chat.unreadCount || 0}, id=${chat._id}`);
+      });
+      
+      // ตรวจสอบข้อความใหม่ก่อนอัพเดท state (ไม่ใช่การโหลดครั้งแรก)
+      checkForNewMessages(sortedChats, false);
+      
+      // อัพเดท state โดยไม่แสดง loading
+      setChats(sortedChats);
+      
+    } catch (error) {
+      console.error('🔇 Quiet chat loading error:', error);
+    }
+  };
+
   const handleChatPress = async (chat) => {
     if (isSelectMode) {
       // ถ้าอยู่ในโหมดเลือก ให้เลือก/ยกเลิกแชท
@@ -517,12 +735,14 @@ const ChatScreen = ({ route, navigation }) => {
 
   const renderChatItem = ({ item }) => {
     const isSelected = selectedChats.has(item._id);
+    const hasUnreadMessages = (item.unreadCount || 0) > 0;
     
     if (item.isGroup) {
       return (
         <View style={[
           isSelectMode && styles.selectModeItem,
-          isSelected && styles.selectedItem
+          isSelected && styles.selectedItem,
+          hasUnreadMessages && styles.chatItemWithUnread
         ]}>
           {isSelectMode && (
             <TouchableOpacity 
@@ -533,6 +753,9 @@ const ChatScreen = ({ route, navigation }) => {
                 {isSelected ? '✓' : '○'}
               </Text>
             </TouchableOpacity>
+          )}
+          {hasUnreadMessages && (
+            <View style={styles.newMessageIndicator} />
           )}
           <GroupChatItem
             item={item}
@@ -547,7 +770,8 @@ const ChatScreen = ({ route, navigation }) => {
       return (
         <View style={[
           isSelectMode && styles.selectModeItem,
-          isSelected && styles.selectedItem
+          isSelected && styles.selectedItem,
+          hasUnreadMessages && styles.chatItemWithUnread
         ]}>
           {isSelectMode && (
             <TouchableOpacity 
@@ -558,6 +782,9 @@ const ChatScreen = ({ route, navigation }) => {
                 {isSelected ? '✓' : '○'}
               </Text>
             </TouchableOpacity>
+          )}
+          {hasUnreadMessages && (
+            <View style={styles.newMessageIndicator} />
           )}
           <UserChatItem
             item={item}
@@ -615,7 +842,7 @@ const ChatScreen = ({ route, navigation }) => {
       }}
     >
       {/* แสดง Loading หรือ Chat List Animation หรือเนื้อหา */}
-      {authLoading || isLoadingChats ? (
+      {authLoading || (isLoadingChats && !hasShownInitialAnimation) ? (
         <LoadingOverlay 
           visible={true} 
           message={authLoading ? "กำลังตรวจสอบผู้ใช้..." : "กำลังโหลดแชท..."} 
@@ -641,9 +868,50 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
       ) : (
         <>
+          {/* Notification Banner */}
+          {notificationBanner && (
+            <TouchableOpacity 
+              style={styles.notificationBanner}
+              activeOpacity={0.8}
+              onPress={() => {
+                // เปิดแชทที่มีข้อความใหม่
+                const targetChat = chats.find(chat => chat._id === notificationBanner.chatId);
+                if (targetChat) {
+                  setNotificationBanner(null);
+                  handleChatPress(targetChat);
+                }
+              }}
+            >
+              <View style={styles.notificationContent}>
+                <Text style={styles.notificationIcon}>
+                  {notificationBanner.chatType === 'group' ? '👥' : '💬'}
+                </Text>
+                <View style={styles.notificationText}>
+                  <Text style={styles.notificationTitle}>ข้อความใหม่</Text>
+                  <Text style={styles.notificationSubtitle}>
+                    {notificationBanner.newMessages} ข้อความใหม่จาก {notificationBanner.chatName}
+                  </Text>
+                  <Text style={styles.notificationHint}>แตะเพื่อเปิดแชท</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.notificationClose}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setNotificationBanner(null);
+                  }}
+                >
+                  <Text style={styles.notificationCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
-              {isSelectMode ? `เลือกแล้ว ${selectedChats.size} รายการ` : 'แชท'}
+              {isSelectMode ? `เลือกแล้ว ${selectedChats.size} รายการ` : (() => {
+                const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+                return totalUnread > 0 ? `แชท (${totalUnread})` : 'แชท';
+              })()}
             </Text>
             
             {/* ปุ่ม dropdown หรือปุ่มยกเลิก/ลบ */}
@@ -1028,6 +1296,75 @@ const styles = StyleSheet.create({
   checkboxText: {
     fontSize: 14,
     color: '#007AFF',
+    fontWeight: 'bold',
+  },
+
+  // New message indicator styles
+  chatItemWithUnread: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+    backgroundColor: 'rgba(0, 122, 255, 0.05)',
+  },
+  newMessageIndicator: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
+    zIndex: 1,
+  },
+
+  // Notification Banner Styles
+  notificationBanner: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    backgroundColor: '#2196F3',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 9999,
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  notificationIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  notificationText: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  notificationSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.95)',
+    marginBottom: 2,
+  },
+  notificationHint: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    fontStyle: 'italic',
+  },
+  notificationClose: {
+    padding: 6,
+  },
+  notificationCloseText: {
+    fontSize: 18,
+    color: '#fff',
     fontWeight: 'bold',
   },
 });

@@ -126,10 +126,12 @@ const getUserGroups = asyncHandler(async (req, res) => {
             try {
                 // หาข้อความที่ยังไม่อ่านในกลุ่มนี้
                 const unreadCount = await Messages.countDocuments({
-                    chatroomId: group._id,
-                    sender: { $ne: userId }, // ไม่นับข้อความที่ส่งเอง
+                    group_id: group._id, // ใช้ group_id แทน chatroomId
+                    user_id: { $ne: userId }, // ใช้ user_id แทน sender (ไม่นับข้อความที่ส่งเอง)
                     readBy: { $not: { $elemMatch: { user: userId } } } // ยังไม่อ่าน
                 });
+
+                console.log(`📊 Group ${group.groupName} (${group._id}): unread count = ${unreadCount}`);
 
                 return {
                     ...group.toObject(),

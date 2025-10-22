@@ -451,7 +451,7 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
 
     return () => {
-      if (backgroundSync) {
+      if (realTimeInterval) {
         console.log('� Stopping group background sync...');
         clearInterval(realTimeInterval);
       }
