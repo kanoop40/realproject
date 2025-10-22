@@ -113,7 +113,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       backgroundSync = setInterval(async () => {
         try {
           // เช็คข้อความใหม่โดยไม่รีเฟรชทั้งหน้า
-          const response = await api.get(`/chat/${chatroomId}/check-new?lastId=${messages[0]?._id}`);
+          const response = await api.get(`/chats/${chatroomId}/check-new?lastId=${messages[0]?._id}`);
           
           if (response.data.newMessages && response.data.newMessages.length > 0) {
             console.log('📨 New messages detected, adding to existing list...');
@@ -164,7 +164,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     try {
       console.log(`📥 Loading messages page ${page}`);
-      const response = await api.get(`/chat/${chatroomId}/messages?page=${page}&limit=30`);
+      const response = await api.get(`/chats/${chatroomId}/messages?page=${page}&limit=30`);
       
       if (refresh || page === 1) {
         setMessages(response.data.messages || []);
@@ -195,7 +195,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const nextPage = currentPage + 1;
       console.log(`📚 Loading more messages - page ${nextPage}`);
       
-      const response = await api.get(`/chat/${chatroomId}/messages?limit=30&page=${nextPage}`);
+      const response = await api.get(`/chats/${chatroomId}/messages?limit=30&page=${nextPage}`);
       const olderMessages = response.data.messages || [];
       
       if (olderMessages.length < 30) {
@@ -269,7 +269,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         });
       }
 
-      const response = await api.post(`/chat/${chatroomId}/send`, formData, {
+      const response = await api.post(`/chats/${chatroomId}/messages`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 

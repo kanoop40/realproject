@@ -1299,10 +1299,13 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
     const { lastId } = req.query;
     const userId = req.user._id;
     
+    console.log('checkNewGroupMessages called:', { groupId: id, lastId, userId });
+    
     try {
         // ตรวจสอบว่าผู้ใช้เป็นสมาชิกของกลุ่ม
         const group = await GroupChat.findById(id);
         if (!group) {
+            console.log('Group not found:', id);
             return res.status(404).json({ message: 'ไม่พบกลุ่ม' });
         }
         
@@ -1311,41 +1314,80 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
         );
         
         if (!isMember) {
+            console.log('User not a member:', userId);
             return res.status(403).json({ message: 'คุณไม่ได้เป็นสมาชิกของกลุ่มนี้' });
         }
         
         let newMessages = [];
         
         if (lastId) {
-            // หาข้อความใหม่ที่มี ID มากกว่า lastId
-            const lastMessage = await Messages.findById(lastId);
-            
-            if (lastMessage) {
-                newMessages = await Messages.find({ 
-                    group_id: id,
-                    time: { $gt: lastMessage.time }
-                })
-                .populate('sender_id', 'firstName lastName username avatar')
-                .populate('file_id')
-                .sort({ time: -1 })
-                .limit(20);
+            try {
+                // หาข้อความใหม่ที่มี ID มากกว่า lastId
+                const lastMessage = await Messages.findById(lastId);
+                
+                if (lastMessage) {
+                    console.log('Last message found:', { id: lastMessage._id, time: lastMessage.time });
+                    
+                    // ค้นหาข้อความใหม่
+                    const query = { 
+                        group_id: id,
+                        time: { $gt: lastMessage.time }
+                    };
+                    console.log('Query:', query);
+                    
+                    newMessages = await Messages.find(query)
+                    .populate('user_id', 'firstName lastName username avatar')
+                    .populate('file_id')
+                    .sort({ time: 1 }) // เปลี่ยนเป็น ascending order
+                    .limit(20);
+                    
+                    console.log('Found new messages:', newMessages.length);
+                } else {
+                    console.log('Last message not found for ID:', lastId);
+                }
+            } catch (queryError) {
+                console.error('Query error:', queryError);
+                // ถ้า query ล้มเหลว ให้ return empty array
+                newMessages = [];
             }
+        } else {
+            console.log('No lastId provided');
         }
         
-        // แปลงรูปแบบข้อความ
-        const formattedMessages = newMessages.map(message => ({
-            _id: message._id,
-            content: message.message,
-            sender: {
-                _id: message.sender_id._id,
-                username: message.sender_id.username,
-                firstName: message.sender_id.firstName,
-                lastName: message.sender_id.lastName,
-                avatar: message.sender_id.avatar
-            },
-            timestamp: message.time,
-            type: message.file_id ? 'file' : 'text'
-        }));
+        // แปลงรูปแบบข้อความ (เพิ่ม null check)
+        const formattedMessages = newMessages.map(message => {
+            // ตรวจสอบว่า user_id ถูก populate หรือไม่
+            if (!message.user_id) {
+                console.warn('Message without user_id:', message._id);
+                return {
+                    _id: message._id,
+                    content: message.content,
+                    sender: {
+                        _id: 'unknown',
+                        username: 'Unknown User',
+                        firstName: 'Unknown',
+                        lastName: 'User',
+                        avatar: null
+                    },
+                    timestamp: message.time,
+                    type: message.file_id ? 'file' : 'text'
+                };
+            }
+            
+            return {
+                _id: message._id,
+                content: message.content,
+                sender: {
+                    _id: message.user_id._id,
+                    username: message.user_id.username,
+                    firstName: message.user_id.firstName,
+                    lastName: message.user_id.lastName,
+                    avatar: message.user_id.avatar
+                },
+                timestamp: message.time,
+                type: message.file_id ? 'file' : 'text'
+            };
+        });
         
         res.json({
             hasNewMessages: newMessages.length > 0,
@@ -1354,7 +1396,13 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error checking new group messages:', error);
+        console.error('Error checking new group messages:', {
+            error: error.message,
+            stack: error.stack,
+            groupId: id,
+            lastId: lastId,
+            userId: userId
+        });
         res.status(500).json({ message: 'ไม่สามารถตรวจสอบข้อความใหม่ได้' });
     }
 });

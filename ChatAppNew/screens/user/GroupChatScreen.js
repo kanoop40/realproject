@@ -417,24 +417,29 @@ const GroupChatScreen = ({ route, navigation }) => {
     }, [authUser, groupId])
   );
 
-  // Smart Background Sync สำหรับกลุ่ม (ไม่รีเฟรชหน้าจอ)
+  // Smart Real-time Sync - ไม่ refresh หน้าจอ
   useEffect(() => {
-    let backgroundSync;
+    let realTimeInterval;
     
     if (authUser && groupId) {
       console.log('� Starting group background sync...');
       
-      backgroundSync = setInterval(async () => {
+      realTimeInterval = setInterval(async () => {
         try {
-          const response = await api.get(`/groups/${groupId}/check-new?lastId=${messages[0]?._id}`);
+          // ใช้ lastMessageId จากข้อความล่าสุด
+          const lastMessageId = messages[messages.length - 1]?._id;
+          if (!lastMessageId) return;
           
-          if (response.data.newMessages && response.data.newMessages.length > 0) {
-            console.log('📩 New group messages detected, adding to existing list...');
+          console.log('🔄 Checking for new messages after:', lastMessageId);
+          const response = await api.get(`/groups/${groupId}/check-new?lastId=${lastMessageId}`);
+          
+          if (response.data.hasNewMessages && response.data.newMessages?.length > 0) {
+            console.log('📩 New messages found:', response.data.newMessages.length);
             
-            // เพิ่มข้อความใหม่โดยไม่รีเฟรช
-            setMessages(prev => [...response.data.newMessages, ...prev]);
+            // เพิ่มข้อความใหม่ต่อท้าย (ไม่ refresh)
+            setMessages(prev => [...prev, ...response.data.newMessages.reverse()]);
             
-            // Auto scroll เฉพาะถ้าผู้ใช้อยู่ล่างสุด
+            // Auto scroll เฉพาะถ้าอยู่ใกล้ล่างสุด
             setTimeout(() => {
               flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
@@ -442,18 +447,19 @@ const GroupChatScreen = ({ route, navigation }) => {
         } catch (error) {
           console.log('� Group background sync failed:', error.message);
         }
-      }, 5000); // เช็คทุก 5 วินาที แต่ไม่รีเฟรช
+      }, 10000); // เช็คทุก 10 วินาที - ช้าลงเพื่อ debug
     }
 
     return () => {
       if (backgroundSync) {
         console.log('� Stopping group background sync...');
-        clearInterval(backgroundSync);
+        clearInterval(realTimeInterval);
       }
     };
   }, [authUser, groupId, messages.length]);
 
-  // Polling สำหรับข้อความใหม่ทุก 5 วินาที (เพิ่ม real-time)
+  // Polling ปิดไว้ชั่วคราว - ใช้ pull-to-refresh แทน
+  /* 
   useEffect(() => {
     let pollInterval;
     
@@ -470,6 +476,7 @@ const GroupChatScreen = ({ route, navigation }) => {
       }
     };
   }, [authUser, groupId]);
+  */
 
   const loadGroupData = async (page = 1, append = false) => {
     try {

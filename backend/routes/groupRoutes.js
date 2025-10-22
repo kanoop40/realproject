@@ -117,7 +117,7 @@ router.get('/:id/messages', getGroupMessages);
 
 // @route   GET /api/groups/:id/check-new
 // @desc    เช็คข้อความใหม่ในกลุ่ม (Real-time sync)
-router.get('/:id/check-new', checkNewGroupMessages);
+router.get('/:id/check-new', protect, checkNewGroupMessages);
 
 // @route   DELETE /api/groups/:id/messages/:messageId
 // @desc    ลบข้อความในกลุ่ม
