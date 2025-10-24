@@ -438,8 +438,6 @@ const sendMessage = asyncHandler(async (req, res) => {
             });
         }
 
-        let fileDoc = null;
-        
         // Handle file upload first if present
         let fileDoc = null;
         let messageType = 'text';
