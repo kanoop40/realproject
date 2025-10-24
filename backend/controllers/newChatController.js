@@ -356,15 +356,21 @@ const sendMessage = asyncHandler(async (req, res) => {
         console.log('🚀 Full req.body:', Object.keys(req.body));
         console.log('🚀 req.body content preview:', JSON.stringify(req.body).substring(0, 500));
         
-        const { content, fileData, messageType } = req.body; // เพิ่ม fileData และ messageType สำหรับ base64
+        const { content, fileData, messageType, fileName, mimeType } = req.body; // เพิ่ม fileData และ messageType สำหรับ base64
         console.log('🚀 Got content:', content);
         console.log('🚀 Got fileData:', !!fileData);
         console.log('🚀 Got messageType:', messageType);
+        console.log('🚀 Got fileName:', fileName);
+        console.log('🚀 Got mimeType:', mimeType);
         if (fileData) {
             console.log('🚀 FileData details:', {
-                name: fileData.name,
-                type: fileData.type,
-                base64Length: fileData.base64?.length
+                fileDataType: typeof fileData,
+                isString: typeof fileData === 'string',
+                isObject: typeof fileData === 'object',
+                hasName: fileData.name,
+                hasType: fileData.type,
+                hasBase64: fileData.base64,
+                base64Length: fileData.base64?.length || (typeof fileData === 'string' ? fileData.length : 'N/A')
             });
         }
         const userId = req.user._id;
@@ -437,13 +443,31 @@ const sendMessage = asyncHandler(async (req, res) => {
                 
                 if (fileData) {
                     // Handle base64 file data
-                    console.log('🔥 Processing base64 file data:', {
-                        name: fileData.name,
-                        type: fileData.type,
-                        base64Length: fileData.base64?.length
+                    console.log('🔥 Processing base64 file data');
+                    
+                    let base64String, fileName_actual, mimeType_actual;
+                    
+                    if (typeof fileData === 'string') {
+                        // fileData เป็น base64 string โดยตรง
+                        base64String = fileData;
+                        fileName_actual = fileName || `image_${Date.now()}.jpg`;
+                        mimeType_actual = mimeType || 'image/jpeg';
+                    } else if (typeof fileData === 'object' && fileData.base64) {
+                        // fileData เป็น object ที่มี base64, name, type
+                        base64String = fileData.base64;
+                        fileName_actual = fileData.name || fileName || `image_${Date.now()}.jpg`;
+                        mimeType_actual = fileData.type || mimeType || 'image/jpeg';
+                    } else {
+                        throw new Error('Invalid fileData format');
+                    }
+                    
+                    console.log('🔥 File details:', {
+                        fileName: fileName_actual,
+                        mimeType: mimeType_actual,
+                        base64Length: base64String?.length
                     });
                     
-                    const buffer = Buffer.from(fileData.base64, 'base64');
+                    const buffer = Buffer.from(base64String, 'base64');
                     
                     // Upload to Cloudinary
                     const result = await new Promise((resolve, reject) => {
@@ -459,27 +483,38 @@ const sendMessage = asyncHandler(async (req, res) => {
                         ).end(buffer);
                     });
                     
-                    const isImage = fileData.type && fileData.type.startsWith('image/');
+                    const isImage = mimeType_actual && mimeType_actual.startsWith('image/');
                     
                     fileDoc = new File({
-                        file_name: fileData.name,
+                        file_name: fileName_actual,
                         url: result.secure_url,
                         user_id: userId,
                         chat_id: id,
                         size: buffer.length.toString(),
-                        file_type: fileData.type,
+                        file_type: mimeType_actual,
                         Messages_id: message._id
                     });
                     
-                    console.log('🔥 Saving base64 file document...');
+                    console.log('🔥 Saving base64 file document...', {
+                        fileName: fileName_actual,
+                        isImage: isImage,
+                        fileSize: buffer.length,
+                        cloudinaryUrl: result.secure_url
+                    });
                     await fileDoc.save();
                     
                     message.file_id = fileDoc._id;
                     message.messageType = isImage ? 'image' : 'file';
                     message.fileUrl = result.secure_url;
-                    message.fileName = fileData.name;
+                    message.fileName = fileName_actual;
                     message.fileSize = buffer.length;
-                    message.mimeType = fileData.type;
+                    message.mimeType = mimeType_actual;
+                    
+                    console.log('🔥 Message updated with file info:', {
+                        messageType: message.messageType,
+                        fileUrl: message.fileUrl,
+                        fileName: message.fileName
+                    });
                 } else {
                     // Handle regular file upload
                     console.log('🔥 File details:', {

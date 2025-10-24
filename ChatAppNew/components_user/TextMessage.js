@@ -30,7 +30,7 @@ const TextMessage = ({
       (item.sender && item.sender.includes && item.sender.includes(currentUser?.firstName?.split(' ')[0] || ''))
     ))
   );
-  const showTime = shouldShowTime && shouldShowTime(item._id);
+  const showTime = shouldShowTime ? shouldShowTime(item._id) : false;
 
   return (
     <View>
@@ -64,18 +64,18 @@ const TextMessage = ({
       </TouchableOpacity>
       
       {/* Time and status for text messages */}
-      {(typeof showTimeForMessages === 'function' ? showTimeForMessages(item._id) : showTimeForMessages?.has?.(item._id)) && (
+      {showTime && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,
             isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
             {
-              opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-              maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+              opacity: timeAnimations[item._id] || new Animated.Value(1),
+              maxHeight: timeAnimations[item._id] ? 
                 (timeAnimations[item._id]).interpolate({
                   inputRange: [0, 1],
                   outputRange: [0, 30]
-                }) : 0)
+                }) : 30
             }
           ]}
         >

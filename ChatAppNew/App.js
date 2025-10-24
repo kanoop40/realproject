@@ -17,7 +17,6 @@ import ProfileScreenWithTabBar from './screens/user/ProfileScreen';
 import CreateGroupScreen from './screens/user/CreateGroupScreen';
 import EditGroupScreen from './screens/user/EditGroupScreen';
 import SearchUserScreenWithTabBar from './screens/user/SearchUserScreen';
-import NewSearchUserScreen from './screens/user/NewSearchUserScreen';
 import EditProfileScreen from './screens/user/EditProfileScreen';
 import ChangePasswordScreen from './screens/user/ChangePasswordScreen';
 
@@ -48,7 +47,6 @@ export default function App() {
               <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
               <Stack.Screen name="EditGroup" component={EditGroupScreen} />
               <Stack.Screen name="SearchUser" component={SearchUserScreenWithTabBar} />
-              <Stack.Screen name="NewSearchUser" component={NewSearchUserScreen} />
               <Stack.Screen name="EditProfile" component={EditProfileScreen} />
               <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             </Stack.Navigator>

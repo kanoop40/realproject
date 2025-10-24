@@ -15,7 +15,6 @@ import {
   Alert,
   Modal,
   Linking,
-  Modal,
   Animated,
   Dimensions,
   RefreshControl
@@ -140,14 +139,28 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       backgroundSync = setInterval(async () => {
         try {
-          // เช็คข้อความใหม่โดยไม่รีเฟรชทั้งหน้า
-          const response = await api.get(`/chats/${chatroomId}/check-new?lastId=${messages[0]?._id}`);
+          // เช็คข้อความใหม่โดยการโหลดข้อความล่าสุด
+          const response = await api.get(`/chats/${chatroomId}/messages?page=1&limit=5`);
+          const latestMessages = response.data.messages || [];
           
-          if (response.data.newMessages && response.data.newMessages.length > 0) {
+          // เช็คว่ามีข้อความใหม่หรือไม่
+          const currentLatestId = messages[messages.length - 1]?._id;
+          const serverLatestId = latestMessages[0]?._id;
+          
+          const hasNewMessages = latestMessages.length > 0 && 
+            currentLatestId !== serverLatestId &&
+            !messages.some(msg => msg._id === serverLatestId);
+          
+          if (hasNewMessages) {
             console.log('📨 New messages detected, adding to existing list...');
             
+            // กรองเฉพาะข้อความใหม่ที่ยังไม่มีในระบบ
+            const newMessages = latestMessages.filter(serverMsg => 
+              !messages.some(localMsg => localMsg._id === serverMsg._id)
+            );
+            
             // Add comprehensive safety checks to new messages too
-            const safeNewMessages = response.data.newMessages
+            const safeNewMessages = newMessages
               .filter((msg, index) => {
                 if (!msg.sender && !msg.sender_id && !msg.user_id) {
                   console.warn(`⚠️ Filtering out new message ${index} - no sender info:`, msg);
@@ -177,16 +190,19 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 };
               });
             
-            // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช
-            setMessages(prev => [...safeNewMessages, ...prev]);
+            // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช (Normal FlatList)
+            setMessages(prev => [...prev, ...safeNewMessages]);
             
-            // Auto scroll เฉพาะถ้าผู้ใช้อยู่ล่างสุด
-            setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+            // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด (ไม่รบกวนเมื่อกำลังดูข้อความเก่า)
+            if (!showScrollToBottom) {
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 200);
+            }
           }
         } catch (error) {
-          console.log('� Background sync failed:', error.message);
+          console.log('🔄 Background sync failed:', error.message);
+          // ไม่ต้องแสดง error เพราะ background sync ล้มเหลวเป็นเรื่องปกติ
         }
       }, 5000); // เช็คทุก 5 วินาที แต่ไม่รีเฟรช
     }
@@ -296,14 +312,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
         setMessages(prev => [...prev, ...safeMessages]);
       }
       
-      setCanLoadMore(response.data.hasMore || false);
+      // Update canLoadMore logic แบบ GroupChat
+      if (safeMessages.length === 0) {
+        setCanLoadMore(false);
+      } else if (safeMessages.length < 30) {
+        setCanLoadMore(false);
+      } else {
+        setCanLoadMore(true);
+        console.log('📚 Initial load - canLoadMore set to true');
+      }
+      
       setCurrentPage(page);
       
-      // Auto scroll for new messages
+      // Auto scroll for new messages (Normal FlatList)
       if (page === 1) {
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: false });
-        }, 100);
+        }, 200);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -322,8 +347,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const response = await api.get(`/chats/${chatroomId}/messages?limit=30&page=${nextPage}`);
       const olderMessages = response.data.messages || [];
       
-      if (olderMessages.length < 30) {
+      // อัปเดต canLoadMore logic แบบ GroupChat
+      if (olderMessages.length === 0) {
         setCanLoadMore(false);
+      } else if (olderMessages.length < 30) {
+        setCanLoadMore(false);
+      } else {
+        setCanLoadMore(true);
       }
       
       if (olderMessages.length > 0) {
@@ -358,7 +388,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
             };
           });
         
-        setMessages(prev => [...prev, ...safeOlderMessages]);
+        setMessages(prev => [...safeOlderMessages, ...prev]);
         setCurrentPage(nextPage);
       }
       
@@ -405,6 +435,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     setMessages(prev => {
       const newMessages = [...prev, optimisticMessage];
+      // เลื่อนไปข้อความล่าสุดทันทีหลังส่งข้อความ (Normal FlatList)
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -466,6 +497,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
           }
           return msg;
         });
+        
+        // เลื่อนไปข้อความล่าสุดหลังจากได้รับตอบกลับจากเซิร์ฟเวอร์ (Normal FlatList)
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 150);
+        
         return updatedMessages;
       });
       
@@ -553,21 +590,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
     const tempId = `temp_${Date.now()}_${Math.random()}_${currentUser._id}`;
     
     try {
-      const optimisticMessage = {
-        _id: tempId,
-        content: 'รูปภาพ',
-        sender: currentUser,
-        timestamp: new Date().toISOString(),
-        messageType: 'image',
-        user_id: currentUser,
-        isOptimistic: true
-      };
-
-      setMessages(prev => {
+    const optimisticMessage = {
+      _id: tempId,
+      content: 'รูปภาพ',
+      sender: currentUser,
+      timestamp: new Date().toISOString(),
+      messageType: 'image',
+      image: imageAsset.uri, // เพิ่ม local URI สำหรับ optimistic display
+      fileUrl: imageAsset.uri, // เพิ่ม fileUrl สำหรับ fallback
+      user_id: currentUser,
+      isOptimistic: true
+    };      setMessages(prev => {
         const newMessages = [...prev, optimisticMessage];
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        }, 150);
         return newMessages;
       });
       
@@ -588,28 +625,50 @@ const PrivateChatScreen = ({ route, navigation }) => {
         sender_id: currentUser._id,
         messageType: 'image',
         fileName: fileName,
-        fileData: base64,
+        fileData: {
+          name: fileName,
+          type: 'image/jpeg',
+          base64: base64
+        },
         mimeType: 'image/jpeg'
+      });
+
+      console.log('📥 Server response for image:', response.data);
+      console.log('🔍 Full response structure:', {
+        message: response.data.message,
+        fileUrl: response.data.fileUrl || response.data.message?.fileUrl,
+        image: response.data.image || response.data.message?.image,
+        file: response.data.file || response.data.message?.file
       });
 
       setMessages(prev => {
         const updatedMessages = prev.map(msg => {
           if (msg._id === tempId) {
             const serverMessage = response.data.message || response.data;
+            console.log('🖼️ Processing server image message:', {
+              serverMessage,
+              fileUrl: serverMessage.fileUrl,
+              image: serverMessage.image,
+              file: serverMessage.file
+            });
+            
             return {
               ...serverMessage,
               _id: serverMessage._id,
               content: serverMessage.content,
               sender: serverMessage.sender || currentUser,
-              timestamp: serverMessage.timestamp || serverMessage.createdAt,
+              timestamp: serverMessage.timestamp || serverMessage.time, // Backend ใช้ field 'time'
               messageType: serverMessage.messageType || 'image',
               fileName: serverMessage.fileName,
               fileSize: serverMessage.fileSize,
               mimeType: serverMessage.mimeType || 'image/jpeg',
+              fileUrl: serverMessage.fileUrl, // URL จาก Cloudinary
+              image: serverMessage.fileUrl || serverMessage.image, // ใช้ fileUrl เป็น image
               file: serverMessage.file || {
                 name: serverMessage.fileName,
                 size: serverMessage.fileSize,
-                type: serverMessage.mimeType || 'image/jpeg'
+                type: serverMessage.mimeType || 'image/jpeg',
+                url: serverMessage.fileUrl
               },
               user_id: serverMessage.user_id || serverMessage.sender,
               isOptimistic: false
@@ -701,14 +760,41 @@ const PrivateChatScreen = ({ route, navigation }) => {
   // Toggle time display for message
   const toggleTimeDisplay = (messageId) => {
     if (!messageId || messageId.startsWith('date_')) return;
-
+    
     setShowTimeForMessages(prev => {
       const newSet = new Set(prev);
+      
       if (newSet.has(messageId)) {
+        // ซ่อนเวลา
         newSet.delete(messageId);
       } else {
+        // แสดงเวลา
         newSet.add(messageId);
+        
+        // สร้าง animation หากยังไม่มี
+        if (!timeAnimations[messageId]) {
+          const newAnimation = new Animated.Value(0);
+          setTimeAnimations(prev => ({
+            ...prev,
+            [messageId]: newAnimation
+          }));
+          
+          // เริ่ม animation ทันที
+          Animated.timing(newAnimation, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: false
+          }).start();
+        } else {
+          // ถ้ามี animation อยู่แล้ว ให้เริ่มทันที
+          Animated.timing(timeAnimations[messageId], {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: false
+          }).start();
+        }
       }
+      
       showTimeForMessagesRef.current = newSet; // Sync ref
       return newSet;
     });
@@ -723,19 +809,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const message = messages.find(msg => msg._id === messageId);
       if (!message) return;
       
-      // ตรวจสอบว่าเป็นข้อความของผู้ส่งปัจจุบันหรือไม่
+      // ตรวจสอบว่าเป็นข้อความของผู้ส่งปัจจุบันหรือไม่ (ใช้วิธีจาก backup)
       const isMyMessage = (
-        message.sender_id?._id === currentUser._id ||
-        message.sender_id === currentUser._id ||
-        (message.sender && message.sender?._id === currentUser._id) ||
-        message.user_id?._id === currentUser._id ||
-        message.user_id === currentUser._id
+        (typeof message.sender === 'object' && message.sender?._id === currentUser._id) ||
+        (typeof message.sender === 'string' && (
+          message.sender === currentUser?.firstName ||
+          message.sender === currentUser?.firstName?.split(' ')[0] ||
+          currentUser?.firstName?.startsWith(message.sender) ||
+          message.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+        ))
       );
       
       // ลบได้เฉพาะข้อความของตัวเอง
       if (!isMyMessage) {
-        Alert.alert('ไม่สามารถเลือกได้', 'คุณสามารถลบได้เฉพาะข้อความของตัวเองเท่านั้น');
-        return;
+        return; // กดไม่ได้เลย (ไม่แสดง Alert)
       }
       
       // เลือก/ยกเลิกการเลือกข้อความ
@@ -754,24 +841,26 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   const handleLongPress = (messageId) => {
     if (!selectionMode && messageId && !messageId.startsWith('date_')) {
-      // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่
+      // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่ (ใช้วิธีจาก backup)
       const message = messages.find(msg => msg._id === messageId);
       if (!message) return;
       
       const isMyMessage = (
-        message.sender_id?._id === currentUser._id ||
-        message.sender_id === currentUser._id ||
-        (message.sender && message.sender?._id === currentUser._id) ||
-        message.user_id?._id === currentUser._id ||
-        message.user_id === currentUser._id
+        (typeof message.sender === 'object' && message.sender?._id === currentUser._id) ||
+        (typeof message.sender === 'string' && (
+          message.sender === currentUser?.firstName ||
+          message.sender === currentUser?.firstName?.split(' ')[0] ||
+          currentUser?.firstName?.startsWith(message.sender) ||
+          message.sender.includes(currentUser?.firstName?.split(' ')[0] || '')
+        ))
       );
       
+      // เข้าโหมดเลือกได้เฉพาะข้อความของตัวเอง
       if (isMyMessage) {
         setSelectionMode(true);
         setSelectedMessages([messageId]);
-      } else {
-        Alert.alert('ไม่สามารถลบได้', 'คุณสามารถลบได้เฉพาะข้อความของตัวเองเท่านั้น');
       }
+      // ถ้าไม่ใช่ข้อความของตัวเอง ไม่ทำอะไร (ไม่แสดง Alert)
     }
   };
 
@@ -846,6 +935,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.warn('❌ Trying to render null/undefined item');
       return null;
     }
+
+    // ถ้าเป็น date separator
+    if (item.type === 'date_separator') {
+      return renderDateSeparator(item.date);
+    }
     
     if (!item.sender) {
       console.warn('❌ Message has no sender:', item);
@@ -867,67 +961,24 @@ const PrivateChatScreen = ({ route, navigation }) => {
         currentUser={currentUser}
         recipientAvatar={recipientAvatar}
         recipientName={roomName}
-        showTimeForMessages={(id) => showTimeForMessagesRef.current?.has?.(id) || false}
+        showTimeForMessages={showTimeForMessages}
         timeAnimations={timeAnimations}
-        selectionMode={selectedMessages && selectedMessages.length > 0}
-        selectedMessages={selectedMessages || []}
-        onMessagePress={(messageItem) => handleMessagePress(messageItem._id)}
-        onLongPress={() => handleLongPress(item._id)}
-        onImagePress={(image) => {
-          setSelectedModalImage(image);
-          setImageModalVisible(true);
-        }}
-        onFilePress={(file) => {
-          console.log('File pressed:', file);
-          if (file && file.url && file.fileName) {
-            showFileOptions(file.url, file.fileName);
-          } else if (file && file.url) {
-            // Fallback for files without proper fileName
-            const fileName = file.url.split('/').pop() || 'unknown_file';
-            showFileOptions(file.url, fileName);
-          }
-        }}
+        selectionMode={selectionMode}
+        selectedMessages={selectedMessages}
+        onMessagePress={item._id ? () => handleMessagePress(item._id) : undefined}
+        onLongPress={item._id ? () => handleLongPress(item._id) : undefined}
+        onImagePress={openImageModal}
+        onFilePress={showFileOptions}
         formatDateTime={formatDateTime}
-        shouldShowTime={(id) => {
-          try {
-            const timeSet = showTimeForMessagesRef.current;
-            if (!timeSet || typeof timeSet.has !== 'function') {
-              return false;
-            }
-            return timeSet.has(id);
-          } catch (error) {
-            return false;
-          }
-        }}
+        shouldShowTime={(messageId) => showTimeForMessages.has(messageId)}
         getFileIcon={getFileIcon}
         decodeFileName={decodeFileName}
         formatFileSize={formatFileSize}
       />
     );
-  }, [currentUser, selectedMessages]); // Removed showTimeForMessages since we use ref
+  }, [currentUser, selectedMessages, showTimeForMessages]); // Added showTimeForMessages back
 
   // Utility functions for ChatMessage
-  const formatDateTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleString('th-TH', { 
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const decodeFileName = (filename) => {
-    try {
-      return decodeURIComponent(filename || '');
-    } catch (error) {
-      return filename || 'Unknown File';
-    }
-  };
-
-  // Helper functions
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
@@ -946,6 +997,89 @@ const PrivateChatScreen = ({ route, navigation }) => {
         day: 'numeric',
         month: 'short'
       });
+    }
+  };
+
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid DateTime';
+    
+    return `${formatDate(timestamp)} ${formatTime(timestamp)}`;
+  };
+
+  // ฟังก์ชันสำหรับจัดกลุ่มข้อความตามวัน (แก้ไขสำหรับ Normal FlatList)
+  const groupMessagesByDate = (messages) => {
+    if (!messages || messages.length === 0) return [];
+    
+    // เรียงข้อความจากเก่าไปใหม่ (Normal FlatList)
+    const sortedMessages = [...messages].sort((a, b) => 
+      new Date(a.timestamp) - new Date(b.timestamp)
+    );
+    
+    const grouped = [];
+    let currentDate = null;
+    
+    sortedMessages.forEach((message, index) => {
+      const messageDate = new Date(message.timestamp).toDateString();
+      
+      // ถ้าเป็นวันใหม่ ให้เพิ่ม date separator
+      if (messageDate !== currentDate) {
+        grouped.push({
+          type: 'date_separator',
+          date: message.timestamp,
+          _id: `date_${messageDate}_${index}`
+        });
+        currentDate = messageDate;
+      }
+      
+      grouped.push(message);
+    });
+    
+    // ไม่ reverse เพราะใช้ normal FlatList
+    return grouped;
+  };
+
+  // ฟังก์ชันสำหรับแสดงวันที่แบบสั้น (เพิ่มใหม่)
+  const formatDateShort = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'วันนี้';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'เมื่อวาน';
+    } else {
+      return date.toLocaleDateString('th-TH', {
+        day: 'numeric',
+        month: 'short'
+      });
+    }
+  };
+
+  // Render date separator (เพิ่มใหม่)
+  const renderDateSeparator = (date) => {
+    return (
+      <View style={styles.dateSeparatorContainer}>
+        <View style={styles.dateSeparatorBadge}>
+          <Text style={styles.dateSeparatorText}>
+            {formatDateShort(date)}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const decodeFileName = (filename) => {
+    try {
+      return decodeURIComponent(filename || '');
+    } catch (error) {
+      return filename || 'Unknown File';
     }
   };
 
@@ -1207,29 +1341,48 @@ const PrivateChatScreen = ({ route, navigation }) => {
             }}
           />
 
+          {/* Selection Mode Banner */}
+          {selectionMode && (
+            <View style={styles.selectionBanner}>
+              <Text style={styles.selectionText}>
+                โหมดเลือกข้อความ - กดที่ข้อความเพื่อเลือก ({selectedMessages.length} เลือกแล้ว)
+              </Text>
+            </View>
+          )}
+
           <FlatList
             ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item._id}
+            data={groupMessagesByDate(messages)}
+            keyExtractor={(item, index) => item._id || `${item._id}_${index}`}
             renderItem={renderMessage}
             style={styles.messagesList}
-            inverted
+            inverted={false}
             onEndReached={loadMoreMessages}
             onEndReachedThreshold={0.1}
             onScroll={(event) => {
-              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-              const isNearBottom = contentOffset.y < 100; // ใกล้ด้านล่าง 100px
-              setShowScrollToBottom(!isNearBottom && messages.length > 0);
+              const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+              const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+              const isNearTop = contentOffset.y < 200; // Normal FlatList - เลื่อนขึ้นจริง ๆ
+              
+              setShowScrollToBottom(!isAtBottom);
+              
+              // แสดงปุ่มโหลดข้อความเก่าเมื่อเลื่อนไปด้านบนจริง ๆ (Normal FlatList)
+              const actualMessageCount = messages.filter(msg => msg.type !== 'date_separator').length;
+              const shouldShowLoadButton = isNearTop && canLoadMore && actualMessageCount >= 5;
+              
+              setShowLoadOlderButton(shouldShowLoadButton);
             }}
             scrollEventThrottle={16}
-            ListFooterComponent={() => 
-              canLoadMore ? (
-                <LoadOlderMessagesPrivateChat
-                  onLoadMore={loadMoreMessages}
-                  isLoading={isLoadingMore}
-                />
-              ) : null
-            }
+            ListHeaderComponent={() => (
+              <LoadOlderMessagesPrivateChat
+                visible={showLoadOlderButton}
+                isLoading={isLoadingMore}
+                canLoadMore={canLoadMore}
+                onLoadMore={loadMoreMessages}
+                messagesCount={messages.filter(msg => msg.type !== 'date_separator').length}
+              />
+            )}
+            ListFooterComponent={() => null}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -1237,6 +1390,16 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 colors={[COLORS.primary]}
               />
             }
+            ListEmptyComponent={() => (
+              <View style={styles.emptyMessageContainer}>
+                <Text style={styles.emptyMessageText}>
+                  ยังไม่มีข้อความในแชทนี้
+                </Text>
+                <Text style={styles.emptyMessageSubText}>
+                  เริ่มส่งข้อความกัน!
+                </Text>
+              </View>
+            )}
           />
 
           <ChatInputBar
@@ -1296,46 +1459,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </KeyboardAvoidingView>
       )}
       
-      {/* Image Modal for Viewing and Downloading */}
+      {/* Image Zoom Modal */}
       <Modal
         visible={imageModalVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setImageModalVisible(false)}
       >
-        <View style={styles.imageModalContainer}>
-          <TouchableOpacity
-            style={styles.imageModalCloseArea}
-            activeOpacity={1}
-            onPress={() => setImageModalVisible(false)}
-          >
-            <View style={styles.imageModalContent}>
+        <ImageViewer
+          imageUrls={selectedModalImage ? [{ url: selectedModalImage }] : []}
+          index={0}
+          onCancel={() => setImageModalVisible(false)}
+          enableSwipeDown={true}
+          renderHeader={() => (
+            <View style={styles.modalHeader}>
               <TouchableOpacity
-                style={styles.closeButton}
+                style={styles.modalDownloadButton}
+                onPress={downloadImageFromModal}
+              >
+                <Text style={styles.modalDownloadText}>📥 บันทึกรูปภาพ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
                 onPress={() => setImageModalVisible(false)}
               >
-                <Text style={styles.closeButtonText}>✕</Text>
+                <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
-
-              {selectedModalImage && (
-                <Image
-                  source={{ uri: selectedModalImage }}
-                  style={styles.modalImage}
-                  resizeMode="contain"
-                />
-              )}
-
-              <View style={styles.imageModalActions}>
-                <TouchableOpacity
-                  style={styles.downloadButton}
-                  onPress={downloadImageFromModal}
-                >
-                  <Text style={styles.downloadButtonText}>📥 บันทึกรูปภาพ</Text>
-                </TouchableOpacity>
-              </View>
             </View>
-          </TouchableOpacity>
-        </View>
+          )}
+          renderFooter={() => null}
+          backgroundColor="rgba(0,0,0,0.9)"
+          enablePreload={true}
+          saveToLocalByLongPress={false}
+          menuContext={{
+            saveToLocal: 'บันทึกรูปภาพ',
+            cancel: 'ยกเลิก'
+          }}
+        />
       </Modal>
       
       {successNotification.visible && (
@@ -1488,6 +1648,95 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Date Separator Styles
+  dateSeparatorContainer: {
+    alignItems: 'center',
+    marginVertical: SPACING.md,
+    paddingHorizontal: SPACING.md
+  },
+  dateSeparatorBadge: {
+    backgroundColor: '#E6B800',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  dateSeparatorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center'
+  },
+  // Modal Header Styles
+  modalHeader: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    zIndex: 999
+  },
+  modalDownloadButton: {
+    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  modalDownloadText: {
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: '600'
+  },
+  modalCloseButton: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 8
+  },
+  modalCloseText: {
+    color: 'white', 
+    fontSize: 18, 
+    fontWeight: 'bold'
+  },
+  // Selection Banner Styles
+  selectionBanner: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center'
+  },
+  selectionText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold'
+  },
+  // Empty Message Styles
+  emptyMessageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50
+  },
+  emptyMessageText: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+    fontWeight: '500'
+  },
+  emptyMessageSubText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.textTertiary,
+    textAlign: 'center'
   }
 });
 

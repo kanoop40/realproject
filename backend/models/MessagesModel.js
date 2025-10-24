@@ -120,4 +120,13 @@ messagesSchema.methods.isReadBy = function(userId) {
     );
 };
 
+// Virtual getter สำหรับ timestamp (เพื่อ compatibility กับ frontend)
+messagesSchema.virtual('timestamp').get(function() {
+    return this.time;
+});
+
+// ให้แน่ใจว่า virtuals ถูก include ใน JSON
+messagesSchema.set('toJSON', { virtuals: true });
+messagesSchema.set('toObject', { virtuals: true });
+
 module.exports = mongoose.model('Messages', messagesSchema);

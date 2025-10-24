@@ -26,6 +26,60 @@ const ImageMessage = ({
 }) => {
   // Image fallback system working - updated
   
+  // ฟังก์ชันสำหรับสร้าง URI รูปภาพ
+  const getImageUri = (item) => {
+    // ลำดับความสำคัญในการหา URI รูปภาพ
+    
+    // 0. Optimistic message - ใช้ local URI โดยตรง
+    if (item.isOptimistic && item.image) {
+      return item.image;
+    }
+    
+    // 1. Cloudinary URL (เป็น full URL แล้ว)
+    if (item.fileUrl && item.fileUrl.includes('cloudinary.com')) {
+      return item.fileUrl;
+    }
+    
+    // 2. File URL จาก API (full HTTP URL)
+    if (item.fileUrl && item.fileUrl.startsWith('http')) {
+      return item.fileUrl;
+    }
+    
+    // 3. Direct image URL (full HTTP URL)
+    if (item.image && typeof item.image === 'string' && item.image.startsWith('http')) {
+      return item.image;
+    }
+    
+    // 4. File path จาก file object
+    if (item.file?.url && item.file.url.startsWith('http')) {
+      return item.file.url;
+    }
+    
+    // 5. Local file URI (สำหรับไฟล์ที่เพิ่งเลือกจากเครื่อง)
+    if (item.fileUrl && (item.fileUrl.startsWith('file://') || item.fileUrl.startsWith('content://'))) {
+      return item.fileUrl;
+    }
+    
+    if (item.image && (item.image.startsWith('file://') || item.image.startsWith('content://'))) {
+      return item.image;
+    }
+    
+    // 6. Relative path - ต่อกับ API_URL
+    const relativePath = item.fileUrl || 
+                         item.image || 
+                         item.file?.url || 
+                         item.file?.file_path;
+    
+    if (relativePath && typeof relativePath === 'string') {
+      // ลบ slash ที่ซ้ำออก
+      const cleanPath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+      return `${API_URL}/${cleanPath}`;
+    }
+    
+    // 7. Fallback
+    return null;
+  };
+  
   // Handle both object and string sender formats with null safety
   const isMyMessage = (
     (item.sender && typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
@@ -36,7 +90,7 @@ const ImageMessage = ({
       (item.sender && item.sender.includes && item.sender.includes(currentUser?.firstName?.split(' ')[0] || ''))
     ))
   );
-  const showTime = shouldShowTime && shouldShowTime(item._id);
+  const showTime = shouldShowTime ? shouldShowTime(item._id) : false;
 
   return (
     <View>
@@ -54,10 +108,7 @@ const ImageMessage = ({
           } else {
             // โหมดปกติ แสดงเวลา และเปิดรูป
             onMessagePress && onMessagePress(item._id);
-            const imageUri = item.fileUrl ||
-                           (item.image && item.image.startsWith && item.image.startsWith('http') 
-                             ? item.image 
-                             : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`);
+            const imageUri = getImageUri(item);
             setTimeout(() => onImagePress && onImagePress(imageUri), 200);
           }
         }}
@@ -70,26 +121,23 @@ const ImageMessage = ({
           {(item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path || item.fileUrl || item.image) ? (
             <Image
               source={{ 
-                uri: item.fileUrl ||
-                     (item.image && item.image.startsWith && item.image.startsWith('http') 
-                       ? item.image 
-                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`)
+                uri: getImageUri(item)
               }}
               style={styles.messageImage}
               resizeMode="cover"
               onError={(error) => {
-                console.log('Image load error:', error.nativeEvent?.error || error);
-                console.log('Failed URI:', item.fileUrl ||
-                     (item.image && item.image.startsWith && item.image.startsWith('http') 
-                       ? item.image 
-                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`));
+                console.log('❌ Image load error:', error.nativeEvent?.error || error);
+                console.log('❌ Failed URI:', getImageUri(item));
+                console.log('🔍 Item data:', {
+                  fileUrl: item.fileUrl,
+                  image: item.image,
+                  file: item.file,
+                  messageType: item.messageType
+                });
               }}
               onLoad={() => {
-                console.log('Image loaded successfully');
-                console.log('Loaded URI:', item.fileUrl ||
-                     (item.image && item.image.startsWith && item.image.startsWith('http') 
-                       ? item.image 
-                       : `${API_URL}${item.image || item.file?.url || item.file?.file_path || ''}`));
+                console.log('✅ Image loaded successfully');
+                console.log('✅ Loaded URI:', getImageUri(item));
               }}
             />
           ) : (
@@ -102,18 +150,18 @@ const ImageMessage = ({
       </TouchableOpacity>
       
       {/* Time and status for images */}
-      {(typeof showTimeForMessages === 'function' ? showTimeForMessages(item._id) : showTimeForMessages?.has?.(item._id)) && (
+      {showTime && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,
             isMyMessage ? styles.myMessageTimeBottom : styles.otherMessageTimeBottom,
             {
-              opacity: showTime ? 1 : (timeAnimations[item._id] || new Animated.Value(0)),
-              maxHeight: showTime ? 'auto' : (timeAnimations[item._id] ? 
+              opacity: timeAnimations[item._id] || new Animated.Value(1),
+              maxHeight: timeAnimations[item._id] ? 
                 (timeAnimations[item._id]).interpolate({
                   inputRange: [0, 1],
                   outputRange: [0, 30]
-                }) : 0)
+                }) : 30
             }
           ]}
         >
