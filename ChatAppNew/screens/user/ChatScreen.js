@@ -23,6 +23,7 @@ import UserChatItem from '../../components_user/UserChatItem';
 import GroupChatItem from '../../components_user/GroupChatItem';
 import TabBar from '../../components_user/TabBar';
 import ChatItemExpandAnimation from '../../components_user/ChatItemExpandAnimation';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import ChatManager from '../../components_user/ChatManager';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 // Removed loading imports - no longer using loading functionality
@@ -47,6 +48,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [showChatListAnimation, setShowChatListAnimation] = useState(false); // เริ่มต้นเป็น false
   const [showChatListContent, setShowChatListContent] = useState(true); // แสดงเนื้อหาทันทีถ้าไม่มี animation
   const [showDropdown, setShowDropdown] = useState(false); // สำหรับ dropdown menu
+  const [showSuccess, setShowSuccess] = useState(false); // สำหรับ SuccessTickAnimation
   const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
   const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
   const [notificationBanner, setNotificationBanner] = useState(null); // สำหรับแสดง notification banner
@@ -610,7 +612,7 @@ const ChatScreen = ({ route, navigation }) => {
       // รีเซ็ต select mode
       cancelSelectMode();
       
-      Alert.alert('สำเร็จ', `ลบแชท ${selectedChats.size} รายการแล้ว`);
+      setShowSuccess(true);
     } catch (error) {
       console.error('Error hiding chats:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบแชทได้');
@@ -1065,6 +1067,11 @@ const ChatScreen = ({ route, navigation }) => {
           />
         </ChatItemExpandAnimation>
       )}
+
+      <SuccessTickAnimation
+        visible={showSuccess}
+        onComplete={() => setShowSuccess(false)}
+      />
     </TouchableOpacity>
   );
 }

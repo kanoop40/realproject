@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { API_URL } from '../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const GroupMessageBubble = ({ 
   item, 
@@ -77,24 +78,12 @@ const GroupMessageBubble = ({
       {/* Avatar สำหรับข้อความของผู้อื่น */}
       {!isMyMessage && (
         <View style={styles.messageAvatarContainer}>
-          {senderAvatar ? (
-            <Image
-              source={{ 
-                uri: (senderAvatar && senderAvatar.startsWith && senderAvatar.startsWith('http'))
-                  ? senderAvatar 
-                  : `${API_URL}/${(senderAvatar || '').replace(/\\/g, '/').replace(/^\/+/, '')}`
-              }}
-              style={styles.messageAvatar}
-            />
-          ) : (
-            <View style={[styles.messageAvatar, styles.defaultMessageAvatar]}>
-              <Text style={styles.messageAvatarText}>
-                {(senderName && senderName.charAt(0)) 
-                  ? senderName.charAt(0).toUpperCase() 
-                  : '?'}
-              </Text>
-            </View>
-          )}
+          <AvatarImage 
+            avatar={senderAvatar} 
+            name={senderName} 
+            size={30} 
+            style={styles.messageAvatar}
+          />
         </View>
       )}
       

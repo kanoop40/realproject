@@ -101,58 +101,47 @@ const LoadOlderMessagesPrivateChat = ({
 const styles = StyleSheet.create({
   container: {
     marginVertical: SPACING.xs,
-    marginHorizontal: SPACING.sm,
-    borderRadius: 8,
-    backgroundColor: 'rgba(60, 255, 0, 1)',
-    shadowColor: '#ffffffff',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 1)'
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent', // พื้นหลังโปร่งใส
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
   },
   loadingText: {
     marginLeft: SPACING.xs,
-    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.textSecondary,
     fontWeight: '500'
   },
   loadButton: {
-    paddingVertical: 8,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: '#F0F8FF',
-    borderWidth: 0,
-    borderColor: '#ffffffff',
-    borderRadius: 0,
-    margin: 4
+    // ลบ background, border, และ padding
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent', // พื้นหลังโปร่งใส
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    paddingVertical: SPACING.xs, // padding เล็กน้อยเพื่อให้กดง่าย
   },
   scrollAnimation: {
-    width: 30,
-    height: 30,
-    marginRight: 8,
+    width: 24, // ลดขนาดให้เล็กลง
+    height: 24,
+    marginRight: 6,
     transform: [{ rotate: '180deg' }]
   },
   textContainer: {
     alignItems: 'center'
   },
   buttonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#000000ff',
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textSecondary, // ใช้สีที่นุ่มกว่า
     textAlign: 'center'
   },
   subText: {

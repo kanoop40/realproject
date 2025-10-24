@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { API_URL } from '../service/api';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const UserCard = ({ user, onPress, onDelete }) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
@@ -172,32 +173,12 @@ const UserCard = ({ user, onPress, onDelete }) => {
         >
         <View style={styles.leftContent}>
           <View style={styles.avatarContainer}>
-            {user.avatar ? (
-              <Image 
-                source={{ 
-                  uri: user.avatar.startsWith('http') 
-                    ? user.avatar 
-                    : `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                }}
-                style={styles.avatar}
-                defaultSource={require('../assets/default-avatar.jpg')}
-                onError={(error) => {
-                  console.log('❌ Avatar load error in UserCard:', error.nativeEvent);
-                  console.log('❌ Avatar URL:', user.avatar.startsWith('http') 
-                    ? user.avatar 
-                    : `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
-                }}
-                onLoad={() => {
-                  console.log('✅ Avatar loaded successfully in UserCard:', user.avatar);
-                }}
-              />
-            ) : (
-              <View style={[styles.avatar, styles.emptyAvatar]}>
-                <Text style={styles.avatarText}>
-                  {user.firstName && user.firstName[0].toUpperCase()}
-                </Text>
-              </View>
-            )}
+            <AvatarImage 
+              avatar={user.avatar} 
+              name={user.firstName} 
+              size={50} 
+              style={styles.avatar}
+            />
           </View>
           <View style={styles.userTextContainer}>
             <Text style={styles.userName}>{user.firstName} {user.lastName}</Text>

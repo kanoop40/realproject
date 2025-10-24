@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { API_URL } from '../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
+import { AvatarImage } from '../utils/avatarUtils';
 
 // SPACING, RADIUS, SHADOWS are now imported from theme
 import ChatMenuButton from './ChatMenuButton';
@@ -32,25 +33,12 @@ const ChatHeader = ({
       
       {/* ข้อมูลผู้ใช้ */}
       <View style={styles.userInfoContainer}>
-        {recipientAvatar ? (
-          <Image
-            source={{ 
-              uri: recipientAvatar.startsWith('http') 
-                ? recipientAvatar 
-                : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-            }}
-            style={styles.avatar}
-            defaultSource={require('../assets/default-avatar.jpg')}
-          />
-        ) : (
-          <View style={styles.defaultAvatar}>
-            <Text style={styles.avatarText}>
-              {(typeof recipientName === 'string' && recipientName.charAt(0)) 
-                ? recipientName.charAt(0).toUpperCase() 
-                : '?'}
-            </Text>
-          </View>
-        )}
+        <AvatarImage 
+          avatar={recipientAvatar} 
+          name={recipientName} 
+          size={40} 
+          style={styles.avatar}
+        />
         
         <View style={styles.nameContainer}>
           <Text style={styles.nameText}>

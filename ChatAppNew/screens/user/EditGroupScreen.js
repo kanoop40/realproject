@@ -17,6 +17,8 @@ import { useAuth } from '../../context/AuthContext';
 import api, { updateGroup, updateGroupAvatar, addGroupMembers, getGroupDetails, API_URL } from '../../service/api';
 import * as ImagePicker from 'expo-image-picker';
 import LoadingOverlay from '../../components/LoadingOverlay';
+import { AvatarImage } from '../../utils/avatarUtils';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 
 const EditGroupScreen = ({ route, navigation }) => {
   const { groupId } = route.params;
@@ -26,6 +28,7 @@ const EditGroupScreen = ({ route, navigation }) => {
   const [groupAvatar, setGroupAvatar] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingGroup, setIsLoadingGroup] = useState(true);
+  const [showSuccess, setShowSuccess] = useState(false);
   
   // User management states
   const [users, setUsers] = useState([]);
@@ -146,10 +149,7 @@ const EditGroupScreen = ({ route, navigation }) => {
       setSelectedUsers(prev => [...prev, ...newUsers]);
       setShowClassSelection(false);
       
-      Alert.alert(
-        'สำเร็จ',
-        `เพิ่มสมาชิกจากกลุ่มเรียน ${classCode} จำนวน ${newUsers.length} คน`
-      );
+      setShowSuccess(true);
       
     } catch (error) {
       console.error('Error adding users by class code:', error);
@@ -306,21 +306,17 @@ const EditGroupScreen = ({ route, navigation }) => {
       console.log('🔄 Force refreshing group data...');
       await loadGroupData();
 
-      Alert.alert('สำเร็จ', 'อัปเดตข้อมูลกลุ่มเรียบร้อยแล้ว', [
-        {
-          text: 'ตกลง',
-          onPress: () => {
-            // ส่ง flag กลับไปให้ parent screen รีเฟรช
-            navigation.navigate('GroupChat', { 
-              groupId, 
-              refresh: true,
-              updatedMembers: selectedUsers.length,
-              forceRefresh: Date.now(), // เพิ่ม timestamp เพื่อบังคับ refresh
-              avatarUpdated: true // บอกว่ามีการอัปเดตรูปภาพ
-            });
-          }
-        }
-      ]);
+      setShowSuccess(true);
+      setTimeout(() => {
+        // ส่ง flag กลับไปให้ parent screen รีเฟรช
+        navigation.navigate('GroupChat', { 
+          groupId, 
+          refresh: true,
+          updatedMembers: selectedUsers.length,
+          forceRefresh: Date.now(), // เพิ่ม timestamp เพื่อบังคับ refresh
+          avatarUpdated: true // บอกว่ามีการอัปเดตรูปภาพ
+        });
+      }, 1500);
 
     } catch (error) {
       console.error('❌ Error updating group:', error);
@@ -342,14 +338,10 @@ const EditGroupScreen = ({ route, navigation }) => {
         style={[styles.userItem, isSelected && styles.selectedUserItem]}
         onPress={() => toggleUserSelection(item)}
       >
-        <Image
-          source={{
-            uri: item.avatar?.startsWith('http') 
-              ? item.avatar 
-              : item.avatar 
-                ? `${API_URL}${item.avatar}`
-                : 'https://via.placeholder.com/40'
-          }}
+        <AvatarImage 
+          avatar={item.avatar} 
+          name={displayName} 
+          size={40} 
           style={styles.userAvatar}
         />
         <View style={styles.userInfo}>
@@ -442,14 +434,10 @@ const EditGroupScreen = ({ route, navigation }) => {
               const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
               return (
                 <View key={user._id} style={styles.selectedMemberChip}>
-                  <Image
-                    source={{
-                      uri: user.avatar?.startsWith('http') 
-                        ? user.avatar 
-                        : user.avatar 
-                          ? `${API_URL}${user.avatar}`
-                          : 'https://via.placeholder.com/32'
-                    }}
+                  <AvatarImage 
+                    avatar={user.avatar} 
+                    name={displayName} 
+                    size={32} 
                     style={styles.selectedMemberAvatar}
                   />
                   <Text style={styles.selectedMemberName} numberOfLines={1}>
@@ -617,6 +605,11 @@ const EditGroupScreen = ({ route, navigation }) => {
           />
         </View>
       </Modal>
+
+      <SuccessTickAnimation
+        visible={showSuccess}
+        onComplete={() => setShowSuccess(false)}
+      />
     </View>
   );
 };

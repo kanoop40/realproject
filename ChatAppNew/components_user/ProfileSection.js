@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { API_URL } from '../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const ProfileSection = ({ 
   currentUser, 
@@ -16,32 +17,12 @@ const ProfileSection = ({
         onPress={onImagePickerPress}
         disabled={isUpdating}
       >
-        {currentUser?.avatar ? (
-          <Image
-            source={{ 
-              uri: currentUser.avatar.startsWith('http') 
-                ? currentUser.avatar 
-                : `${API_URL}/${currentUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-            }}
-            style={styles.avatar}
-            defaultSource={require('../assets/default-avatar.jpg')}
-            onLoad={() => console.log('✅ Avatar image loaded successfully')}
-            onError={(error) => {
-              console.error('❌ Avatar image load error:', error);
-              console.log('❌ Avatar path:', currentUser.avatar);
-              console.log('❌ Avatar URL:', currentUser.avatar.startsWith('http') 
-                ? currentUser.avatar 
-                : `${API_URL}/${currentUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
-            }}
-            onLoadStart={() => console.log('🔄 Avatar image loading started')}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.defaultAvatar]}>
-            <Text style={styles.avatarText}>
-              {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
-            </Text>
-          </View>
-        )}
+        <AvatarImage 
+          avatar={currentUser?.avatar} 
+          name={currentUser?.firstName} 
+          size={100} 
+          style={styles.avatar}
+        />
         
         <View style={styles.cameraIconContainer}>
           {isUpdating ? (

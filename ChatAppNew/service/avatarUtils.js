@@ -56,42 +56,37 @@ export const AvatarImage = ({
   const avatarUrl = getAvatarUrl(avatarPath);
   const initials = getInitials(firstName, lastName);
   
-  if (!avatarUrl || imageError) {
+  // ถ้ามี avatar URL และยังไม่ error ให้แสดง Image
+  if (avatarUrl && !imageError) {
     return (
-      <View style={[{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: '#007AFF',
-        justifyContent: 'center',
-        alignItems: 'center'
-      }, defaultStyle]}>
-        <Text style={[{
-          color: 'white',
-          fontSize: size * 0.3,
-          fontWeight: 'bold'
-        }, textStyle]}>
-          {initials}
-        </Text>
-      </View>
+      <Image
+        source={{ uri: avatarUrl }}
+        style={[{
+          width: size,
+          height: size,
+          borderRadius: size / 2
+        }, style]}
+        onLoad={() => setImageLoading(false)}
+        onError={() => {
+          console.log('Avatar failed to load:', avatarUrl);
+          setImageError(true);
+          setImageLoading(false);
+        }}
+        defaultSource={require('../assets/default-avatar.jpg')}
+      />
     );
   }
   
+  // ถ้าไม่มี avatar หรือ error ให้แสดง default-avatar.jpg
   return (
     <Image
-      source={{ uri: avatarUrl }}
+      source={require('../assets/default-avatar.jpg')}
       style={[{
         width: size,
         height: size,
         borderRadius: size / 2
       }, style]}
-      onLoad={() => setImageLoading(false)}
-      onError={() => {
-        console.log('Avatar failed to load:', avatarUrl);
-        setImageError(true);
-        setImageLoading(false);
-      }}
-      defaultSource={require('../assets/default-avatar.jpg')}
+      resizeMode="cover"
     />
   );
 };

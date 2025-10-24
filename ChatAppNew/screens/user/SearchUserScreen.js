@@ -18,6 +18,7 @@ import LottieView from 'lottie-react-native';
 import { searchUsers, createPrivateChat } from '../../service/api';
 import { useAuth } from '../../context/AuthContext';
 import api, { API_URL } from '../../service/api';
+import { AvatarImage } from '../../service/avatarUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Removed loading import - no longer using loading functionality
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
@@ -32,7 +33,6 @@ const SearchUserScreen = ({ navigation }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [chatCreationLoading, setChatCreationLoading] = useState(false);
-  const [chatCreationProgress, setChatCreationProgress] = useState(0);
 
   // Real-time search with debounce เหมือนหน้าเดิม
   useEffect(() => {
@@ -94,122 +94,63 @@ const SearchUserScreen = ({ navigation }) => {
   };
 
   const createChatRoom = async (selectedUser) => {
-    console.log('🚀 createChatRoom called for iOS');
+    console.log('🚀 createChatRoom - Fast version');
+    
+    if (!selectedUser || !selectedUser._id) {
+      Alert.alert('ข้อผิดพลาด', 'ข้อมูลผู้ใช้ไม่ครบถ้วน');
+      return;
+    }
+
+    // ใช้ข้อมูล currentUser ที่มีอยู่แล้วจาก AuthContext แทนการเรียก API
+    if (!currentUser || !currentUser._id) {
+      Alert.alert('ข้อผิดพลาด', 'ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
+      navigation.replace('Login');
+      return;
+    }
+
+    setChatCreationLoading(true);
     
     try {
-      console.log('Starting createChatRoom with selectedUser:', selectedUser);
+      console.log('✅ Creating chat between:', currentUser._id, 'and', selectedUser._id);
       
-      if (!selectedUser || !selectedUser._id) {
-        console.log('❌ Invalid selectedUser data');
-        Alert.alert('ข้อผิดพลาด', 'ข้อมูลผู้ใช้ไม่ครบถ้วน');
-        return;
-      }
+      // เรียก API เพียงครั้งเดียว พร้อม timeout สั้นลง
+      const response = await Promise.race([
+        createPrivateChat([currentUser._id, selectedUser._id]),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000) // ลดเหลือ 5 วินาที
+        )
+      ]);
+      
+      console.log('✅ Chat created/found:', response.chatroomId);
+      
+      // ปิด loading และ modal ก่อน navigate
+      setChatCreationLoading(false);
+      closeModal();
+      
+      // Navigate ทันทีโดยไม่ต้องรอ
+      const chatParams = {
+        chatroomId: response.chatroomId,
+        roomName: response.roomName || `${selectedUser.firstName} ${selectedUser.lastName}`,
+        recipientId: selectedUser._id,
+        recipientName: `${selectedUser.firstName} ${selectedUser.lastName}`,
+        recipientAvatar: selectedUser.avatar
+      };
 
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        console.log('❌ No token found');
-        Alert.alert('ข้อผิดพลาด', 'ไม่พบ Token กรุณาเข้าสู่ระบบใหม่');
-        navigation.replace('Login');
-        return;
-      }
-
-      let progressInterval;
-      try {
-        console.log('✅ Starting chat creation process...');
-        setChatCreationLoading(true);
-        setChatCreationProgress(0);
-        
-        // Simulate progress
-        progressInterval = setInterval(() => {
-          setChatCreationProgress(prev => {
-            if (prev >= 90) return prev;
-            return prev + 10;
-          });
-        }, 800);
-        
-        // ดึงข้อมูลผู้ใช้ปัจจุบันจาก API เพื่อให้แน่ใจว่าถูกต้อง
-        console.log('Getting current user from API...');
-        setChatCreationProgress(20);
-        const currentUserResponse = await Promise.race([
-          api.get('/users/current'),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout getting current user')), 8000)
-          )
-        ]);
-        const currentUser = currentUserResponse.data;
-        
-        console.log('Current user from API:', currentUser);
-        console.log('Creating private chat between:', currentUser._id, 'and', selectedUser._id);
-        setChatCreationProgress(50);
-        
-        // สร้างหรือดึงแชทส่วนตัวพร้อม timeout
-        const response = await Promise.race([
-          createPrivateChat([currentUser._id, selectedUser._id]),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout creating chat')), 10000)
-          )
-        ]);
-        
-        setChatCreationProgress(100);
-        
-        console.log('Private chat response:', response);
-        
-        // หยุด progress interval
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
-        
-        // ปิด loading ก่อน navigate เพื่อป้องกันการค้าง
-        setChatCreationLoading(false);
-        setChatCreationProgress(0);
-        
-        if (response.existing) {
-          console.log('🚀 Navigating to Chat then PrivateChat...');
-          // Navigation สำหรับ iOS - ไปที่ ChatScreen ก่อน แล้วเปิด PrivateChat
-          requestAnimationFrame(() => {
-            // ไปที่ ChatScreen ก่อนพร้อม parameter ที่จะเปิด PrivateChat
-            navigation.navigate('Chat', {
-              openChatId: response.chatroomId,
-              openChatParams: {
-                chatroomId: response.chatroomId,
-                roomName: response.roomName,
-                recipientId: selectedUser._id,
-                recipientName: `${selectedUser.firstName} ${selectedUser.lastName}`,
-                recipientAvatar: selectedUser.avatar,
-                returnChatId: response.chatroomId,
-              }
-            });
-            console.log('✅ Navigation completed');
-          });
-        }
-      } catch (error) {
-        // หยุด progress interval ถ้ามี error
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
-        // ปิด loading ทุกกรณีเมื่อมี error
-        setChatCreationLoading(false);
-        setChatCreationProgress(0);
-        
-        console.error('Error creating chat:', error);
-        
-        let errorMessage = 'ไม่สามารถสร้างแชทได้';
-        if (error.message === 'Timeout creating chat') {
-          errorMessage = 'การสร้างแชทใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
-        } else if (error.message === 'Timeout getting current user') {
-          errorMessage = 'การเข้าถึงข้อมูลผู้ใช้ล่าช้า กรุณาตรวจสอบการเชื่อมต่อ';
-        } else if (error.response?.status === 500) {
-          errorMessage = 'เซิร์ฟเวอร์ไม่สามารถตอบสนองได้ กรุณาลองใหม่';
-        }
-        
-        Alert.alert('ข้อผิดพลาด', errorMessage, [
-          { text: 'ลองใหม่', onPress: () => createChatRoom(selectedUser) },
-          { text: 'ยกเลิก', style: 'cancel' }
-        ]);
-      }
+      // Navigate ตรงไปยัง PrivateChat เลย
+      navigation.navigate('PrivateChat', chatParams);
+      
     } catch (error) {
-      console.error('Error in createChatRoom:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถสร้างแชทได้');
+      setChatCreationLoading(false);
+      console.error('Error creating chat:', error);
+      
+      let errorMessage = 'ไม่สามารถสร้างแชทได้';
+      if (error.message === 'Timeout') {
+        errorMessage = 'การเชื่อมต่อช้าเกินไป กรุณาลองใหม่';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง';
+      }
+      
+      Alert.alert('ข้อผิดพลาด', errorMessage);
     }
   };
 
@@ -237,24 +178,13 @@ const SearchUserScreen = ({ navigation }) => {
         onPress={() => openProfileModal(item)}
       >
         <View style={styles.avatarContainer}>
-          {item.avatar ? (
-            <Image 
-              source={{ 
-                uri: item.avatar.startsWith('http') 
-                  ? item.avatar 
-                  : `${API_URL}/${item.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-              }} 
-              style={styles.avatar} 
-              defaultSource={require('../../assets/default-avatar.jpg')}
-              onError={(error) => console.log('Avatar load error:', error)}
-            />
-          ) : (
-            <View style={styles.defaultAvatar}>
-              <Text style={styles.avatarText}>
-                {item.firstName ? item.firstName.charAt(0).toUpperCase() : '?'}
-              </Text>
-            </View>
-          )}
+          <AvatarImage
+            avatarPath={item.avatar}
+            firstName={item.firstName}
+            lastName={item.lastName}
+            size={50}
+            style={styles.avatar}
+          />
         </View>
         
         <View style={styles.userInfo}>
@@ -368,24 +298,13 @@ const SearchUserScreen = ({ navigation }) => {
             <ScrollView style={styles.modalContent}>
               <View style={styles.profileSection}>
                 <View style={styles.profileAvatarContainer}>
-                  {selectedUser.avatar ? (
-                    <Image 
-                      source={{ 
-                        uri: selectedUser.avatar.startsWith('http') 
-                          ? selectedUser.avatar 
-                          : `${API_URL}/${selectedUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                      }} 
-                      style={styles.profileAvatar} 
-                      defaultSource={require('../../assets/default-avatar.jpg')}
-                      onError={(error) => console.log('Profile avatar load error:', error)}
-                    />
-                  ) : (
-                    <View style={styles.profileDefaultAvatar}>
-                      <Text style={styles.profileAvatarText}>
-                        {selectedUser.firstName ? selectedUser.firstName.charAt(0).toUpperCase() : '?'}
-                      </Text>
-                    </View>
-                  )}
+                  <AvatarImage
+                    avatarPath={selectedUser.avatar}
+                    firstName={selectedUser.firstName}
+                    lastName={selectedUser.lastName}
+                    size={80}
+                    style={styles.profileAvatar}
+                  />
                 </View>
                 
                 <Text style={styles.profileName}>
@@ -444,19 +363,26 @@ const SearchUserScreen = ({ navigation }) => {
               </View>
 
               <TouchableOpacity
-                style={styles.chatButton}
+                style={[styles.chatButton, chatCreationLoading && styles.chatButtonDisabled]}
                 activeOpacity={0.7}
                 delayPressIn={0}
+                disabled={chatCreationLoading}
                 onPress={() => {
                   console.log('Chat button pressed for:', selectedUser._id);
-                  closeModal();
-                  setTimeout(() => {
-                    createChatRoom(selectedUser);
-                  }, 300); // รอให้ modal ปิดก่อน
+                  createChatRoom(selectedUser);
                 }}
               >
-                <MaterialIcons name="chat" size={24} color="#fff" />
-                <Text style={styles.chatButtonText}>แชท</Text>
+                {chatCreationLoading ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.chatButtonText}>กำลังเข้าแชท...</Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcons name="chat" size={24} color="#fff" />
+                    <Text style={styles.chatButtonText}>แชท</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </ScrollView>
           )}
@@ -705,6 +631,10 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     marginBottom: SPACING.lg,
     ...SHADOWS.md,
+  },
+  chatButtonDisabled: {
+    opacity: 0.7,
+    backgroundColor: '#999',
   },
   chatButtonText: {
     color: COLORS.textInverse,

@@ -1186,7 +1186,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           console.log('🌤️ Trying direct Cloudinary save...');
           const asset = await MediaLibrary.saveToLibraryAsync(selectedModalImage);
           console.log('✅ Direct save successful:', asset);
-          Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
+          setShowSuccessAnimation(true);
           return;
         } catch (directError) {
           console.log('⚠️ Direct save failed:', directError.message);
@@ -1213,7 +1213,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         try {
           const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
           console.log('✅ Image saved to gallery:', asset);
-          Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
+          setShowSuccessAnimation(true);
         } catch (saveError) {
           console.error('❌ Error saving to gallery:', saveError);
           Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกรูปภาพลงในแกลเลอรี่ได้: ' + saveError.message);
@@ -1317,7 +1317,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           try {
             const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
             console.log('✅ Media saved to gallery:', asset);
-            Alert.alert('สำเร็จ', isImage ? 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว' : 'บันทึกวิดีโอลงในแกลเลอรี่แล้ว');
+            setShowSuccessAnimation(true);
           } catch (saveError) {
             console.error('❌ Error saving media to gallery:', saveError);
             Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกไฟล์ลงในแกลเลอรี่ได้: ' + saveError.message);
@@ -1357,7 +1357,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
             });
             console.log('✅ File shared successfully');
           } else {
-            Alert.alert('สำเร็จ', 'ดาวน์โหลดไฟล์แล้ว: ' + finalFileName);
+            setShowSuccessAnimation(true);
             console.log('✅ File downloaded (sharing not available)');
           }
         } else {

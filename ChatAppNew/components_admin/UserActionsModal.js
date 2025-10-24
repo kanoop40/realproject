@@ -8,6 +8,7 @@ import {
   Image,
 } from 'react-native';
 import { API_URL } from '../service/api';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const UserActionsModal = ({ 
   visible, 
@@ -33,18 +34,11 @@ const UserActionsModal = ({
           
           {selectedUser && (
             <View style={styles.selectedUserInfo}>
-              <Image
-                source={
-                  selectedUser.avatar
-                    ? { 
-                        uri: selectedUser.avatar.startsWith('http') 
-                          ? selectedUser.avatar 
-                          : `${API_URL}/${selectedUser.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                      }
-                    : require('../assets/default-avatar.jpg')
-                }
+              <AvatarImage 
+                avatar={selectedUser.avatar} 
+                name={selectedUser.firstName} 
+                size={80} 
                 style={styles.modalAvatar}
-                defaultSource={require('../assets/default-avatar.jpg')}
               />
               <Text style={styles.modalUserName}>
                 {selectedUser.firstName} {selectedUser.lastName}

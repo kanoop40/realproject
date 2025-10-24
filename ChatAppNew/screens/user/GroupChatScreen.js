@@ -22,6 +22,7 @@ import GroupChatMenuButton from '../../components_user/GroupChatMenuButton';
 import GroupMessageBubble from '../../components_user/GroupMessageBubble';
 import LoadOlderMessagesGroupChat from '../../components_user/LoadOlderMessagesGroupChat';
 import LoadingOverlay from '../../components/LoadingOverlay';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
@@ -53,6 +54,7 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [selectionMode, setSelectionMode] = useState(false); // โหมดเลือกข้อความ
   const [selectedMessages, setSelectedMessages] = useState([]); // ข้อความที่เลือก
   const [successNotification, setSuccessNotification] = useState({ visible: false, message: '' }); // แจ้งเตือนสำเร็จ
+  const [showSuccess, setShowSuccess] = useState(false); // สำหรับ SuccessTickAnimation
   
   // States สำหรับโหลดข้อความเก่า
   const [showLoadOlderButton, setShowLoadOlderButton] = useState(false);
@@ -614,7 +616,7 @@ const GroupChatScreen = ({ route, navigation }) => {
       // อัปเดตข้อมูลสมาชิกใหม่
       await loadGroupData();
       
-      Alert.alert('สำเร็จ', 'ลบสมาชิกออกจากกลุ่มแล้ว');
+      setShowSuccess(true);
     } catch (error) {
       console.error('Error removing member:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบสมาชิกออกจากกลุ่มได้');
@@ -1446,9 +1448,8 @@ const GroupChatScreen = ({ route, navigation }) => {
               try {
                 const { deleteGroup } = await import('../../service/api');
                 await deleteGroup(groupId);
-                Alert.alert('สำเร็จ', 'ลบกลุ่มแล้ว', [
-                  { text: 'ตกลง', onPress: () => navigation.goBack() }
-                ]);
+                setShowSuccess(true);
+                setTimeout(() => navigation.goBack(), 1500);
               } catch (error) {
                 console.error('Delete group error:', error.response?.data || error.message);
                 Alert.alert('ข้อผิดพลาด', 'ไม่สามารถลบกลุ่มได้');
@@ -1466,9 +1467,8 @@ const GroupChatScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await api.post(`/groups/${groupId}/leave`);
-              Alert.alert('สำเร็จ', 'ออกจากกลุ่มแล้ว', [
-                { text: 'ตกลง', onPress: () => navigation.goBack() }
-              ]);
+              setShowSuccess(true);
+              setTimeout(() => navigation.goBack(), 1500);
             } catch (error) {
               console.error('Leave group error:', error.response?.data || error.message);
               Alert.alert('ข้อผิดพลาด', 'ไม่สามารถออกจากกลุ่มได้');
@@ -2402,6 +2402,11 @@ const GroupChatScreen = ({ route, navigation }) => {
       <LoadingOverlay 
         visible={isLoading} 
         message="กำลังโหลดแชทกลุ่ม..." 
+      />
+
+      <SuccessTickAnimation
+        visible={showSuccess}
+        onComplete={() => setShowSuccess(false)}
       />
 
     </KeyboardAvoidingView>

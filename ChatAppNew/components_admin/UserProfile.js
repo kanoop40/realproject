@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { API_URL } from '../service/api';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const UserProfile = ({ user, onDelete }) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
@@ -135,31 +136,12 @@ const UserProfile = ({ user, onDelete }) => {
             activeOpacity={0.7}
           >
             <View style={styles.avatarContainer}>
-              {user.avatar ? (
-                <Image
-                  source={{ 
-                    uri: user.avatar.startsWith('http') 
-                      ? user.avatar 
-                      : `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                  }}
-                  style={styles.avatar}
-                  defaultSource={require('../assets/default-avatar.jpg')}
-                  onError={(error) => {
-                    console.log('❌ Avatar load error:', error.nativeEvent.error);
-                    console.log('❌ Avatar path:', user.avatar);
-                    console.log('❌ Full URL:', `${API_URL}/${user.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
-                  }}
-                  onLoad={() => {
-                    console.log('✅ Avatar loaded successfully:', user.avatar);
-                  }}
-                />
-              ) : (
-                <View style={[styles.avatar, styles.defaultAvatar]}>
-                  <Text style={styles.avatarText}>
-                    {user.firstName?.[0]?.toUpperCase() || '?'}
-                  </Text>
-                </View>
-              )}
+              <AvatarImage 
+                avatar={user.avatar} 
+                name={user.firstName} 
+                size={60} 
+                style={styles.avatar}
+              />
               {/* Online Status Indicator */}
               <View style={[styles.statusIndicator, { backgroundColor: user.isOnline ? '#34C759' : '#8E8E93' }]} />
             </View>

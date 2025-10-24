@@ -10,6 +10,7 @@ import ImageMessage from './ImageMessage';
 import FileMessage from './FileMessage';
 import TextMessage from './TextMessage';
 import { API_URL } from '../service/api';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const ChatMessage = ({ 
   item, 
@@ -79,23 +80,12 @@ const ChatMessage = ({
       {/* Avatar for other messages */}
       {!isMyMessage && (
         <View style={styles.messageAvatarContainer}>
-          {recipientAvatar ? (
-            <Image
-              source={{ 
-                uri: recipientAvatar.startsWith('http') 
-                  ? recipientAvatar 
-                  : `${API_URL}/${recipientAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-              }}
-              style={styles.messageAvatar}
-              defaultSource={require('../assets/default-avatar.jpg')}
-            />
-          ) : (
-            <View style={[styles.messageAvatar, styles.defaultMessageAvatar]}>
-              <Text style={styles.messageAvatarText}>
-                {recipientName?.charAt(0)?.toUpperCase() || '?'}
-              </Text>
-            </View>
-          )}
+          <AvatarImage 
+            avatar={recipientAvatar} 
+            name={recipientName} 
+            size={30} 
+            style={styles.messageAvatar}
+          />
         </View>
       )}
       

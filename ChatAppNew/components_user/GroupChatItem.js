@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/theme';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const GroupChatItem = ({ 
   item, 
@@ -24,32 +25,12 @@ const GroupChatItem = ({
       onPress={() => onPress(groupData)}
     >
       <View style={styles.avatarContainer}>
-        {groupData.groupAvatar ? (
-          <Image
-            source={{ 
-              uri: groupData.groupAvatar.startsWith('http') 
-                ? groupData.groupAvatar 
-                : `${API_URL}/${groupData.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-            }}
-            style={styles.avatar}
-            defaultSource={require('../assets/default-avatar.jpg')}
-            onError={(error) => {
-              console.log('❌ Group avatar load error:', error.nativeEvent);
-              console.log('❌ Group avatar URL:', groupData.groupAvatar.startsWith('http') 
-                ? groupData.groupAvatar 
-                : `${API_URL}/${groupData.groupAvatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
-            }}
-            onLoad={() => {
-              console.log('✅ Group avatar loaded successfully:', groupData.groupAvatar);
-            }}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.groupAvatar]}>
-            <Text style={styles.groupAvatarText}>
-              👥
-            </Text>
-          </View>
-        )}
+        <AvatarImage 
+          avatar={groupData.groupAvatar} 
+          name={groupData.groupName} 
+          size={50} 
+          style={styles.avatar}
+        />
         {groupData.unreadCount > 0 && (
           <View style={styles.unreadBadge}>
             <Text style={styles.unreadText}>

@@ -5,17 +5,18 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  Alert,
-  ActivityIndicator,
-  Image,
-  Modal,
   ScrollView,
-  Platform
+  Image,
+  Alert,
+  Modal,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../service/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AvatarImage } from '../../utils/avatarUtils';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import * as ImagePicker from 'expo-image-picker';
 
 const CreateGroupScreen = ({ navigation }) => {
@@ -24,6 +25,7 @@ const CreateGroupScreen = ({ navigation }) => {
   const [description, setDescription] = useState('');
   const [groupAvatar, setGroupAvatar] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,10 +114,7 @@ const CreateGroupScreen = ({ navigation }) => {
       setSelectedUsers(prev => [...prev, ...newUsers]);
       setShowClassSelection(false);
       
-      Alert.alert(
-        'สำเร็จ',
-        `เพิ่มสมาชิกจากกลุ่มเรียน ${classCode} จำนวน ${newUsers.length} คน`
-      );
+      setShowSuccess(true);
     } catch (error) {
       console.error('Error adding users by class code:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเพิ่มสมาชิกจากกลุ่มเรียนได้');
@@ -254,12 +253,10 @@ const CreateGroupScreen = ({ navigation }) => {
         style={[styles.userItem, isSelected && styles.userItemSelected]}
         onPress={() => toggleUserSelection(item)}
       >
-        <Image
-          source={
-            item.avatar
-              ? { uri: `${api.defaults.baseURL}/${item.avatar.replace(/\\/g, '/')}` }
-              : require('../../assets/default-avatar.jpg')
-          }
+        <AvatarImage 
+          avatar={item.avatar} 
+          name={item.firstName} 
+          size={40} 
           style={styles.userAvatar}
         />
         <View style={styles.userInfo}>
@@ -353,12 +350,10 @@ const CreateGroupScreen = ({ navigation }) => {
           <View style={styles.selectedMembersContainer}>
             {/* Current User (Always included) */}
             <View style={styles.memberItem}>
-              <Image
-                source={
-                  authUser.avatar
-                    ? { uri: `${api.defaults.baseURL}/${authUser.avatar.replace(/\\/g, '/')}` }
-                    : require('../../assets/default-avatar.jpg')
-                }
+              <AvatarImage 
+                avatar={authUser.avatar} 
+                name={authUser.firstName} 
+                size={32} 
                 style={styles.memberAvatar}
               />
               <Text style={styles.memberName}>
@@ -369,12 +364,10 @@ const CreateGroupScreen = ({ navigation }) => {
             {/* Selected Users */}
             {selectedUsers.map((user) => (
               <View key={user._id} style={styles.memberItem}>
-                <Image
-                  source={
-                    user.avatar
-                      ? { uri: `${api.defaults.baseURL}/${user.avatar.replace(/\\/g, '/')}` }
-                      : require('../../assets/default-avatar.jpg')
-                  }d
+                <AvatarImage 
+                  avatar={user.avatar} 
+                  name={user.firstName} 
+                  size={32} 
                   style={styles.memberAvatar}
                 />
                 <Text style={styles.memberName}>
@@ -567,6 +560,11 @@ const CreateGroupScreen = ({ navigation }) => {
           <Text style={styles.loadingText}>กำลังสร้างกลุ่ม...</Text>
         </View>
       )}
+
+      <SuccessTickAnimation
+        visible={showSuccess}
+        onComplete={() => setShowSuccess(false)}
+      />
     </View>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/theme';
+import { AvatarImage } from '../utils/avatarUtils';
 
 const UserChatItem = ({ 
   item, 
@@ -41,32 +42,12 @@ const UserChatItem = ({
       onPress={handlePress}
     >
       <View style={styles.avatarContainer}>
-        {otherParticipant?.avatar ? (
-          <Image
-            source={{ 
-              uri: otherParticipant.avatar.startsWith('http') 
-                ? otherParticipant.avatar 
-                : `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`
-            }}
-            style={styles.avatar}
-            defaultSource={require('../assets/default-avatar.jpg')}
-            onError={(error) => {
-              console.log('❌ Avatar load error:', error.nativeEvent);
-              console.log('❌ Avatar URL:', otherParticipant.avatar.startsWith('http') 
-                ? otherParticipant.avatar 
-                : `${API_URL}/${otherParticipant.avatar.replace(/\\/g, '/').replace(/^\/+/, '')}`);
-            }}
-            onLoad={() => {
-              console.log('✅ Avatar loaded successfully:', otherParticipant.avatar);
-            }}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.defaultAvatar]}>
-            <Text style={styles.avatarText}>
-              {otherParticipant?.firstName?.[0]?.toUpperCase() || '?'}
-            </Text>
-          </View>
-        )}
+        <AvatarImage 
+          avatar={otherParticipant?.avatar} 
+          name={otherParticipant?.firstName} 
+          size={50} 
+          style={styles.avatar}
+        />
         {/* แสดงจำนวนข้อความที่ยังไม่อ่าน */}
         {chatData.unreadCount > 0 && (
           <View style={styles.unreadBadge}>
