@@ -766,14 +766,48 @@ const getMessageReadCounts = asyncHandler(async (req, res) => {
 
         console.log('📊 getMessageReadCounts called for chat:', id, 'by user:', userId);
 
-        // Check if user is participant in this chatroom
-        const chatroom = await Chatrooms.findOne({
+        // Check if user is participant in this chatroom or group
+        let chatroom = await Chatrooms.findOne({
             _id: id,
             $or: [
                 { user_id: { $in: [userId] } }, // For group chats
                 { participants: { $in: [userId] } } // For private chats
             ]
         });
+
+        // If not found as chatroom, try to find by group_id
+        if (!chatroom) {
+            chatroom = await Chatrooms.findOne({
+                group_id: id,
+                $or: [
+                    { user_id: { $in: [userId] } },
+                    { participants: { $in: [userId] } }
+                ]
+            });
+        }
+
+        // If still not found, check if user is member of the group directly
+        if (!chatroom) {
+            const GroupChat = require('../models/GroupChatModel');
+            const group = await GroupChat.findOne({
+                _id: id,
+                'members.user': userId
+            });
+            
+            if (group) {
+                // Find the actual chatroom for this group
+                chatroom = await Chatrooms.findOne({ group_id: id });
+                
+                if (!chatroom) {
+                    // Create a virtual chatroom object for this group
+                    chatroom = { 
+                        group_id: id, 
+                        _id: id,
+                        type: 'group'
+                    };
+                }
+            }
+        }
 
         if (!chatroom) {
             console.log('❌ User not authorized to access this chat');
@@ -782,23 +816,31 @@ const getMessageReadCounts = asyncHandler(async (req, res) => {
             });
         }
 
-        // For group chats, get total members from GroupChat model via chatroom
+        // For group chats, get total members from GroupChat model
         let totalMembers = 0;
-        if (chatroom.group_id) {
+        const groupId = chatroom.group_id || (chatroom.type === 'group' ? chatroom._id : null);
+        
+        if (groupId) {
             // It's a group chat - get from GroupChat model
             const GroupChat = require('../models/GroupChatModel');
-            const group = await GroupChat.findById(chatroom.group_id);
+            const group = await GroupChat.findById(groupId);
             totalMembers = group?.members?.length || 0;
+            console.log(`📊 Group ${groupId} has ${totalMembers} members`);
         } else {
             // Regular chatroom - count participants
             totalMembers = chatroom.participants?.length || chatroom.user_id?.length || 0;
+            console.log(`📊 Chatroom has ${totalMembers} participants`);
         }
 
         // Get messages with read counts (only messages from current user)
-        const messages = await Messages.find({
-            chat_id: id,
-            user_id: userId // Only messages from current user
-        })
+        // For group chats, use group_id; for regular chats, use chat_id
+        const messageQuery = groupId ? 
+            { group_id: groupId, user_id: userId } : 
+            { chat_id: id, user_id: userId };
+            
+        console.log('📊 Looking for messages with query:', messageQuery);
+        
+        const messages = await Messages.find(messageQuery)
         .select('_id content time readBy user_id')
         .sort({ time: -1 })
         .limit(50) // Limit to recent messages

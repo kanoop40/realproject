@@ -546,6 +546,8 @@ const GroupChatScreen = ({ route, navigation }) => {
         // Load read counts for group chat messages
         if (!append || page === 1) {
           try {
+            console.log('📊 Loading read counts for group ID:', groupId);
+            
             const readCountRes = await api.get(`/chats/${groupId}/read-counts`);
             const readCountData = readCountRes.data;
             
