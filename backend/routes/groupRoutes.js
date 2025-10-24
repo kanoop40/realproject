@@ -102,15 +102,6 @@ router.put('/:id/auto-invite', updateAutoInviteSettings);
 
 // @route   POST /api/groups/:id/messages
 // @desc    ส่งข้อความในกลุ่ม
-const { fileStorage } = require('../config/cloudinary');
-const multerFileUpload = require('multer')({ 
-  storage: fileStorage,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB
-  }
-});
-
-// Multer instance for group file uploads (similar to chatRoutes)
 
 // Multer configuration for group file uploads (same as chatRoutes)
 const uploadGroupMessage = multer({ 
@@ -231,6 +222,6 @@ router.put('/:id/read', protect, markGroupMessagesAsRead);
 
 // @route   POST /api/groups/:id/upload
 // @desc    อัพโหลดไฟล์ในกลุ่ม (alias สำหรับ messages endpoint)
-router.post('/:id/upload', multerFileUpload.single('file'), sendGroupMessage);
+router.post('/:id/upload', handleGroupUpload, sendGroupMessage);
 
 module.exports = router;
