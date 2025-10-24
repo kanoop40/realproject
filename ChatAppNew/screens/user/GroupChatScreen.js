@@ -881,6 +881,20 @@ const GroupChatScreen = ({ route, navigation }) => {
       // แก้ไข: ข้อมูลจริงอยู่ใน response.data.data
       const actualMessageData = response.data.data || response.data;
       
+      // Debug: แสดงข้อมูลไฟล์ที่ได้รับจาก backend
+      console.log('📥 File Server response:', actualMessageData);
+      if (actualMessageData.fileName) {
+        console.log('✅ File metadata received:', {
+          fileName: actualMessageData.fileName,
+          fileSize: actualMessageData.fileSize,
+          fileUrl: actualMessageData.fileUrl,
+          messageType: actualMessageData.messageType,
+          mimeType: actualMessageData.mimeType
+        });
+      } else {
+        console.log('❌ No fileName in response - this is the problem!');
+      }
+      
       setMessages(prev => {
         const filteredMessages = prev.filter(msg => msg._id !== tempId);
         const optimisticMsg = prev.find(msg => msg._id === tempId);
@@ -1254,16 +1268,27 @@ const GroupChatScreen = ({ route, navigation }) => {
             
             // ลองใช้ MediaLibrary.createAssetAsync โดยตรงจาก URL
             try {
-              const asset = await MediaLibrary.createAssetAsync(fullUrl);
+              // ลอง download ผ่าน FileSystem ก่อนแล้วค่อยบันทึก
+              const fileUri = FileSystem.documentDirectory + finalFileName;
+              console.log('💾 Downloading to:', fileUri);
               
-              // แสดงการแจ้งเตือนที่หายไปเอง
-              showSuccessNotification(
-                isImage ? 
-                  `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
-                  `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
-              );
+              const downloadResult = await FileSystem.downloadAsync(fullUrl, fileUri);
+              console.log('📁 Download result:', downloadResult.status);
               
-              console.log('✅ Media saved to gallery directly:', asset);
+              if (downloadResult.status === 200) {
+                const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+                
+                // แสดงการแจ้งเตือนที่หายไปเอง
+                showSuccessNotification(
+                  isImage ? 
+                    `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
+                    `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
+                );
+                
+                console.log('✅ Media saved to gallery:', asset);
+              } else {
+                throw new Error(`Download failed with status: ${downloadResult.status}`);
+              }
               return; // สำเร็จแล้ว ออกจาก function
               
             } catch (directError) {

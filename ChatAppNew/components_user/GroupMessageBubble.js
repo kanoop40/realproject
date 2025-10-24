@@ -143,10 +143,10 @@ const GroupMessageBubble = ({
           </TouchableOpacity>
         )}
 
-        {/* แสดงไฟล์แนบ */}
-        {(item.messageType === 'file' && item.fileName && 
-          typeof item.fileName === 'string' &&
-          !/\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) && (
+        {/* แสดงไฟล์แนบ - รวมกรณีที่ไม่มี fileName แต่มี fileUrl */}
+        {((item.messageType === 'file' || item.fileUrl) && 
+          (item.fileName || item.fileUrl) &&
+          (!item.fileName || !/\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName))) && (
           <TouchableOpacity 
             style={[
               styles.fileMessageBubble,
@@ -171,16 +171,14 @@ const GroupMessageBubble = ({
                   styles.fileName, 
                   isMyMessage ? styles.myFileName : styles.otherFileName
                 ]} numberOfLines={1}>
-                  {decodeFileName(item.fileName)}
+                  {item.fileName ? decodeFileName(item.fileName) : 'ไฟล์แนบ'}
                 </Text>
-                {item.fileSize && (
-                  <Text style={[
-                    styles.fileSize, 
-                    isMyMessage ? styles.myFileSize : styles.otherFileSize
-                  ]}>
-                    {formatFileSize(item.fileSize)}
-                  </Text>
-                )}
+                <Text style={[
+                  styles.fileSize, 
+                  isMyMessage ? styles.myFileSize : styles.otherFileSize
+                ]}>
+                  {item.fileSize ? formatFileSize(item.fileSize) : 'ไฟล์'}
+                </Text>
               </View>
             </View>
           </TouchableOpacity>
