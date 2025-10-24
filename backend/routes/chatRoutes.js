@@ -24,15 +24,17 @@ const { protect } = require('../Middleware/authMiddleware');
 const { fileStorage } = require('../config/cloudinary');
 const multer = require('multer');
 
-// Add error handling for multer with better configuration
+// Multer configuration optimized for React Native FormData
 const uploadMessage = multer({ 
   storage: fileStorage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB - match Cloudinary free tier limit
     fieldSize: 10 * 1024 * 1024, // 10MB for field data
     fieldNameSize: 255,
-    fields: 10,
-    files: 1
+    fields: 20, // Increase field limit for React Native
+    files: 5,   // Allow multiple files just in case
+    parts: 50,  // Increase parts limit
+    headerPairs: 2000 // Increase header pairs limit
   },
   fileFilter: (req, file, cb) => {
     console.log('🔍 Multer processing file:', {
@@ -42,11 +44,7 @@ const uploadMessage = multer({
       size: file.size
     });
     
-    // Accept all file types but warn about size
-    if (file.size && file.size > 10 * 1024 * 1024) {
-      console.warn('⚠️ File size exceeds limit:', file.size);
-    }
-    
+    // Accept all file types
     cb(null, true);
   }
 });
@@ -102,8 +100,8 @@ router.post('/hide', hideChatrooms);
 // @access  Private
 router.get('/:id/messages', getMessages);
 
-// Middleware to conditionally apply multer with better error handling
-const conditionalUpload = (req, res, next) => {
+// Simplified multer middleware that handles both multipart and regular requests
+const handleUpload = (req, res, next) => {
   console.log('🔍 Request details:', {
     contentType: req.get('Content-Type'),
     method: req.method,
@@ -113,56 +111,69 @@ const conditionalUpload = (req, res, next) => {
     contentLength: req.get('Content-Length')
   });
   
-  // Only apply multer for multipart/form-data requests
-  if (req.get('Content-Type')?.includes('multipart/form-data')) {
-    console.log('📎 Multipart request detected - applying multer');
-    
-    // Use single('file') for more predictable behavior
-    const upload = uploadMessage.single('file');
-    
-    upload(req, res, (err) => {
-      if (err) {
-        console.error('❌ Multer error details:', {
-          code: err.code,
-          message: err.message,
-          field: err.field,
-          stack: err.stack
+  // Use any() to handle React Native FormData which might send files with different field names
+  const upload = uploadMessage.any();
+  
+  upload(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error details:', {
+        code: err.code,
+        message: err.message,
+        field: err.field,
+        stack: err.stack
+      });
+      
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ 
+          message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 10MB' 
         });
-        
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ 
-            message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 10MB' 
-          });
-        }
-        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-          return res.status(400).json({ 
-            message: 'รูปแบบไฟล์ไม่ถูกต้อง' 
-          });
-        }
-        return res.status(500).json({
-          message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
-          error: err.message,
-          code: err.code
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ 
+          message: 'รูปแบบไฟล์ไม่ถูกต้อง' 
         });
       }
       
-      console.log('📎 Multer success:', {
-        hasFile: !!req.file,
-        bodyKeys: Object.keys(req.body || {}),
-        fileDetails: req.file ? {
-          fieldname: req.file.fieldname,
-          originalname: req.file.originalname,
-          mimetype: req.file.mimetype,
-          size: req.file.size
-        } : null
-      });
+      // If it's not a multer-specific error and content-type is not multipart, 
+      // it might be a regular request, so continue
+      if (!req.get('Content-Type')?.includes('multipart/form-data')) {
+        console.log('💬 Non-multipart request with multer error, continuing...');
+        return next();
+      }
       
-      next();
+      return res.status(500).json({
+        message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
+        error: err.message,
+        code: err.code
+      });
+    }
+    
+    // Handle files array from multer.any()
+    if (req.files && req.files.length > 0) {
+      req.file = req.files[0]; // Set the first file as req.file for backward compatibility
+    }
+    
+    console.log('📎 Multer processed:', {
+      hasFile: !!req.file,
+      filesCount: req.files ? req.files.length : 0,
+      isMultipart: req.get('Content-Type')?.includes('multipart/form-data'),
+      bodyKeys: Object.keys(req.body || {}),
+      fileDetails: req.file ? {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        path: req.file.path
+      } : null,
+      allFiles: req.files ? req.files.map(f => ({
+        fieldname: f.fieldname,
+        originalname: f.originalname,
+        size: f.size
+      })) : []
     });
-  } else {
-    console.log('💬 Regular JSON request - skipping multer');
+    
     next();
-  }
+  });
 };
 
 // Debug middleware to verify routing
@@ -201,7 +212,7 @@ const detailedDebug = (req, res, next) => {
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
 // @access  Private  
-router.post('/:id/messages', conditionalUpload, detailedDebug, debugBeforeSendMessage, sendMessage);
+router.post('/:id/messages', handleUpload, detailedDebug, debugBeforeSendMessage, sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants

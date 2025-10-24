@@ -390,13 +390,27 @@ const sendMessage = asyncHandler(async (req, res) => {
         }
         const userId = req.user._id;
         console.log('🚀 Got userId:', userId);
-        // Handle both req.file and req.files
+        // Handle both req.file and req.files (multer.any() uses req.files)
         let file = req.file;
         if (!file && req.files && req.files.length > 0) {
+            // Find file field or use the first file
             file = req.files.find(f => f.fieldname === 'file') || req.files[0];
+            console.log('🚀 Using file from files array:', {
+                fieldname: file.fieldname,
+                originalname: file.originalname,
+                size: file.size
+            });
         }
         console.log('🚀 Got file:', !!file);
-        console.log('🚀 Files array:', req.files);
+        console.log('🚀 Files array length:', req.files?.length || 0);
+        if (req.files && req.files.length > 0) {
+            console.log('🚀 All files:', req.files.map(f => ({
+                fieldname: f.fieldname,
+                originalname: f.originalname,
+                mimetype: f.mimetype,
+                size: f.size
+            })));
+        }
 
         console.log('📨 sendMessage request:', {
             chatId: id,
