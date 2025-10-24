@@ -492,7 +492,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         try {
           const formData = new FormData();
           formData.append('content', contentToSend);
-          formData.append('sender_id', currentUser._id);
+          formData.append('messageType', messageType);
           
           // React Native FormData requires specific format
           formData.append('file', {
@@ -500,12 +500,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
             type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
             name: fileToSend.name || fileToSend.fileName || 'file.txt'
           });
+          
+          console.log('📋 FormData prepared:', {
+            content: contentToSend,
+            messageType: messageType,
+            fileName: fileToSend.name || fileToSend.fileName
+          });
 
           console.log('📤 FormData created, attempting send...');
           
           response = await api.post(`/chats/${chatroomId}/messages`, formData, {
             headers: {
-              // Let axios set Content-Type automatically for FormData
+              'Content-Type': 'multipart/form-data',
             },
             timeout: 60000 // เพิ่ม timeout
           });

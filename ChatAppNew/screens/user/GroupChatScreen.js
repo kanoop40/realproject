@@ -836,48 +836,38 @@ const GroupChatScreen = ({ route, navigation }) => {
         console.log('🔄 About to read file URI:', fileObj.uri);
         console.log('📁 File object details:', JSON.stringify(fileObj, null, 2));
         
-        // Check if file exists first
-        try {
-          const fileInfo = await FileSystem.getInfoAsync(fileObj.uri);
-          console.log('📋 File info:', fileInfo);
-          
-          if (!fileInfo.exists) {
-            throw new Error(`File does not exist at URI: ${fileObj.uri}`);
-          }
-          
-          if (fileInfo.size === 0) {
-            throw new Error(`File is empty (0 bytes): ${fileObj.uri}`);
-          }
-        } catch (infoError) {
-          console.error('❌ Error getting file info:', infoError);
-          throw new Error(`Cannot access file: ${infoError.message}`);
-        }
-        
-        let base64;
-        try {
-          base64 = await FileSystem.readAsStringAsync(fileObj.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          
-          console.log('✅ Base64 read completed. Length:', base64.length);
-          console.log('🔤 Base64 preview (first 100 chars):', base64.substring(0, 100));
-          
-          if (!base64 || base64.length === 0) {
-            throw new Error('Base64 encoding returned empty string');
-          }
-        } catch (fileError) {
-          console.error('❌ Error reading file as base64:', fileError);
-          throw new Error(`Failed to read file: ${fileError.message}`);
-        }
+        console.log('� Preparing to send file with FormData:', {
+          uri: fileObj.uri,
+          type: fileObj.type,
+          name: fileObj.name
+        });
 
-        response = await api.post(`/groups/${groupId}/messages`, {
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('content', contentToSend);
+        formData.append('messageType', messageType);
+        
+        // Append the actual file
+        formData.append('file', {
+          uri: fileObj.uri,
+          type: fileObj.type,
+          name: fileObj.name,
+        });
+
+        console.log('📋 FormData prepared with file:', {
           content: contentToSend,
           messageType: messageType,
-          fileData: {
-            base64: base64,
-            name: fileObj.name,
-            type: fileObj.type,
-          }
+          fileName: fileObj.name,
+          fileType: fileObj.type,
+          fileUri: fileObj.uri
+        });
+        
+        console.log('🚀 About to send POST request to:', `/groups/${groupId}/messages`);
+        
+        response = await api.post(`/groups/${groupId}/messages`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         });
       } else {
         response = await api.post(`/groups/${groupId}/messages`, {
@@ -988,8 +978,8 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         if (!result.canceled && result.assets && result.assets[0]) {
           console.log('📸 Image selected:', result.assets[0]);
-          // ส่งรูปภาพทันทีโดยไม่ต้องแสดงตัวอย่าง
-          await sendImageDirectly(result.assets[0]);
+          // เซ็ตรูปภาพที่เลือก
+          setSelectedImage(result.assets[0]);
         }
       } else {
         console.log('📁 Opening document picker...');

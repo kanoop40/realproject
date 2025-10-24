@@ -164,7 +164,7 @@ const detailedDebug = (req, res, next) => {
 // @route   POST /api/chats/:id/messages
 // @desc    Send message with optional file
 // @access  Private  
-router.post('/:id/messages', uploadMessage.any(), detailedDebug, debugBeforeSendMessage, sendMessage);
+router.post('/:id/messages', conditionalUpload, detailedDebug, debugBeforeSendMessage, sendMessage);
 
 // @route   GET /api/chats/:id/participants
 // @desc    Get chat participants

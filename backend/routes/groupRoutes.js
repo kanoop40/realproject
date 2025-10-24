@@ -109,7 +109,33 @@ const multerFileUpload = require('multer')({
     fileSize: 50 * 1024 * 1024 // 50MB
   }
 });
-router.post('/:id/messages', multerFileUpload.single('file'), sendGroupMessage);
+
+// Conditional upload middleware for group messages
+const conditionalUploadGroup = (req, res, next) => {
+  console.log('🔍 Group message - checking content type:', req.get('Content-Type'));
+  
+  if (req.get('Content-Type')?.includes('multipart/form-data')) {
+    console.log('📎 Group multipart request detected - applying multer');
+    
+    return multerFileUpload.single('file')(req, res, (err) => {
+      if (err) {
+        console.error('❌ Group multer error:', err);
+        return res.status(400).json({ 
+          message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
+          error: err.message 
+        });
+      }
+      
+      console.log('📎 Group multer processed file:', req.file ? 'Present' : 'Not present');
+      next();
+    });
+  } else {
+    console.log('💬 Group JSON request - skipping multer');
+    next();
+  }
+};
+
+router.post('/:id/messages', conditionalUploadGroup, sendGroupMessage);
 
 // @route   GET /api/groups/:id/messages
 // @desc    ดึงข้อความในกลุ่ม

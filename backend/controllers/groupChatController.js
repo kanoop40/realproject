@@ -575,7 +575,7 @@ const searchGroups = asyncHandler(async (req, res) => {
 // @access  Private
 const sendGroupMessage = asyncHandler(async (req, res) => {
     const groupId = req.params.id;
-    const { content, fileData, messageType } = req.body; // เพิ่ม fileData และ messageType สำหรับ base64
+    const { content, fileData, messageType } = req.body;
     const userId = req.user._id;
 
     console.log('📨 Group message request received:', {
@@ -584,6 +584,8 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         hasFile: !!req.file,
         hasFileData: !!fileData,
         messageType,
+        contentType: req.get('Content-Type'),
+        isMultipart: req.get('Content-Type')?.includes('multipart/form-data'),
         fileInfo: req.file ? {
             originalname: req.file.originalname,
             mimetype: req.file.mimetype,
