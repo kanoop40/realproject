@@ -618,6 +618,7 @@ const sendMessage = asyncHandler(async (req, res) => {
                     // Save the message updates for base64 files
                     await message.save();
                     console.log('🔥 Base64 message updated successfully');
+                }
                 
             } catch (fileError) {
                 console.error('❌ Error processing base64 file:', fileError);
