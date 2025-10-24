@@ -107,6 +107,11 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   }, [selectionMode, selectedMessages]);
 
+  // Debug selectedImage state
+  useEffect(() => {
+    console.log('🖼️ selectedImage state changed:', selectedImage);
+  }, [selectedImage]);
+
   useEffect(() => {
     loadGroupData();
     // อัปเดตข้อมูลผู้ใช้ใน NotificationService
@@ -501,6 +506,23 @@ const GroupChatScreen = ({ route, navigation }) => {
         lastMessageId: loadedMessages[loadedMessages.length - 1]?._id,
         lastMessageTime: loadedMessages[loadedMessages.length - 1]?.timestamp
       });
+
+      // Debug file messages specifically
+      const fileMessages = loadedMessages.filter(msg => msg.messageType === 'file' || msg.fileUrl);
+      if (fileMessages.length > 0) {
+        console.log('🔍 FILE DEBUG - Found', fileMessages.length, 'file messages:');
+        fileMessages.forEach((msg, idx) => {
+          console.log(`📎 File ${idx + 1}:`, {
+            id: msg._id,
+            messageType: msg.messageType,
+            fileName: msg.fileName,
+            fileSize: msg.fileSize,
+            fileUrl: msg.fileUrl ? msg.fileUrl.substring(0, 50) + '...' : 'NO URL',
+            mimeType: msg.mimeType,
+            content: msg.content
+          });
+        });
+      }
       const groupData = groupRes.data.data || groupRes.data;
       
       if (loadedMessages.length === 0) {
@@ -992,8 +1014,8 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         if (!result.canceled && result.assets && result.assets[0]) {
           console.log('📸 Image selected:', result.assets[0]);
-          // เซ็ตรูปภาพที่เลือก
-          setSelectedImage(result.assets[0]);
+          // ส่งรูปภาพทันทีแบบเดียวกับ Private Chat
+          await sendImageDirectly(result.assets[0]);
         }
       } else {
         console.log('📁 Opening document picker...');
@@ -1227,9 +1249,13 @@ const GroupChatScreen = ({ route, navigation }) => {
       
       // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
       if (fileUrl.includes('cloudinary.com')) {
-        // ใช้ URL โดยตรงสำหรับ Cloudinary (ไม่ต้องใช้ token)
-        fullUrl = fileUrl;
-        console.log('🌤️ Using Cloudinary URL directly:', fullUrl);
+        // เพิ่ม fl_attachment transformation เพื่อให้ download ได้
+        if (fileUrl.includes('/upload/')) {
+          fullUrl = fileUrl.replace('/upload/', '/upload/fl_attachment/');
+          console.log('🔧 Added attachment flag to Cloudinary URL:', fullUrl);
+        } else {
+          fullUrl = fileUrl;
+        }
       } else if (!fileUrl.startsWith('http')) {
         // สำหรับไฟล์ที่เก็บบน server เอง
         fullUrl = `${API_URL}${fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl}`;
@@ -1247,6 +1273,9 @@ const GroupChatScreen = ({ route, navigation }) => {
       const isMedia = isImage || isVideo;
 
       console.log('📷 Is media file:', isMedia, '(Image:', isImage, ', Video:', isVideo, ')');
+
+      // ใช้ original Cloudinary URL (อย่าแก้ resource_type เพราะไฟล์ถูกเก็บใน image/upload)
+      console.log('🌤️ Using original Cloudinary URL for download');
 
       // สำหรับ Cloudinary ไม่ต้องใช้ Authorization header
       const headers = fileUrl.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
@@ -1641,11 +1670,27 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันเลือกข้อความตามประเภทไฟล์
   const getFileIcon = (fileName) => {
+    console.log('🔍 getFileIcon called with:', fileName);
     if (!fileName) {
+      console.log('⚠️ No fileName provided, returning FILE icon');
       return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
     }
     
-    const decodedName = decodeFileName(fileName);
+    // Fix: Handle already encoded filenames from backend
+    let decodedName;
+    try {
+      // Check if already encoded (contains %)
+      if (fileName.includes('%')) {
+        decodedName = decodeURIComponent(fileName);
+        console.log('🔧 Decoded URL-encoded fileName:', fileName, '→', decodedName);
+      } else {
+        decodedName = decodeFileName(fileName);
+      }
+    } catch (error) {
+      console.log('⚠️ Error decoding fileName:', error, 'using original:', fileName);
+      decodedName = fileName;
+    }
+    
     const extension = decodedName.split('.').pop()?.toLowerCase();
     
     switch (extension) {
@@ -2279,6 +2324,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         newMessage={inputText}
         setNewMessage={setInputText}
         selectedFile={selectedFile}
+        selectedImage={selectedImage}
         isSending={isSending}
         showAttachmentMenu={showAttachmentMenu}
         setShowAttachmentMenu={setShowAttachmentMenu}

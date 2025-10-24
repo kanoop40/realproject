@@ -12,6 +12,7 @@ const ChatInputBar = ({
   newMessage,
   setNewMessage,
   selectedFile,
+  selectedImage,
   isSending,
   showAttachmentMenu,
   setShowAttachmentMenu,
@@ -107,7 +108,7 @@ const ChatInputBar = ({
         <TouchableOpacity
           style={styles.floatingSendButton}
           onPress={onSendMessage}
-          disabled={(!newMessage.trim() && !selectedFile) || isSending}
+          disabled={(!newMessage.trim() && !selectedFile && !selectedImage) || isSending}
         >
           <Text style={styles.sendButtonText}>ส่ง</Text>
         </TouchableOpacity>

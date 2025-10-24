@@ -60,6 +60,8 @@ const fileStorage = new CloudinaryStorage({
     folder: 'chat-app-files',
     resource_type: 'auto', // Automatically detect file type
     access_mode: 'public', // Ensure files are publicly accessible
+    // เพิ่ม flags เพื่อให้ download ได้
+    flags: 'attachment',
     // Remove file size limit from Cloudinary config - handle in multer instead
     public_id: (req, file) => {
       const timestamp = Date.now();

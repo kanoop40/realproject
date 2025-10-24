@@ -143,10 +143,32 @@ const GroupMessageBubble = ({
           </TouchableOpacity>
         )}
 
-        {/* แสดงไฟล์แนบ - รวมกรณีที่ไม่มี fileName แต่มี fileUrl */}
-        {((item.messageType === 'file' || item.fileUrl) && 
-          (item.fileName || item.fileUrl) &&
-          (!item.fileName || !/\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName))) && (
+        {/* แสดงไฟล์แนบ - รวมกรণีที่ไม่มี fileName แต่มี fileUrl */}
+        {(() => {
+          const hasFileType = item.messageType === 'file' || item.fileUrl;
+          const hasFileData = item.fileName || item.fileUrl;
+          
+          let isNotImage = true;
+          if (item.fileName) {
+            const decodedFileName = item.fileName.includes('%') ? decodeURIComponent(item.fileName) : item.fileName;
+            isNotImage = !/\.(jpg|jpeg|png|gif|webp)$/i.test(decodedFileName);
+          }
+          
+          const shouldShow = hasFileType && hasFileData && isNotImage;
+          
+          console.log('🔍 File display check for message:', item._id, {
+            messageType: item.messageType,
+            hasFileUrl: !!item.fileUrl,
+            fileName: item.fileName,
+            decodedFileName: item.fileName ? (item.fileName.includes('%') ? decodeURIComponent(item.fileName) : item.fileName) : null,
+            hasFileType,
+            hasFileData,
+            isNotImage,
+            shouldShow
+          });
+          
+          return shouldShow;
+        })() && (
           <TouchableOpacity 
             style={[
               styles.fileMessageBubble,
@@ -162,16 +184,14 @@ const GroupMessageBubble = ({
           >
             <View style={styles.fileAttachment}>
               <View style={styles.fileIcon}>
-                <Text style={styles.fileIconText}>
-                  {getFileIcon(item.fileName)}
-                </Text>
+                {getFileIcon(item.fileName)}
               </View>
               <View style={styles.fileInfo}>
                 <Text style={[
                   styles.fileName, 
                   isMyMessage ? styles.myFileName : styles.otherFileName
-                ]} numberOfLines={1}>
-                  {item.fileName ? decodeFileName(item.fileName) : 'ไฟล์แนบ'}
+                ]} numberOfLines={2} ellipsizeMode="middle">
+                  {item.fileName ? (item.fileName.includes('%') ? decodeURIComponent(item.fileName) : decodeFileName(item.fileName)) : 'ไฟล์แนบ'}
                 </Text>
                 <Text style={[
                   styles.fileSize, 
@@ -317,6 +337,8 @@ const styles = StyleSheet.create({
     width: 200,
     height: 150,
     borderRadius: RADIUS.md,
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   messageBubble: {
     paddingHorizontal: 16,
@@ -390,7 +412,8 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: RADIUS.lg,
     marginBottom: 4,
-    maxWidth: 250,
+    minWidth: 280, // เพิ่ม minimum width
+    maxWidth: '85%', // เปลี่ยนเป็น percentage เพื่อให้ responsive
     ...SHADOWS.sm,
   },
   myFileBubble: {
@@ -422,6 +445,8 @@ const styles = StyleSheet.create({
   },
   fileInfo: {
     flex: 1,
+    marginLeft: 8,
+    minWidth: 0, // ป้องกัน flex shrink ปัญหา
   },
   fileName: {
     fontSize: TYPOGRAPHY.fontSize.sm,
