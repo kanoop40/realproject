@@ -370,12 +370,13 @@ const sendMessage = asyncHandler(async (req, res) => {
         console.log('🚀 Full req.body:', Object.keys(req.body));
         console.log('🚀 req.body content preview:', JSON.stringify(req.body).substring(0, 500));
         
-        const { content, fileData, messageType, fileName, mimeType } = req.body; // เพิ่ม fileData และ messageType สำหรับ base64
-        console.log('🚀 Got content:', content);
-        console.log('🚀 Got fileData:', !!fileData);
-        console.log('🚀 Got messageType:', messageType);
-        console.log('🚀 Got fileName:', fileName);
-        console.log('🚀 Got mimeType:', mimeType);
+    const { content, fileData, fileName, mimeType } = req.body; // เพิ่ม fileData สำหรับ base64
+    const incomingMessageType = req.body.messageType; // don't destructure to avoid duplicate declaration
+    console.log('🚀 Got content:', content);
+    console.log('🚀 Got fileData:', !!fileData);
+    console.log('🚀 Got incomingMessageType:', incomingMessageType);
+    console.log('🚀 Got fileName:', fileName);
+    console.log('🚀 Got mimeType:', mimeType);
         if (fileData) {
             console.log('🚀 FileData details:', {
                 fileDataType: typeof fileData,
@@ -441,6 +442,10 @@ const sendMessage = asyncHandler(async (req, res) => {
         // Handle file upload first if present
         let fileDoc = null;
         let messageType = 'text';
+        // If client provided a messageType (e.g., from base64 flow), use it as a starting value
+        if (incomingMessageType) {
+            messageType = incomingMessageType;
+        }
         
         if (file) {
             try {
