@@ -264,4 +264,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default FileMessage;
+export default React.memo(FileMessage);

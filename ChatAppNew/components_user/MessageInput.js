@@ -87,7 +87,7 @@ const MessageInput = ({
         {selectedFile && (
           <View style={styles.selectedFileContainer}>
             <Text style={styles.selectedFileText}>
-              📎 {selectedFile.name}
+              📎 {selectedFile.name || selectedFile.fileName || 'ไฟล์ที่เลือก'}
             </Text>
             <TouchableOpacity onPress={onRemoveFile} style={styles.removeButton}>
               <Text style={styles.removeButtonText}>✕</Text>

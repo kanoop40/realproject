@@ -1234,6 +1234,71 @@ const checkNewMessages = asyncHandler(async (req, res) => {
     }
 });
 
+// Hide chatrooms (soft delete for specific user)
+const hideChatrooms = asyncHandler(async (req, res) => {
+    try {
+        const { chatIds } = req.body;
+        const userId = req.user._id;
+
+        console.log('🙈 Hiding chatrooms:', chatIds, 'for user:', userId);
+
+        if (!chatIds || !Array.isArray(chatIds) || chatIds.length === 0) {
+            return res.status(400).json({
+                message: 'กรุณาระบุรายการแชทที่ต้องการซ่อน'
+            });
+        }
+
+        // For now, we'll implement this as removing the user from the chat's participants
+        // or adding a hidden field. Let's check if the chatrooms have a hidden_by field
+        // If not, we can implement it as removing from participants for private chats
+        
+        let hiddenCount = 0;
+        
+        for (const chatId of chatIds) {
+            // Check if user has access to this chat
+            const chatroom = await Chatrooms.findOne({
+                _id: chatId,
+                $or: [
+                    { user_id: { $in: [userId] } }, // For group chats
+                    { participants: { $in: [userId] } } // For private chats
+                ]
+            });
+
+            if (chatroom) {
+                if (chatroom.type === 'private') {
+                    // For private chats, remove user from participants
+                    await Chatrooms.findByIdAndUpdate(chatId, {
+                        $pull: { participants: userId }
+                    });
+                    hiddenCount++;
+                } else {
+                    // For group chats, we could add a hidden_by field or similar logic
+                    // For now, let's also remove from user_id array
+                    await Chatrooms.findByIdAndUpdate(chatId, {
+                        $pull: { user_id: userId }
+                    });
+                    hiddenCount++;
+                }
+                console.log('🙈 Hidden chat:', chatId, 'for user:', userId);
+            } else {
+                console.log('❌ User not authorized to hide chat:', chatId);
+            }
+        }
+
+        res.json({ 
+            message: `ซ่อนแชท ${hiddenCount} รายการแล้ว`,
+            hiddenCount
+        });
+
+    } catch (error) {
+        console.error('❌ Error hiding chats:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการซ่อนแชท',
+            error: error.message
+        });
+    }
+});
+
 module.exports = {
     getChats,
     getMessages,
@@ -1242,6 +1307,7 @@ module.exports = {
     createPrivateChat,
     markAsRead,
     deleteChatroom,
+    hideChatrooms,
     deleteMessage,
     editMessage,
     markMessageAsRead,

@@ -862,7 +862,7 @@ const ChatScreen = ({ route, navigation }) => {
 
   // Debug info
   console.log('ChatScreen render:', {
-    currentUser: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser._id})` : 'null',
+    currentUser: currentUser ? (currentUser.firstName + ' ' + currentUser.lastName + ' (' + currentUser._id + ')') : 'null',
     authUser: authUser ? `${authUser.firstName} ${authUser.lastName} (${authUser._id})` : 'null',
     chatsCount: chats.length,
     recipientId,
@@ -968,9 +968,9 @@ const ChatScreen = ({ route, navigation }) => {
 
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
-              {isSelectMode ? `เลือกแล้ว ${selectedChats.size} รายการ` : (() => {
+              {isSelectMode ? ('เลือกแล้ว ' + selectedChats.size + ' รายการ') : (() => {
                 const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
-                return totalUnread > 0 ? `แชท (${totalUnread})` : 'แชท';
+                return totalUnread > 0 ? ('แชท (' + totalUnread + ')') : 'แชท';
               })()}
             </Text>
             

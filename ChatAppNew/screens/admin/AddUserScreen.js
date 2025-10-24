@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator,
   Modal,
   FlatList
 } from 'react-native';
@@ -15,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { API_URL } from '../../service/api'; // ใช้ api และ API_URL เดียวกัน
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const faculties = [
   { label: 'เลือกคณะ', value: '1' },
@@ -94,6 +95,7 @@ const AddUserScreen = ({ navigation }) => {
   const [showFacultyModal, setShowFacultyModal] = useState(false);
   const [showMajorModal, setShowMajorModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const selectFaculty = (faculty) => {
     setFormData({
@@ -155,6 +157,34 @@ const AddUserScreen = ({ navigation }) => {
       major: '1',
       groupCode: '1'
     });
+  };
+
+  const handleSuccessComplete = () => {
+    setShowSuccess(false);
+    // แสดงตัวเลือกหลังจาก animation เสร็จ
+    Alert.alert(
+      'เพิ่มผู้ใช้สำเร็จ',
+      'คุณต้องการทำอะไรต่อไป?',
+      [
+        {
+          text: 'เพิ่มผู้ใช้อีกคน',
+          style: 'default',
+          onPress: () => {
+            // อยู่ในหน้าเดิมเพื่อเพิ่มผู้ใช้คนต่อไป
+          }
+        },
+        {
+          text: 'กลับหน้าแอดมิน',
+          style: 'cancel',
+          onPress: () => {
+            setShowFacultyModal(false);
+            setShowMajorModal(false);
+            setShowGroupModal(false);
+            navigation.navigate('Admin', { refresh: true });
+          }
+        }
+      ]
+    );
   };
 
   const validateForm = () => {
@@ -291,29 +321,8 @@ const AddUserScreen = ({ navigation }) => {
       });
       setErrors({});
 
-      Alert.alert(
-        'สำเร็จ',
-        'เพิ่มผู้ใช้เรียบร้อยแล้ว',
-        [
-          {
-            text: 'เพิ่มผู้ใช้อีกคน',
-            style: 'default',
-            onPress: () => {
-              // อยู่ในหน้าเดิมเพื่อเพิ่มผู้ใช้คนต่อไป
-            }
-          },
-          {
-            text: 'กลับหน้าแอดมิน',
-            style: 'cancel',
-            onPress: () => {
-              setShowFacultyModal(false);
-              setShowMajorModal(false);
-              setShowGroupModal(false);
-              navigation.navigate('Admin', { refresh: true });
-            }
-          }
-        ]
-      );
+      // แสดง SuccessTickAnimation แทน Alert.alert
+      setShowSuccess(true);
     } catch (error) {
       console.log('Error creating user:', error.response?.data || error.message);
       let errorMessage = 'ไม่สามารถเพิ่มผู้ใช้ได้';
@@ -528,11 +537,7 @@ const AddUserScreen = ({ navigation }) => {
             onPress={handleSubmit}
             disabled={isLoading}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>สร้างบัญชีผู้ใช้</Text>
-            )}
+            <Text style={styles.submitButtonText}>สร้างบัญชีผู้ใช้</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -634,6 +639,18 @@ const AddUserScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Success Animation */}
+      <SuccessTickAnimation
+        visible={showSuccess}
+        onComplete={handleSuccessComplete}
+      />
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        visible={isLoading}
+        message="กำลังสร้างบัญชีผู้ใช้..."
+      />
     </SafeAreaView>
   );
 };

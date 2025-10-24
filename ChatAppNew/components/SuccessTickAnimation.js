@@ -20,7 +20,7 @@ const SuccessTickAnimation = ({ visible, onComplete }) => {
         if (onComplete) {
           onComplete();
         }
-      }, 2000);
+      }, 1000);
 
       return () => clearTimeout(timer);
     }
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.0)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

@@ -8,6 +8,7 @@ const {
     createPrivateChat,
     markAsRead,
     deleteChatroom,
+    hideChatrooms,
     deleteMessage,
     editMessage,
     markMessageAsRead,
@@ -79,6 +80,11 @@ router.post('/', createChatroom);
 // @desc    Create or get private chat between two users
 // @access  Private
 router.post('/private', createPrivateChat);
+
+// @route   POST /api/chats/hide
+// @desc    Hide chatrooms for current user (soft delete)
+// @access  Private
+router.post('/hide', hideChatrooms);
 
 // @route   GET /api/chats/:id/messages
 // @desc    Get messages for a chatroom

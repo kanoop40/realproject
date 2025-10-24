@@ -7,13 +7,14 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  ActivityIndicator,
   Image,
   TextInput,
   Modal
 } from 'react-native';
 import api, { API_URL } from '../../service/api';
 import { UserProfile, UserInfoSection, EditUserButton } from '../../components_admin';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const UserDetailScreen = ({ navigation, route }) => {
   const { userId } = route.params;
@@ -21,6 +22,7 @@ const UserDetailScreen = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
@@ -84,15 +86,8 @@ const UserDetailScreen = ({ navigation, route }) => {
       // ใช้ api instance
       await api.put(`/users/${userId}`, updateData);
       
-      Alert.alert('สำเร็จ', 'แก้ไขข้อมูลผู้ใช้เรียบร้อยแล้ว', [
-        {
-          text: 'ตกลง',
-          onPress: () => {
-            setShowEditModal(false);
-            fetchUserDetails();
-          }
-        }
-      ]);
+      // แสดง SuccessTickAnimation แทน Alert.alert
+      setShowSuccess(true);
     } catch (error) {
       console.error('Error updating user:', error);
       Alert.alert('ผิดพลาด', error.response?.data?.message || 'ไม่สามารถแก้ไขข้อมูลผู้ใช้ได้');
@@ -101,36 +96,11 @@ const UserDetailScreen = ({ navigation, route }) => {
     }
   };
 
-
-
-
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>ไม่พบข้อมูลผู้ใช้</Text>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>กลับ</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const handleSuccessComplete = () => {
+    setShowSuccess(false);
+    setShowEditModal(false);
+    fetchUserDetails();
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,12 +116,26 @@ const UserDetailScreen = ({ navigation, route }) => {
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.content}>
-        <UserProfile user={user} />
-        <UserInfoSection user={user} />
-      </ScrollView>
+      {!user ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>ไม่พบข้อมูลผู้ใช้</Text>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>กลับ</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          <ScrollView style={styles.content}>
+            <UserProfile user={user} />
+            <UserInfoSection user={user} />
+          </ScrollView>
 
-      <EditUserButton onPress={() => setShowEditModal(true)} />
+          <EditUserButton onPress={() => setShowEditModal(true)} />
+        </>
+      )}
 
       {/* Edit Modal */}
       <Modal
@@ -170,7 +154,7 @@ const UserDetailScreen = ({ navigation, route }) => {
               disabled={isUpdating}
             >
               <Text style={[styles.modalSaveButton, isUpdating && styles.disabledButton]}>
-                {isUpdating ? 'กำลังบันทึก...' : 'บันทึก'}
+                บันทึก
               </Text>
             </TouchableOpacity>
           </View>
@@ -210,6 +194,18 @@ const UserDetailScreen = ({ navigation, route }) => {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Success Animation */}
+      <SuccessTickAnimation
+        visible={showSuccess}
+        onComplete={handleSuccessComplete}
+      />
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        visible={isLoading || isUpdating}
+        message={isUpdating ? "กำลังบันทึกข้อมูล..." : "กำลังโหลดข้อมูลผู้ใช้..."}
+      />
     </SafeAreaView>
   );
 };
@@ -218,16 +214,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5'
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  loadingText: {
-    marginTop: 10,
-    color: '#666',
-    fontSize: 16
   },
   errorContainer: {
     flex: 1,

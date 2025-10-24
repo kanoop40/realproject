@@ -240,4 +240,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ChatMessage;
+export default React.memo(ChatMessage);

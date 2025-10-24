@@ -7,7 +7,6 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  ActivityIndicator,
   Image,
   Modal
 } from 'react-native';
@@ -15,6 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { API_URL } from '../../service/api'; // ใช้ api instance แทน axios
 import { UserCard, AddButton, LogoutButton, UserActionsModal } from '../../components_admin';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const AdminScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
@@ -22,6 +23,7 @@ const AdminScreen = ({ navigation, route }) => {
   const [error, setError] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserActions, setShowUserActions] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
  const fetchUsers = async () => {
   try {
@@ -86,7 +88,8 @@ const AdminScreen = ({ navigation, route }) => {
                 // ใช้ api instance (มี interceptor ใส่ token อัตโนมัติ)
                 await api.delete(`/users/${userId}`);
                 fetchUsers();
-                Alert.alert('สำเร็จ', 'ลบผู้ใช้เรียบร้อยแล้ว');
+                // แสดง SuccessTickAnimation แทน Alert.alert
+                setShowSuccess(true);
               } catch (error) {
                 console.error('Error deleting user:', error);
                 Alert.alert('ผิดพลาด', 'ไม่สามารถลบผู้ใช้ได้');
@@ -115,6 +118,10 @@ const AdminScreen = ({ navigation, route }) => {
     setShowUserActions(true);
   };
 
+  const handleSuccessComplete = () => {
+    setShowSuccess(false);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
     <View style={styles.header}>
@@ -129,11 +136,7 @@ const AdminScreen = ({ navigation, route }) => {
       <LogoutButton onPress={handleLogout} />
     </View>
 
-    {isLoading ? (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    ) : error ? (
+    {error ? (
       <View style={styles.errorContainer}>
         <Text style={styles.errorIcon}>⚠️</Text>
         <Text style={styles.errorText}>{error}</Text>
@@ -183,6 +186,18 @@ const AdminScreen = ({ navigation, route }) => {
       onEdit={(user) => navigation.navigate('UserDetail', { userId: user._id })}
       onDelete={(user) => handleDeleteUser(user._id, user.username)}
     />
+
+    {/* Success Animation */}
+    <SuccessTickAnimation
+      visible={showSuccess}
+      onComplete={handleSuccessComplete}
+    />
+
+    {/* Loading Overlay */}
+    <LoadingOverlay
+      visible={isLoading}
+      message="กำลังโหลดข้อมูลผู้ใช้..."
+    />
   </SafeAreaView>
 );
 };
@@ -216,11 +231,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: '#fff'
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
   },
   errorContainer: {
     flex: 1,

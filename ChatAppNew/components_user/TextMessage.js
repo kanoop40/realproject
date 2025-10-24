@@ -238,4 +238,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TextMessage;
+export default React.memo(TextMessage);

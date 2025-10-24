@@ -311,4 +311,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ImageMessage;
+export default React.memo(ImageMessage);

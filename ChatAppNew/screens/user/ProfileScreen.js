@@ -442,7 +442,7 @@ const ProfileScreen = ({ navigation }) => {
             style={styles.actionButton} 
             onPress={handleEditProfile}
           >
-            <Text style={styles.actionIcon}></Text>
+            
             <Text style={styles.actionButtonText}>แก้ไขข้อมูล</Text>
           </TouchableOpacity>
           
@@ -450,7 +450,7 @@ const ProfileScreen = ({ navigation }) => {
             style={styles.actionButton} 
             onPress={() => setShowPasswordModal(true)}
           >
-            <Text style={styles.actionIcon}></Text>
+            
             <Text style={styles.actionButtonText}>เปลี่ยนรหัสผ่าน</Text>
           </TouchableOpacity>
           
