@@ -866,7 +866,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         
         response = await api.post(`/groups/${groupId}/messages`, formData, {
           headers: {
-            'Content-Type': 'multipart/form-data',
+            // ให้ axios ตั้งค่า Content-Type เองสำหรับ FormData
           },
         });
       } else {

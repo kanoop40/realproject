@@ -24,20 +24,25 @@ const { protect } = require('../Middleware/authMiddleware');
 const { fileStorage } = require('../config/cloudinary');
 const multer = require('multer');
 
-// Add error handling for multer
+// Add error handling for multer with better configuration
 const uploadMessage = multer({ 
   storage: fileStorage,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB
+    fileSize: 50 * 1024 * 1024, // 50MB
+    fieldSize: 50 * 1024 * 1024, // 50MB for field data
+    fieldNameSize: 255,
+    fields: 10,
+    files: 1
   },
   fileFilter: (req, file, cb) => {
     console.log('🔍 Multer processing file:', {
       fieldname: file.fieldname,
       originalname: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size
+      mimetype: file.mimetype
     });
-    cb(null, true); // Accept all files
+    
+    // Accept all file types
+    cb(null, true);
   }
 });
 
@@ -94,7 +99,14 @@ router.get('/:id/messages', getMessages);
 
 // Middleware to conditionally apply multer with better error handling
 const conditionalUpload = (req, res, next) => {
-  console.log('🔍 Checking request content-type:', req.get('Content-Type'));
+  console.log('🔍 Request details:', {
+    contentType: req.get('Content-Type'),
+    method: req.method,
+    url: req.url,
+    hasBody: !!req.body,
+    bodyKeys: Object.keys(req.body || {}),
+    contentLength: req.get('Content-Length')
+  });
   
   // Only apply multer for multipart/form-data requests
   if (req.get('Content-Type')?.includes('multipart/form-data')) {
@@ -105,7 +117,13 @@ const conditionalUpload = (req, res, next) => {
     
     upload(req, res, (err) => {
       if (err) {
-        console.error('❌ Multer error:', err);
+        console.error('❌ Multer error details:', {
+          code: err.code,
+          message: err.message,
+          field: err.field,
+          stack: err.stack
+        });
+        
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({ 
             message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 50MB' 
@@ -118,12 +136,21 @@ const conditionalUpload = (req, res, next) => {
         }
         return res.status(500).json({
           message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
-          error: err.message
+          error: err.message,
+          code: err.code
         });
       }
       
-      console.log('📎 Multer processed file:', req.file ? 'Present' : 'Not present');
-      console.log('📎 Multer processed body:', Object.keys(req.body));
+      console.log('📎 Multer success:', {
+        hasFile: !!req.file,
+        bodyKeys: Object.keys(req.body || {}),
+        fileDetails: req.file ? {
+          fieldname: req.file.fieldname,
+          originalname: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size
+        } : null
+      });
       
       next();
     });

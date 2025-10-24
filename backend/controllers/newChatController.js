@@ -440,12 +440,43 @@ const sendMessage = asyncHandler(async (req, res) => {
 
         let fileDoc = null;
         
-        // Create message first
+        // Handle file upload first if present
+        let fileDoc = null;
+        let messageType = 'text';
+        
+        if (file) {
+            try {
+                console.log('📎 Processing uploaded file:', {
+                    originalname: file.originalname,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    path: file.path
+                });
+                
+                // Determine message type based on file
+                const isImage = file.mimetype && file.mimetype.startsWith('image/');
+                messageType = isImage ? 'image' : 'file';
+                
+                // File is already uploaded to Cloudinary by multer
+                console.log('✅ File uploaded to Cloudinary:', file.path);
+                
+            } catch (fileError) {
+                console.error('❌ File processing error:', fileError);
+                throw new Error(`ไม่สามารถประมวลผลไฟล์ได้: ${fileError.message}`);
+            }
+        }
+
+        // Create message with file info
         const message = new Messages({
             chat_id: id,
             user_id: userId,
             content: messageContent,
-            file_id: null // จะอัปเดตทีหลังถ้ามีไฟล์
+            messageType: messageType,
+            fileUrl: file ? file.path : null,
+            fileName: file ? file.originalname : null,
+            fileSize: file ? file.size : null,
+            mimeType: file ? file.mimetype : null,
+            file_id: fileDoc ? fileDoc._id : null
         });
 
         await message.save();

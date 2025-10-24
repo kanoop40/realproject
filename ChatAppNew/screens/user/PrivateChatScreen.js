@@ -511,7 +511,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           
           response = await api.post(`/chats/${chatroomId}/messages`, formData, {
             headers: {
-              'Content-Type': 'multipart/form-data',
+              // ให้ axios ตั้งค่า Content-Type เอง สำหรับ FormData
             },
             timeout: 60000 // เพิ่ม timeout
           });
