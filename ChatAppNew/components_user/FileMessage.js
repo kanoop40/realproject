@@ -74,30 +74,27 @@ const FileMessage = ({
         delayLongPress={500}
         activeOpacity={0.7}
       >
-        <View style={styles.fileAttachmentContainer}>
-          <View 
-            style={[
-              styles.fileAttachment,
-              isMyMessage ? styles.myFileAttachment : styles.otherFileAttachment
-            ]}
-          >
-            <View style={styles.fileIcon}>
-              {getFileIcon(decodeFileName(item.fileName || item.file?.file_name || 'unknown_file'))}
-            </View>
-            <View style={styles.fileDetails}>
-              <Text style={[
-                styles.fileName,
-                { color: isMyMessage ? "#fff" : "#333" }
-              ]} numberOfLines={2}>
-                {item.fileName || item.file?.file_name || 'ไฟล์ที่ไม่สามารถแสดงได้'}
-              </Text>
-              <Text style={[
-                styles.fileSize,
-                { color: isMyMessage ? "rgba(255,255,255,0.8)" : "#666" }
-              ]}>
-                {(item.fileSize || item.file?.size) ? formatFileSize(item.fileSize || item.file.size) : 'ไม่มีข้อมูลไฟล์จาก server'}
-              </Text>
-            </View>
+        <View style={styles.fileAttachment}>
+          <View style={styles.fileIcon}>
+            {getFileIcon(decodeFileName(item.fileName || item.file?.file_name || 'unknown_file'))}
+          </View>
+          <View style={styles.fileInfo}>
+            <Text style={[
+              styles.fileName,
+              isMyMessage ? styles.myFileName : styles.otherFileName
+            ]} numberOfLines={2} ellipsizeMode="middle">
+              {item.fileName || item.file?.file_name ? 
+                (item.fileName?.includes('%') ? decodeURIComponent(item.fileName) : 
+                 item.file?.file_name?.includes('%') ? decodeURIComponent(item.file.file_name) :
+                 decodeFileName(item.fileName || item.file.file_name)) : 
+                'ไฟล์แนบ'}
+            </Text>
+            <Text style={[
+              styles.fileSize,
+              isMyMessage ? styles.myFileSize : styles.otherFileSize
+            ]}>
+              {(item.fileSize || item.file?.size) ? formatFileSize(item.fileSize || item.file.size) : 'ไฟล์'}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -153,14 +150,16 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 18,
     marginBottom: 4,
-    maxWidth: 250
+    minWidth: 280, // เพิ่ม minimum width เหมือน GroupMessageBubble
+    maxWidth: '85%', // เปลี่ยนเป็น percentage เพื่อให้ responsive
+    ...SHADOWS.sm,
   },
   myFileBubble: {
-    backgroundColor: '#000',
+    backgroundColor: COLORS.primary,
     alignSelf: 'flex-end'
   },
   otherFileBubble: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.backgroundSecondary,
     alignSelf: 'flex-start'
   },
   optimisticMessage: {
@@ -179,11 +178,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  fileAttachmentContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
   fileAttachment: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -193,26 +187,39 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#007AFF',
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8
   },
-  fileDetails: {
+  fileInfo: {
     flex: 1,
+    marginLeft: 8,
+    minWidth: 0, // ป้องกัน flex shrink ปัญหา
   },
   fileName: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.fontSize.sm,
     fontWeight: '500',
     marginBottom: 2
   },
+  myFileName: {
+    color: COLORS.textInverse,
+  },
+  otherFileName: {
+    color: COLORS.textPrimary,
+  },
   fileSize: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.fontSize.xs,
     marginTop: 2
   },
-  fileInfo: {
-    flex: 1
+  myFileSize: {
+    color: COLORS.textInverse,
+    opacity: 0.8,
   },
+  otherFileSize: {
+    color: COLORS.textSecondary,
+  },
+
   messageTimeBottomContainer: {
     alignItems: 'flex-start',
     marginTop: 4,

@@ -1500,7 +1500,7 @@ const hideChatrooms = asyncHandler(async (req, res) => {
 module.exports = {
     getChats,
     getMessages,
-    sendMessage: [upload.single('file'), sendMessage],
+    sendMessage: [upload.any(), sendMessage],
     createChatroom,
     createPrivateChat,
     markAsRead,

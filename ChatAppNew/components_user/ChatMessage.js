@@ -135,17 +135,33 @@ const ChatMessage = ({
         )}
 
         {/* File messages (non-images) - check for actual file data first, then fallback */}
-        {(
-          item.messageType === 'file' || 
-          (item.fileName && !(item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName))) || 
-          (item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) || 
-          (item.content === 'ไฟล์แนบ' && item.messageType === 'text' && !item.file && !item.fileName)
-        ) && !(
-          item.messageType === 'image' || 
-          item.image || 
-          (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
-          (item.content === 'รูปภาพ' && item.messageType === 'text')
-        ) && (
+        {(() => {
+          const shouldShowFile = (
+            item.messageType === 'file' || 
+            (item.fileName && !(item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName))) || 
+            (item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) || 
+            (item.content === 'ไฟล์แนบ' && item.messageType === 'text' && !item.file && !item.fileName)
+          ) && !(
+            item.messageType === 'image' || 
+            item.image || 
+            (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
+            (item.content === 'รูปภาพ' && item.messageType === 'text')
+          );
+          
+          // Debug logging for file display
+          if (item.fileName || item.fileUrl || item.messageType === 'file') {
+            console.log('🔍 File message check:', {
+              messageId: item._id,
+              messageType: item.messageType,
+              fileName: item.fileName,
+              fileUrl: item.fileUrl,
+              content: item.content,
+              shouldShowFile
+            });
+          }
+          
+          return shouldShowFile;
+        })() && (
           <FileMessage
             item={item}
             index={index}

@@ -1249,12 +1249,27 @@ const GroupChatScreen = ({ route, navigation }) => {
       
       // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
       if (fileUrl.includes('cloudinary.com')) {
+        // ลองใช้ resource_type 'raw' สำหรับการดาวน์โหลด
+        let downloadUrl = fileUrl;
+        
+        // เปลี่ยนจาก /image/upload/ เป็น /raw/upload/ สำหรับ non-image files
+        if (downloadUrl.includes('/image/upload/')) {
+          const finalFileName = fileName || `file_${new Date().getTime()}`;
+          const fileExtension = finalFileName.split('.').pop()?.toLowerCase() || '';
+          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
+          
+          if (!isImage) {
+            downloadUrl = downloadUrl.replace('/image/upload/', '/raw/upload/');
+            console.log('🔄 Changed to raw URL for non-image file:', downloadUrl);
+          }
+        }
+        
         // เพิ่ม fl_attachment transformation เพื่อให้ download ได้
-        if (fileUrl.includes('/upload/')) {
-          fullUrl = fileUrl.replace('/upload/', '/upload/fl_attachment/');
+        if (downloadUrl.includes('/upload/') && !downloadUrl.includes('fl_attachment')) {
+          fullUrl = downloadUrl.replace('/upload/', '/upload/fl_attachment/');
           console.log('🔧 Added attachment flag to Cloudinary URL:', fullUrl);
         } else {
-          fullUrl = fileUrl;
+          fullUrl = downloadUrl;
         }
       } else if (!fileUrl.startsWith('http')) {
         // สำหรับไฟล์ที่เก็บบน server เอง
