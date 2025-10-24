@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { API_URL } from '../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
+import ReadCount from '../components/ReadCount';
 
 const GroupMessageBubble = ({ 
   item, 
@@ -79,7 +80,7 @@ const GroupMessageBubble = ({
       {!isMyMessage && (
         <View style={styles.messageAvatarContainer}>
           <AvatarImage 
-            avatar={senderAvatar} 
+            avatarPath={senderAvatar} 
             name={senderName} 
             size={30} 
             style={styles.messageAvatar}
@@ -224,14 +225,14 @@ const GroupMessageBubble = ({
                  ? new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
                  : formatDateTime(item.timestamp)}
             </Text>
-            {isMyMessage && getGroupReadStatus && (() => {
-              const readStatus = getGroupReadStatus(item);
-              return readStatus && (
-                <Text style={styles.readStatus}>
-                  {readStatus.isRead ? '✓✓' : '✓'} {readStatus.text}
-                </Text>
-              );
-            })()}
+            {/* แสดง ReadCount สำหรับข้อความของเราเอง */}
+            {isMyMessage && item.readCount !== undefined && (
+              <ReadCount 
+                readCount={item.readCount}
+                totalMembers={item.totalMembers || 0}
+                style={styles.readCountStyle}
+              />
+            )}
           </View>
         )}
       </View>
@@ -461,6 +462,9 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.xs,
     color: COLORS.success,
     fontWeight: 'bold',
+  },
+  readCountStyle: {
+    marginLeft: 8,
   },
 });
 

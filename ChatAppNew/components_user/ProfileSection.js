@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { API_URL } from '../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../styles/theme';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const ProfileSection = ({ 
   currentUser, 
@@ -18,7 +18,7 @@ const ProfileSection = ({
         disabled={isUpdating}
       >
         <AvatarImage 
-          avatar={currentUser?.avatar} 
+          avatarPath={currentUser?.avatar} 
           name={currentUser?.firstName} 
           size={100} 
           style={styles.avatar}

@@ -42,9 +42,11 @@ export const getInitials = (firstName, lastName) => {
 
 // สร้าง avatar component ที่มี fallback
 export const AvatarImage = ({ 
-  avatarPath, 
+  avatarPath,
+  avatar, // alias สำหรับ avatarPath
   firstName, 
-  lastName, 
+  lastName,
+  name, // alias สำหรับ firstName
   style, 
   defaultStyle,
   textStyle,
@@ -53,8 +55,13 @@ export const AvatarImage = ({
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   
-  const avatarUrl = getAvatarUrl(avatarPath);
-  const initials = getInitials(firstName, lastName);
+  // รองรับทั้ง avatar และ avatarPath
+  const finalAvatarPath = avatar || avatarPath;
+  // รองรับทั้ง name และ firstName
+  const finalFirstName = firstName || name;
+  
+  const avatarUrl = getAvatarUrl(finalAvatarPath);
+  const initials = getInitials(finalFirstName, lastName);
   
   // ถ้ามี avatar URL และยังไม่ error ให้แสดง Image
   if (avatarUrl && !imageError) {

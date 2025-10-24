@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/theme';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const GroupChatItem = ({ 
   item, 
@@ -26,7 +26,7 @@ const GroupChatItem = ({
     >
       <View style={styles.avatarContainer}>
         <AvatarImage 
-          avatar={groupData.groupAvatar} 
+          avatarPath={groupData.groupAvatar} 
           name={groupData.groupName} 
           size={50} 
           style={styles.avatar}

@@ -17,7 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import api, { updateGroup, updateGroupAvatar, addGroupMembers, getGroupDetails, API_URL } from '../../service/api';
 import * as ImagePicker from 'expo-image-picker';
 import LoadingOverlay from '../../components/LoadingOverlay';
-import { AvatarImage } from '../../utils/avatarUtils';
+import { AvatarImage } from '../../service/avatarUtils';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 
 const EditGroupScreen = ({ route, navigation }) => {

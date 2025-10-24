@@ -8,7 +8,7 @@ import {
   Image,
 } from 'react-native';
 import { API_URL } from '../service/api';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const UserActionsModal = ({ 
   visible, 
@@ -35,7 +35,7 @@ const UserActionsModal = ({
           {selectedUser && (
             <View style={styles.selectedUserInfo}>
               <AvatarImage 
-                avatar={selectedUser.avatar} 
+                avatarPath={selectedUser.avatar} 
                 name={selectedUser.firstName} 
                 size={80} 
                 style={styles.modalAvatar}

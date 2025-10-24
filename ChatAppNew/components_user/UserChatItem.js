@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/theme';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const UserChatItem = ({ 
   item, 
@@ -43,7 +43,7 @@ const UserChatItem = ({
     >
       <View style={styles.avatarContainer}>
         <AvatarImage 
-          avatar={otherParticipant?.avatar} 
+          avatarPath={otherParticipant?.avatar} 
           name={otherParticipant?.firstName} 
           size={50} 
           style={styles.avatar}

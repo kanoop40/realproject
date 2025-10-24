@@ -320,6 +320,18 @@ const getMessages = asyncHandler(async (req, res) => {
                     }
                 }
                 
+                // Calculate read count for group messages
+                let readCount = 0;
+                let totalMembers = 0;
+                if (isMyMessage && msg.readBy) {
+                    readCount = msg.readBy.filter(read => 
+                        read.user && read.user.toString() !== userId.toString()
+                    ).length;
+                    
+                    // Get total members count (approximate - will be more accurate with proper group lookup)
+                    totalMembers = (msg.readBy.length + 1); // Rough estimate
+                }
+
                 return {
                     _id: msg._id,
                     content: msg.content,
@@ -331,7 +343,9 @@ const getMessages = asyncHandler(async (req, res) => {
                     fileSize: msg.fileSize,
                     mimeType: msg.mimeType,
                     file: msg.file_id || null,
-                    isRead: isRead
+                    isRead: isRead,
+                    readCount: readCount,
+                    readStatus: isMyMessage && readCount > 0 ? `${readCount} อ่านแล้ว` : null
                 };
             })
         });
@@ -737,6 +751,88 @@ const createChatroom = asyncHandler(async (req, res) => {
         console.error('Error creating chatroom:', error);
         res.status(500).json({
             message: 'เกิดข้อผิดพลาดในการสร้างห้องแชท',
+            error: error.message
+        });
+    }
+});
+
+// @desc    Get read count for messages in group chat
+// @route   GET /api/chats/:id/read-counts
+// @access  Private
+const getMessageReadCounts = asyncHandler(async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user._id;
+
+        console.log('📊 getMessageReadCounts called for chat:', id, 'by user:', userId);
+
+        // Check if user is participant in this chatroom
+        const chatroom = await Chatrooms.findOne({
+            _id: id,
+            $or: [
+                { user_id: { $in: [userId] } }, // For group chats
+                { participants: { $in: [userId] } } // For private chats
+            ]
+        });
+
+        if (!chatroom) {
+            console.log('❌ User not authorized to access this chat');
+            return res.status(403).json({
+                message: 'คุณไม่มีสิทธิ์เข้าถึงแชทนี้'
+            });
+        }
+
+        // For group chats, get total members from GroupChat model via chatroom
+        let totalMembers = 0;
+        if (chatroom.group_id) {
+            // It's a group chat - get from GroupChat model
+            const GroupChat = require('../models/GroupChatModel');
+            const group = await GroupChat.findById(chatroom.group_id);
+            totalMembers = group?.members?.length || 0;
+        } else {
+            // Regular chatroom - count participants
+            totalMembers = chatroom.participants?.length || chatroom.user_id?.length || 0;
+        }
+
+        // Get messages with read counts (only messages from current user)
+        const messages = await Messages.find({
+            chat_id: id,
+            user_id: userId // Only messages from current user
+        })
+        .select('_id content time readBy user_id')
+        .sort({ time: -1 })
+        .limit(50) // Limit to recent messages
+        .lean();
+
+        // Calculate read counts for each message
+        const messagesWithReadCount = messages.map(msg => {
+            const readCount = msg.readBy ? msg.readBy.filter(read => 
+                read.user && read.user.toString() !== userId.toString()
+            ).length : 0;
+
+            return {
+                messageId: msg._id,
+                content: msg.content?.substring(0, 50) + (msg.content?.length > 50 ? '...' : ''), // Preview
+                timestamp: msg.time,
+                readCount: readCount,
+                totalMembers: totalMembers - 1, // Exclude sender
+                readStatus: `${readCount}/${totalMembers - 1}`,
+                isFullyRead: readCount === (totalMembers - 1)
+            };
+        });
+
+        console.log(`📊 Found ${messagesWithReadCount.length} messages with read counts for user`);
+        
+        res.json({
+            chatId: id,
+            totalMembers: totalMembers,
+            messages: messagesWithReadCount
+        });
+
+    } catch (error) {
+        console.error('❌ Error getting message read counts:', error);
+        res.status(500).json({
+            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการอ่าน',
             error: error.message
         });
     }
@@ -1306,6 +1402,7 @@ module.exports = {
     createChatroom,
     createPrivateChat,
     markAsRead,
+    getMessageReadCounts,
     deleteChatroom,
     hideChatrooms,
     deleteMessage,

@@ -543,19 +543,44 @@ const GroupChatScreen = ({ route, navigation }) => {
           setCanLoadMore(true);
         }
         
-        // เริ่มต้นข้อมูล messageReadCount สำหรับข้อความที่โหลดมา
-        const initialReadCount = {};
-        loadedMessages.forEach(message => {
-          // สำหรับข้อความของตัวเอง ตั้งค่าเริ่มต้นการอ่าน
-          if (message.sender?._id === authUser._id) {
-            initialReadCount[message._id] = message.readCount || 0;
+        // Load read counts for group chat messages
+        if (!append || page === 1) {
+          try {
+            const readCountRes = await api.get(`/chats/${groupId}/read-counts`);
+            const readCountData = readCountRes.data;
+            
+            console.log('📊 Read counts loaded:', readCountData);
+            
+            // Create mapping of message ID to read count
+            const readCountMap = {};
+            if (readCountData.messages) {
+              readCountData.messages.forEach(msgData => {
+                readCountMap[msgData.messageId] = {
+                  readCount: msgData.readCount,
+                  totalMembers: msgData.totalMembers,
+                  readStatus: msgData.readStatus,
+                  isFullyRead: msgData.isFullyRead
+                };
+              });
+            }
+            
+            setMessageReadCount(readCountMap);
+          } catch (readError) {
+            console.error('❌ Error loading read counts:', readError);
+            // Fall back to using message.readCount from API
+            const initialReadCount = {};
+            loadedMessages.forEach(message => {
+              if (message.sender?._id === authUser._id) {
+                initialReadCount[message._id] = {
+                  readCount: message.readCount || 0,
+                  totalMembers: 0,
+                  readStatus: message.readStatus || '',
+                  isFullyRead: false
+                };
+              }
+            });
+            setMessageReadCount(initialReadCount);
           }
-        });
-        
-        if (append) {
-          setMessageReadCount(prev => ({ ...initialReadCount, ...prev }));
-        } else {
-          setMessageReadCount(initialReadCount);
         }
       }
       console.log('📨 Messages set, total:', append ? `${messages.length} + ${loadedMessages.length}` : loadedMessages.length);
@@ -1818,7 +1843,12 @@ const GroupChatScreen = ({ route, navigation }) => {
         )}
         
         <GroupMessageBubble
-          item={item}
+          item={{
+            ...item,
+            readCount: messageReadCount[item._id]?.readCount || item.readCount || 0,
+            totalMembers: messageReadCount[item._id]?.totalMembers || 0,
+            readStatus: messageReadCount[item._id]?.readStatus || item.readStatus || null
+          }}
           index={index}
           currentUser={authUser}
           selectionMode={selectionMode}

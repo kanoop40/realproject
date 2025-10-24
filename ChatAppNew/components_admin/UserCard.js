@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { API_URL } from '../service/api';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const UserCard = ({ user, onPress, onDelete }) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
@@ -174,7 +174,7 @@ const UserCard = ({ user, onPress, onDelete }) => {
         <View style={styles.leftContent}>
           <View style={styles.avatarContainer}>
             <AvatarImage 
-              avatar={user.avatar} 
+              avatarPath={user.avatar} 
               name={user.firstName} 
               size={50} 
               style={styles.avatar}

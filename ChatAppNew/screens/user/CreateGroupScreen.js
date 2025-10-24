@@ -15,9 +15,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../service/api';
-import { AvatarImage } from '../../utils/avatarUtils';
+import { AvatarImage } from '../../service/avatarUtils';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
-import * as ImagePicker from 'expo-image-picker';
 
 const CreateGroupScreen = ({ navigation }) => {
   const { user: authUser } = useAuth();
@@ -254,8 +253,8 @@ const CreateGroupScreen = ({ navigation }) => {
         onPress={() => toggleUserSelection(item)}
       >
         <AvatarImage 
-          avatar={item.avatar} 
-          name={item.firstName} 
+          avatarPath={item.avatar} 
+          firstName={item.firstName} 
           size={40} 
           style={styles.userAvatar}
         />
@@ -351,8 +350,8 @@ const CreateGroupScreen = ({ navigation }) => {
             {/* Current User (Always included) */}
             <View style={styles.memberItem}>
               <AvatarImage 
-                avatar={authUser.avatar} 
-                name={authUser.firstName} 
+                avatarPath={authUser.avatar} 
+                firstName={authUser.firstName} 
                 size={32} 
                 style={styles.memberAvatar}
               />
@@ -365,8 +364,8 @@ const CreateGroupScreen = ({ navigation }) => {
             {selectedUsers.map((user) => (
               <View key={user._id} style={styles.memberItem}>
                 <AvatarImage 
-                  avatar={user.avatar} 
-                  name={user.firstName} 
+                  avatarPath={user.avatar} 
+                  firstName={user.firstName} 
                   size={32} 
                   style={styles.memberAvatar}
                 />

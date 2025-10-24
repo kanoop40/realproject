@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { API_URL } from '../../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
-import { AvatarImage } from '../../utils/avatarUtils';
+import { AvatarImage } from '../../service/avatarUtils';
 
 // SPACING, RADIUS, SHADOWS are now imported from theme
 
@@ -48,7 +48,7 @@ const MessageBubble = ({
       {!isMyMessage && (
         <View style={styles.messageAvatarContainer}>
           <AvatarImage 
-            avatar={recipientAvatar} 
+            avatarPath={recipientAvatar} 
             name={recipientName} 
             size={30} 
             style={styles.messageAvatar}

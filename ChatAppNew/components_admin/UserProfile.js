@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { API_URL } from '../service/api';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const UserProfile = ({ user, onDelete }) => {
   const [isSwipeOpen, setIsSwipeOpen] = useState(false);
@@ -137,7 +137,7 @@ const UserProfile = ({ user, onDelete }) => {
           >
             <View style={styles.avatarContainer}>
               <AvatarImage 
-                avatar={user.avatar} 
+                avatarPath={user.avatar} 
                 name={user.firstName} 
                 size={60} 
                 style={styles.avatar}

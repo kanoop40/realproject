@@ -10,7 +10,7 @@ import ImageMessage from './ImageMessage';
 import FileMessage from './FileMessage';
 import TextMessage from './TextMessage';
 import { API_URL } from '../service/api';
-import { AvatarImage } from '../utils/avatarUtils';
+import { AvatarImage } from '../service/avatarUtils';
 
 const ChatMessage = ({ 
   item, 
@@ -81,7 +81,7 @@ const ChatMessage = ({
       {!isMyMessage && (
         <View style={styles.messageAvatarContainer}>
           <AvatarImage 
-            avatar={recipientAvatar} 
+            avatarPath={recipientAvatar} 
             name={recipientName} 
             size={30} 
             style={styles.messageAvatar}

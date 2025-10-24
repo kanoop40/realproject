@@ -7,6 +7,7 @@ const {
     createChatroom,
     createPrivateChat,
     markAsRead,
+    getMessageReadCounts,
     deleteChatroom,
     hideChatrooms,
     deleteMessage,
@@ -184,6 +185,11 @@ router.get('/:id/check-new', checkNewMessages);
 // @desc    Mark messages as read
 // @access  Private
 router.put('/:id/read', protect, markAsRead);
+
+// @route   GET /api/chats/:id/read-counts
+// @desc    Get read counts for messages in group chat
+// @access  Private
+router.get('/:id/read-counts', protect, getMessageReadCounts);
 
 // @route   POST /api/chats/:id/read-all
 // @desc    Mark all messages in chat as read
