@@ -22,7 +22,7 @@ import NotificationService from '../../service/notificationService';
 import UserChatItem from '../../components_user/UserChatItem';
 import GroupChatItem from '../../components_user/GroupChatItem';
 import TabBar from '../../components_user/TabBar';
-import ChatItemExpandAnimation from '../../components_user/ChatItemExpandAnimation';
+
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import ChatManager from '../../components_user/ChatManager';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
@@ -35,9 +35,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [chats, setChats] = useState([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true); // เพิ่ม loading state สำหรับแชท
-  const [showExpandAnimation, setShowExpandAnimation] = useState(false);
-  const [expandingItem, setExpandingItem] = useState(null);
-  const [expandLayout, setExpandLayout] = useState(null);
+
   // ระบบซ่อนแชทถูกลบออกแล้ว
   const joinedChatroomsRef = useRef(new Set()); // เพิ่ม ref เพื่อ track chatrooms ที่ join แล้ว (สำหรับ iOS)
   const focusTimeRef = useRef(0); // เพิ่ม ref เพื่อ track เวลาที่ focus
@@ -769,23 +767,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleChatPressWithAnimation = (chat, layout) => {
-    // เก็บข้อมูล item และ layout สำหรับ animation
-    setExpandingItem(chat);
-    setExpandLayout(layout);
-    setShowExpandAnimation(true);
-  };
-
-  const onAnimationComplete = () => {
-    // ซ่อน animation และนำทางไปหน้าแชท
-    setShowExpandAnimation(false);
-    if (expandingItem) {
-      handleChatPress(expandingItem);
-    }
-    // Reset states
-    setExpandingItem(null);
-    setExpandLayout(null);
-  };
+  // ลบฟังก์ชัน animation ออกแล้ว - ใช้การเข้าแชทแบบตรง
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -852,7 +834,6 @@ const ChatScreen = ({ route, navigation }) => {
             item={item}
             currentUser={currentUser}
             onPress={handleChatPress}
-            onPressWithAnimation={handleChatPressWithAnimation}
             formatTime={formatTime}
             API_URL={API_URL}
             style={isSelectMode ? { flex: 1 } : {}}
@@ -1051,22 +1032,7 @@ const ChatScreen = ({ route, navigation }) => {
         </>
       )}
 
-      {/* Expand Animation Overlay */}
-      {showExpandAnimation && expandingItem && (
-        <ChatItemExpandAnimation
-          isVisible={showExpandAnimation}
-          onAnimationComplete={onAnimationComplete}
-          originalLayout={expandLayout}
-        >
-          <UserChatItem
-            item={expandingItem}
-            currentUser={currentUser}
-            onPress={() => {}}
-            formatTime={formatTime}
-            API_URL={API_URL}
-          />
-        </ChatItemExpandAnimation>
-      )}
+
 
       <SuccessTickAnimation
         visible={showSuccess}

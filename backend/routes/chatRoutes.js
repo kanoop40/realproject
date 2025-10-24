@@ -92,34 +92,39 @@ router.post('/hide', hideChatrooms);
 // @access  Private
 router.get('/:id/messages', getMessages);
 
-// Middleware to conditionally apply multer
+// Middleware to conditionally apply multer with better error handling
 const conditionalUpload = (req, res, next) => {
   console.log('🔍 Checking request content-type:', req.get('Content-Type'));
-  console.log('🔍 Request headers:', req.headers);
   
   // Only apply multer for multipart/form-data requests
   if (req.get('Content-Type')?.includes('multipart/form-data')) {
     console.log('📎 Multipart request detected - applying multer');
     
-    // Use any() instead of single() to be more flexible
-    return uploadMessage.any()(req, res, (err) => {
-      console.log('🔄 Multer middleware callback called, error:', err);
+    // Use single('file') for more predictable behavior
+    const upload = uploadMessage.single('file');
+    
+    upload(req, res, (err) => {
       if (err) {
-        console.error('❌ Multer processing error:', err);
-        return handleMulterError(err, req, res, next);
+        console.error('❌ Multer error:', err);
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ 
+            message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 50MB' 
+          });
+        }
+        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          return res.status(400).json({ 
+            message: 'รูปแบบไฟล์ไม่ถูกต้อง' 
+          });
+        }
+        return res.status(500).json({
+          message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
+          error: err.message
+        });
       }
       
-      // Log what multer found
-      console.log('📎 Multer processed files:', req.files);
-      console.log('📎 Multer processed fields:', req.body);
+      console.log('📎 Multer processed file:', req.file ? 'Present' : 'Not present');
+      console.log('📎 Multer processed body:', Object.keys(req.body));
       
-      // Convert files array to single file for backward compatibility
-      if (req.files && req.files.length > 0) {
-        req.file = req.files.find(f => f.fieldname === 'file');
-        console.log('📎 Selected file for processing:', req.file);
-      }
-      
-      console.log('✅ Multer processing completed, calling next()');
       next();
     });
   } else {
