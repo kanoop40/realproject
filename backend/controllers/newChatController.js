@@ -456,6 +456,11 @@ const sendMessage = asyncHandler(async (req, res) => {
                     path: file.path
                 });
                 
+                // Check if file upload was successful (should have Cloudinary URL)
+                if (!file.path) {
+                    throw new Error('File upload to Cloudinary failed - no path received');
+                }
+                
                 // Determine message type based on file
                 const isImage = file.mimetype && file.mimetype.startsWith('image/');
                 messageType = isImage ? 'image' : 'file';
@@ -465,11 +470,17 @@ const sendMessage = asyncHandler(async (req, res) => {
                 
             } catch (fileError) {
                 console.error('❌ File processing error:', fileError);
-                throw new Error(`ไม่สามารถประมวลผลไฟล์ได้: ${fileError.message}`);
+                
+                // Check if it's a Cloudinary-specific error
+                if (fileError.message?.includes('File size too large')) {
+                    throw new Error('ไฟล์ใหญ่เกินไป ขนาดสูงสุด 10MB');
+                }
+                
+                throw new Error(`ไม่สามารถอัปโหลดไฟล์ได้: ${fileError.message}`);
             }
         }
 
-        // Create message with file info
+        // Create message with file info - create the message first
         const message = new Messages({
             chat_id: id,
             user_id: userId,
@@ -479,15 +490,55 @@ const sendMessage = asyncHandler(async (req, res) => {
             fileName: file ? file.originalname : null,
             fileSize: file ? file.size : null,
             mimeType: file ? file.mimetype : null,
-            file_id: fileDoc ? fileDoc._id : null
+            file_id: null // Will be updated after file document is created
         });
 
         await message.save();
 
-        // If file is uploaded or base64 data provided, save file info to database and link to message
-        if (file || fileData) {
+        // Handle file document creation after message is saved
+        if (file) {
             try {
-                console.log('🔥 Processing file upload...');
+                console.log('🔥 Processing regular file upload for database...');
+                
+                // Create file document for regular uploaded file
+                const isImage = file.mimetype && file.mimetype.startsWith('image/');
+                console.log('🔥 Creating file document:', {
+                    originalname: file.originalname,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    path: file.path,
+                    isImage: isImage
+                });
+                
+                fileDoc = new File({
+                    file_name: file.originalname,
+                    url: file.path, // Use Cloudinary URL
+                    user_id: userId,
+                    chat_id: id,
+                    size: file.size.toString(),
+                    file_type: file.mimetype,
+                    Messages_id: message._id // Link to the message we just created
+                });
+                
+                console.log('🔥 Saving file document...');
+                await fileDoc.save();
+                console.log('🔥 File document saved with ID:', fileDoc._id);
+
+                // Update message with file_id
+                message.file_id = fileDoc._id;
+                await message.save();
+                console.log('🔥 Message updated with file_id:', fileDoc._id);
+                
+            } catch (fileError) {
+                console.error('❌ Error creating file document:', fileError);
+                // Continue without file document if it fails
+            }
+        }
+        
+        // If base64 file data provided, save file info to database and link to message
+        if (fileData) {
+            try {
+                console.log('🔥 Processing base64 file upload...');
                 
                 if (fileData) {
                     // Handle base64 file data
@@ -558,59 +609,19 @@ const sendMessage = asyncHandler(async (req, res) => {
                     message.fileSize = buffer.length;
                     message.mimeType = mimeType_actual;
                     
-                    console.log('🔥 Message updated with file info:', {
+                    console.log('🔥 Base64 message updated with file info:', {
                         messageType: message.messageType,
                         fileUrl: message.fileUrl,
                         fileName: message.fileName
                     });
-                } else {
-                    // Handle regular file upload
-                    console.log('🔥 File details:', {
-                        originalname: file.originalname,
-                        mimetype: file.mimetype,
-                        size: file.size,
-                        path: file.path,
-                        fieldname: file.fieldname
-                    });
                     
-                    const isImage = file.mimetype && file.mimetype.startsWith('image/');
-                    console.log('🔥 File type check - isImage:', isImage, 'mimetype:', file.mimetype);
+                    // Save the message updates for base64 files
+                    await message.save();
+                    console.log('🔥 Base64 message updated successfully');
                 
-                    fileDoc = new File({
-                        file_name: file.originalname,
-                        url: file.path, // Use Cloudinary URL
-                        user_id: userId,
-                        chat_id: id,
-                        size: file.size.toString(),
-                        file_type: file.mimetype,
-                        Messages_id: message._id // เชื่อมโยงกับ message ที่สร้างแล้ว
-                    });
-                    
-                    console.log('🔥 Saving file document...');
-                    await fileDoc.save();
-                    console.log('🔥 File document saved with ID:', fileDoc._id);
-
-                    // อัปเดต message ให้มี file_id และข้อมูลไฟล์
-                    message.file_id = fileDoc._id;
-                    message.messageType = isImage ? 'image' : 'file';
-                    message.fileUrl = file.path;
-                    message.fileName = file.originalname;
-                    message.fileSize = file.size;
-                    message.mimeType = file.mimetype;
-                }
-            
-            console.log('🔥 Updating message with file info...');
-            await message.save();
-            console.log('🔥 Message updated successfully');
-            
-        } catch (fileError) {
-            console.error('❌ Error processing file:', fileError);
-            // ถ้า file processing ล้มเหลว ให้ส่งเป็น text message แทน
-        }
-        } else {
-            console.log('📝 No file detected, saving as text message')
-            if (messageType) {
-                console.log('⚠️ MessageType provided but no file/fileData found:', messageType);
+            } catch (fileError) {
+                console.error('❌ Error processing base64 file:', fileError);
+                // Continue without base64 file if it fails
             }
         }
 

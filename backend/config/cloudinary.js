@@ -59,6 +59,7 @@ const fileStorage = new CloudinaryStorage({
   params: {
     folder: 'chat-app-files',
     resource_type: 'auto', // Automatically detect file type
+    // Remove file size limit from Cloudinary config - handle in multer instead
     public_id: (req, file) => {
       const timestamp = Date.now();
       const randomNum = Math.round(Math.random() * 1E9);

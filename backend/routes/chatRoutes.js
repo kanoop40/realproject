@@ -28,8 +28,8 @@ const multer = require('multer');
 const uploadMessage = multer({ 
   storage: fileStorage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB
-    fieldSize: 50 * 1024 * 1024, // 50MB for field data
+    fileSize: 10 * 1024 * 1024, // 10MB - match Cloudinary free tier limit
+    fieldSize: 10 * 1024 * 1024, // 10MB for field data
     fieldNameSize: 255,
     fields: 10,
     files: 1
@@ -38,10 +38,15 @@ const uploadMessage = multer({
     console.log('🔍 Multer processing file:', {
       fieldname: file.fieldname,
       originalname: file.originalname,
-      mimetype: file.mimetype
+      mimetype: file.mimetype,
+      size: file.size
     });
     
-    // Accept all file types
+    // Accept all file types but warn about size
+    if (file.size && file.size > 10 * 1024 * 1024) {
+      console.warn('⚠️ File size exceeds limit:', file.size);
+    }
+    
     cb(null, true);
   }
 });
@@ -53,7 +58,7 @@ const handleMulterError = (error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ 
-        message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 50MB' 
+        message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 10MB' 
       });
     }
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {
@@ -126,7 +131,7 @@ const conditionalUpload = (req, res, next) => {
         
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({ 
-            message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 50MB' 
+            message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 10MB' 
           });
         }
         if (err.code === 'LIMIT_UNEXPECTED_FILE') {
