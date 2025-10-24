@@ -89,14 +89,10 @@ const LoadOlderMessagesPrivateChat = ({
             />
             <View style={styles.textContainer}>
               <Text style={styles.buttonText}>โหลดข้อความเก่า</Text>
-            
             </View>
           </View>
         </TouchableOpacity>
       )}
-      
-      
-    
     </Animated.View>
   );
 };

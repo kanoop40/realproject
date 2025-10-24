@@ -25,17 +25,20 @@ class PrivateChatHandler {
 
   static prepareNavigationParams(chat, currentUser) {
     const otherParticipant = chat.participants?.find(p => p._id !== currentUser._id);
+    const recipientDisplayName = otherParticipant ? 
+      `${otherParticipant.firstName} ${otherParticipant.lastName}` : 
+      'แชทส่วนตัว';
     
     console.log('🔗 Opening private chat with participant:', otherParticipant);
     console.log('🔗 Chat room name:', chat.roomName);
+    console.log('🔗 Recipient display name:', recipientDisplayName);
+    console.log('🔗 Current user:', currentUser.firstName, currentUser.lastName);
     
     return {
       chatroomId: chat._id,
       roomName: chat.roomName,
       recipientId: otherParticipant?._id,
-      recipientName: otherParticipant ? 
-        `${otherParticipant.firstName} ${otherParticipant.lastName}` : 
-        'แชทส่วนตัว',
+      recipientName: recipientDisplayName,
       recipientAvatar: otherParticipant?.avatar,
       returnChatId: chat._id
     };

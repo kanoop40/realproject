@@ -1,16 +1,23 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LottieView from 'lottie-react-native';
 import { useAuth } from '../context/AuthContext';
+import StartupScreen from './StartupScreen';
 
 const WelcomeScreen = ({ navigation }) => {
   const { user, loading } = useAuth();
+  const [showStartupAnimation, setShowStartupAnimation] = useState(true);
+  const [hasShownStartup, setHasShownStartup] = useState(false);
   // Removed loading hook - no longer using loading functionality
 
   useEffect(() => {
     checkExistingSession();
+    
+    // เล่น StartupScreen ทุกครั้งที่เข้ามาหน้านี้
+    setShowStartupAnimation(true);
+    setHasShownStartup(false);
   }, []);
 
   const checkExistingSession = async () => {
@@ -41,6 +48,40 @@ const WelcomeScreen = ({ navigation }) => {
       console.error('Error clearing session:', error);
     }
   };
+
+
+
+  const handleStartupAnimationFinish = async () => {
+    console.log('🎬 Startup animation completed, checking for existing session');
+    
+    // ตรวจสอบว่ามี session อยู่หรือไม่
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const userData = await AsyncStorage.getItem('userData');
+      
+      if (token && userData) {
+        const user = JSON.parse(userData);
+        console.log('🔑 Found existing session, going directly to Chat for:', user.firstName, user.lastName);
+        
+        // ไปหน้าแชททันทีถ้ามี session
+        navigation.replace('Chat');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+    }
+    
+    // ถ้าไม่มี session ให้แสดง welcome screen
+    setShowStartupAnimation(false);
+    setHasShownStartup(true);
+  };
+
+  // แสดง Startup Animation ทุกครั้ง
+  if (showStartupAnimation) {
+    return (
+      <StartupScreen onAnimationFinish={handleStartupAnimationFinish} />
+    );
+  }
 
   // ไม่แสดง loading เต็มหน้า ให้นำทางไปหน้า Chat ทันที
   // if (loading || isLoading) {
@@ -101,7 +142,6 @@ const WelcomeScreen = ({ navigation }) => {
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.25,
               shadowRadius: 3.84,
-              
             }}
             onPress={() => navigation.navigate('Login')}
           >

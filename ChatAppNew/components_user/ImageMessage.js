@@ -149,8 +149,8 @@ const ImageMessage = ({
         </View>
       </TouchableOpacity>
       
-      {/* Time and status for images */}
-      {showTime && (
+      {/* Time and status for images - ไม่แสดงในโหมดเลือก */}
+      {showTime && !selectionMode && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,
@@ -186,12 +186,7 @@ const ImageMessage = ({
                 ]}>
                   {item.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}
                 </Text>
-                {/* Debug info in development */}
-                {__DEV__ && (
-                  <Text style={{fontSize: 8, color: 'gray', marginLeft: 5}}>
-                    {`[IMG:${String(item.isRead)}]`}
-                  </Text>
-                )}
+
               </View>
             )}
           </View>
@@ -203,16 +198,16 @@ const ImageMessage = ({
 
 const styles = StyleSheet.create({
   imageMessageBubble: {
-    marginBottom: 6,
-    backgroundColor: 'transparent',
+    padding: 4,
+    borderRadius: 18,
+    marginBottom: 4,
+    backgroundColor: 'transparent'
   },
   myImageBubble: {
-    backgroundColor: 'transparent',
-    alignSelf: 'flex-end',
+    alignSelf: 'flex-end'
   },
   otherImageBubble: {
-    backgroundColor: 'transparent',
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-start'
   },
   optimisticMessage: {
     opacity: 0.7
@@ -237,10 +232,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent'
   },
   messageImage: {
-    width: 220,
-    height: 220,
-    borderRadius: 12,
-    backgroundColor: 'transparent'
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 5,
+    borderWidth: 2,
+    borderColor: '#000'
   },
   messageTimeBottomContainer: {
     alignItems: 'flex-start',

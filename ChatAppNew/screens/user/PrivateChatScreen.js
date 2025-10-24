@@ -34,6 +34,7 @@ import ChatInputBar from '../../components_user/ChatInputBar';
 import ChatHeader from '../../components_user/ChatHeader';
 import LoadOlderMessagesPrivateChat from '../../components_user/LoadOlderMessagesPrivateChat';
 import LoadingOverlay from '../../components/LoadingOverlay';
+import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -66,6 +67,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const showTimeForMessagesRef = useRef(new Set());
   const [timeAnimations, setTimeAnimations] = useState({});
   const [successNotification, setSuccessNotification] = useState({ visible: false, message: '' });
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const flatListRef = React.useRef(null);
@@ -86,18 +88,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
     loadCurrentUser();
   }, []);
 
-  // Load messages when user and chatroom are ready
   // Sync ref with state
   useEffect(() => {
     showTimeForMessagesRef.current = showTimeForMessages;
   }, [showTimeForMessages]);
 
+  // Load messages when user and chatroom are ready - Load latest 30 messages only
   useEffect(() => {
     if (currentUser && chatroomId) {
-      console.log('🚀 Loading initial 30 messages and scrolling to latest');
+      console.log('🚀 Loading latest 30 messages and auto-scrolling to bottom');
       loadMessages(1, false);
       setHasScrolledToEnd(false);
       setCurrentPage(1);
+      
+      // Force scroll to bottom after loading - only for initial load
+      if (!hasScrolledToEnd) {
+        setTimeout(() => {
+          console.log('🎯 Force scrolling to latest message');
+          flatListRef.current?.scrollToEnd({ animated: true });
+          setHasScrolledToEnd(true);
+        }, 800);
+      }
     }
   }, [currentUser, chatroomId]);
 
@@ -122,13 +133,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }, [currentUser, chatroomId])
   );
 
-  // Initial load only - ไม่รีเฟรชเมื่อกลับมา
-  useEffect(() => {
-    if (currentUser && chatroomId) {
-      console.log('� Initial load - loading messages once');
-      loadMessages(1, false);
-    }
-  }, [currentUser, chatroomId]);
+
 
   // Smart Background Sync (ไม่รีเฟรชหน้าจอ)
   useEffect(() => {
@@ -235,7 +240,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
   }, [navigation]);
 
   const loadMessages = useCallback(async (page = 1, refresh = false) => {
-    if (!currentUser || !chatroomId) return;
+    if (!currentUser || !chatroomId || (page === 1 && isLoading)) return;
+    
+    if (page === 1) setIsLoading(true);
     
     try {
       console.log(`📥 Loading messages page ${page}`);
@@ -308,8 +315,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       if (refresh || page === 1) {
         setMessages(safeMessages);
+        console.log('📋 Set initial messages:', safeMessages.length);
       } else {
-        setMessages(prev => [...prev, ...safeMessages]);
+        // Prevent duplicate messages when loading more
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(msg => msg._id));
+          const newMessages = safeMessages.filter(msg => !existingIds.has(msg._id));
+          console.log('📋 Adding new messages:', newMessages.length, 'to existing:', prev.length);
+          return [...prev, ...newMessages];
+        });
       }
       
       // Update canLoadMore logic แบบ GroupChat
@@ -324,20 +338,34 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       setCurrentPage(page);
       
-      // Auto scroll for new messages (Normal FlatList)
+      // Auto scroll to latest message (Normal FlatList) - Always scroll when loading page 1
       if (page === 1) {
+        console.log('🎯 Auto-scrolling to latest message...');
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 300);
+        // Additional scroll after a bit more delay to ensure content is rendered
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: false });
-        }, 200);
+        }, 600);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
+    } finally {
+      if (page === 1) setIsLoading(false);
     }
-  }, [currentUser, chatroomId]);
+  }, [currentUser, chatroomId, isLoading]);
 
   // Load more messages
   const loadMoreMessages = useCallback(async () => {
-    if (isLoadingMore || !canLoadMore) return;
+    if (isLoadingMore || !canLoadMore) {
+      console.log('🚫 Load more blocked:', { isLoadingMore, canLoadMore });
+      return;
+    }
+    
+    // เพิ่มการบันทึก log สำหรับการโหลดข้อความเก่าผ่านปุ่ม
+    const actualMessageCount = messages.filter(msg => msg.type !== 'date_separator').length;
+    console.log('� Manual loading older messages - current count:', actualMessageCount);
     
     setIsLoadingMore(true);
     try {
@@ -388,7 +416,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
             };
           });
         
-        setMessages(prev => [...safeOlderMessages, ...prev]);
+        // Prevent duplicate messages
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(msg => msg._id));
+          const newMessages = safeOlderMessages.filter(msg => !existingIds.has(msg._id));
+          console.log('📋 Prepending older messages:', newMessages.length, 'to existing:', prev.length);
+          return [...newMessages, ...prev];
+        });
         setCurrentPage(nextPage);
       }
       
@@ -887,12 +921,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
               console.log('🗑️ Starting to delete selected messages...');
               console.log('📝 Selected messages:', selectedMessages);
 
-              const token = await AsyncStorage.getItem('token');
+              const token = await AsyncStorage.getItem('userToken');
               
               // ลบข้อความทีละข้อ
               for (const messageId of selectedMessages) {
                 try {
-                  const response = await fetch(`${API_URL}/api/messages/${messageId}`, {
+                  const response = await fetch(`${API_URL}/api/chats/messages/${messageId}`, {
                     method: 'DELETE',
                     headers: {
                       'Authorization': `Bearer ${token}`,
@@ -1028,7 +1062,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         grouped.push({
           type: 'date_separator',
           date: message.timestamp,
-          _id: `date_${messageDate}_${index}`
+          _id: 'date_' + messageDate.replace(/\s/g, '_') + '_' + index
         });
         currentDate = messageDate;
       }
@@ -1100,9 +1134,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('🖼️ Image URL:', selectedModalImage);
       
       // ตรวจสอบสิทธิ์การเข้าถึงไฟล์
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ');
+      try {
+        const permissionResult = await MediaLibrary.requestPermissionsAsync();
+        console.log('🔐 Permission result:', permissionResult);
+        
+        if (!permissionResult || permissionResult.status !== 'granted') {
+          Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ');
+          return;
+        }
+      } catch (permissionError) {
+        console.error('❌ Permission request error:', permissionError);
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถขอสิทธิ์การเข้าถึงไฟล์ได้');
         return;
       }
 
@@ -1121,12 +1163,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
           Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
           return;
         } catch (directError) {
-          console.log('⚠️ Direct save failed, trying alternative method...');
+          console.log('⚠️ Direct save failed:', directError.message);
+          console.log('🔄 Trying alternative download method...');
         }
       }
 
       // วิธี fallback: ดาวน์โหลดไฟล์ชั่วคราว
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken'); // Fixed: should be 'userToken' not 'token'
       const headers = selectedModalImage.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
       
       const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
@@ -1141,7 +1184,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('📊 Download result:', downloadResult);
 
       if (downloadResult.status === 200) {
-        const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+        try {
+          const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+          console.log('✅ Image saved to gallery:', asset);
+          Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
+        } catch (saveError) {
+          console.error('❌ Error saving to gallery:', saveError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกรูปภาพลงในแกลเลอรี่ได้: ' + saveError.message);
+        }
         
         // ลบไฟล์ชั่วคราว
         try {
@@ -1149,9 +1199,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
         } catch (deleteError) {
           console.log('⚠️ Could not delete temp file:', deleteError);
         }
-        
-        Alert.alert('สำเร็จ', 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว');
-        console.log('✅ Image saved to gallery:', asset);
       } else {
         throw new Error(`Download failed with status: ${downloadResult.status}`);
       }
@@ -1182,7 +1229,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
       
       // ไม่ต้องใช้ token สำหรับ Cloudinary files
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('userToken'); // Fixed: should be 'userToken' not 'token'
 
       let fullUrl = fileUrl;
       
@@ -1215,9 +1262,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
         // สำหรับไฟล์สื่อ ให้บันทึกลงในแกลเลอรี่
         console.log('📷 Processing as media file...');
         
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกสื่อ');
+        try {
+          const permissionResult = await MediaLibrary.requestPermissionsAsync();
+          console.log('🔐 Media permission result:', permissionResult);
+          
+          if (!permissionResult || permissionResult.status !== 'granted') {
+            Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกสื่อ');
+            return;
+          }
+        } catch (permissionError) {
+          console.error('❌ Media permission request error:', permissionError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถขอสิทธิ์การเข้าถึงไฟล์ได้');
           return;
         }
 
@@ -1233,7 +1288,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
         if (downloadResult.status === 200) {
           console.log('💾 Saving to media library...');
-          const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+          try {
+            const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+            console.log('✅ Media saved to gallery:', asset);
+            Alert.alert('สำเร็จ', isImage ? 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว' : 'บันทึกวิดีโอลงในแกลเลอรี่แล้ว');
+          } catch (saveError) {
+            console.error('❌ Error saving media to gallery:', saveError);
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกไฟล์ลงในแกลเลอรี่ได้: ' + saveError.message);
+          }
           
           // ลบไฟล์ชั่วคราว
           try {
@@ -1241,9 +1303,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
           } catch (deleteError) {
             console.log('⚠️ Could not delete temp file:', deleteError);
           }
-          
-          Alert.alert('สำเร็จ', isImage ? 'บันทึกรูปภาพลงในแกลเลอรี่แล้ว' : 'บันทึกวิดีโอลงในแกลเลอรี่แล้ว');
-          console.log('✅ Media saved to gallery:', asset);
         } else {
           throw new Error(`Download failed with status: ${downloadResult.status}`);
         }
@@ -1304,12 +1363,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
     );
   };
 
-  // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จที่หายไปเอง
+  // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จด้วย Tick Animation
   const showSuccessNotification = (message) => {
-    setSuccessNotification({ visible: true, message });
-    setTimeout(() => {
-      setSuccessNotification({ visible: false, message: '' });
-    }, 3000); // หายไปใน 3 วินาที
+    console.log('✅ Showing success animation for:', message);
+    setShowSuccessAnimation(true);
+  };
+
+  // ฟังก์ชันจัดการเมื่อ animation จบ
+  const handleSuccessAnimationComplete = () => {
+    setShowSuccessAnimation(false);
   };
 
   return (
@@ -1335,6 +1397,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
               setSelectionMode(false);
               setSelectedMessages([]);
             }}
+            onCancelSelection={() => {
+              setSelectionMode(false);
+              setSelectedMessages([]);
+            }}
             onDeleteSelected={deleteSelectedMessages}
             onManageChat={() => {
               setSelectionMode(true);
@@ -1353,22 +1419,30 @@ const PrivateChatScreen = ({ route, navigation }) => {
           <FlatList
             ref={flatListRef}
             data={groupMessagesByDate(messages)}
-            keyExtractor={(item, index) => item._id || `${item._id}_${index}`}
+            keyExtractor={(item, index) => item._id || `fallback_${index}`}
             renderItem={renderMessage}
             style={styles.messagesList}
             inverted={false}
-            onEndReached={loadMoreMessages}
+            onEndReached={null}
             onEndReachedThreshold={0.1}
+            initialNumToRender={30}
+            maxToRenderPerBatch={20}
+            windowSize={10}
             onScroll={(event) => {
               const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
               const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
-              const isNearTop = contentOffset.y < 200; // Normal FlatList - เลื่อนขึ้นจริง ๆ
+              const isNearTop = contentOffset.y < 50; // ลดอีกเพื่อให้ปุ่มแสดงเฉพาะตอนที่เลื่อนไปบนสุดจริงๆ
               
               setShowScrollToBottom(!isAtBottom);
               
-              // แสดงปุ่มโหลดข้อความเก่าเมื่อเลื่อนไปด้านบนจริง ๆ (Normal FlatList)
+              // แสดงปุ่มโหลดข้อความเก่าเฉพาะตอนเลื่อนไปด้านบนสุด (ไม่โหลดอัตโนมัติ)
               const actualMessageCount = messages.filter(msg => msg.type !== 'date_separator').length;
-              const shouldShowLoadButton = isNearTop && canLoadMore && actualMessageCount >= 5;
+              const shouldShowLoadButton = isNearTop && canLoadMore && actualMessageCount >= 5 && !isLoadingMore;
+              
+              // แสดง debug เฉพาะเมื่อปุ่มควรจะแสดง
+              if (shouldShowLoadButton) {
+                console.log('📜 Load older button will show - offset:', contentOffset.y, 'messages:', actualMessageCount);
+              }
               
               setShowLoadOlderButton(shouldShowLoadButton);
             }}
@@ -1491,20 +1565,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
           backgroundColor="rgba(0,0,0,0.9)"
           enablePreload={true}
           saveToLocalByLongPress={false}
-          menuContext={{
-            saveToLocal: 'บันทึกรูปภาพ',
-            cancel: 'ยกเลิก'
-          }}
         />
       </Modal>
       
-      {successNotification.visible && (
-        <View style={styles.successNotification}>
-          <Text style={styles.successNotificationText}>
-            ✅ {successNotification.message}
-          </Text>
-        </View>
-      )}
+      {/* Success Tick Animation */}
+      <SuccessTickAnimation
+        visible={showSuccessAnimation}
+        onComplete={handleSuccessAnimationComplete}
+      />
     </View>
   );
 };

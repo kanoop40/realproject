@@ -15,6 +15,7 @@ const TextMessage = ({
   showTimeForMessages,
   timeAnimations,
   selectedMessages,
+  selectionMode,
   formatDateTime,
   shouldShowTime,
   onMessagePress,
@@ -63,8 +64,8 @@ const TextMessage = ({
         )}
       </TouchableOpacity>
       
-      {/* Time and status for text messages */}
-      {showTime && (
+      {/* Time and status for text messages - ไม่แสดงในโหมดเลือก */}
+      {showTime && !selectionMode && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,
@@ -111,40 +112,47 @@ const TextMessage = ({
 
 const styles = StyleSheet.create({
   messageBubble: {
-    maxWidth: '80%',
-    minWidth: 60,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
+    maxWidth: '85%',
+    minWidth: 'auto',
+    padding: 12,
+    borderRadius: 12,
     marginBottom: 4,
+    backgroundColor: '#fff',
+    flexShrink: 1,
+    alignSelf: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2
   },
   myMessageBubble: {
-    backgroundColor: '#000000',
+    backgroundColor: '#000',
     alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-    marginRight: 8
+    borderBottomRightRadius: 12
   },
   otherMessageBubble: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#fff',
     alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
-    marginLeft: 8
+    borderBottomLeftRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '400'
+    lineHeight: 22,
+    textAlign: 'left',
+    flexWrap: 'wrap',
+    flexShrink: 1
   },
   myMessageText: {
-    color: '#ffffff'
+    color: '#fff'
   },
   otherMessageText: {
-    color: '#1f2937'
+    color: '#333'
   },
   optimisticMessage: {
     opacity: 0.7

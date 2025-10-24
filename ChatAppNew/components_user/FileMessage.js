@@ -102,8 +102,8 @@ const FileMessage = ({
         </View>
       </TouchableOpacity>
       
-      {/* Time and status for files */}
-      {showTime && (
+      {/* Time and status for files - ไม่แสดงในโหมดเลือก */}
+      {showTime && !selectionMode && (
         <Animated.View 
           style={[
             styles.messageTimeBottomContainer,
@@ -150,17 +150,18 @@ const FileMessage = ({
 
 const styles = StyleSheet.create({
   fileMessageBubble: {
-    padding: 4,
+    padding: 8,
     borderRadius: 18,
     marginBottom: 4,
+    maxWidth: 250
   },
   myFileBubble: {
-    backgroundColor: 'transparent',
-    alignSelf: 'flex-end',
+    backgroundColor: '#000',
+    alignSelf: 'flex-end'
   },
   otherFileBubble: {
-    backgroundColor: 'transparent',
-    alignSelf: 'flex-start',
+    backgroundColor: '#f0f0f0',
+    alignSelf: 'flex-start'
   },
   optimisticMessage: {
     opacity: 0.7
@@ -186,38 +187,31 @@ const styles = StyleSheet.create({
   fileAttachment: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    minWidth: 200,
-  },
-  myFileAttachment: {
-    backgroundColor: '#000000',
-  },
-  otherFileAttachment: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    padding: 8
   },
   fileIcon: {
-    marginRight: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 28,
-    height: 28,
+    marginRight: 8
   },
   fileDetails: {
     flex: 1,
   },
   fileName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: 2
   },
   fileSize: {
     fontSize: 12,
+    marginTop: 2
+  },
+  fileInfo: {
+    flex: 1
   },
   messageTimeBottomContainer: {
     alignItems: 'flex-start',

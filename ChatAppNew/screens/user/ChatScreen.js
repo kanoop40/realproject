@@ -1024,24 +1024,7 @@ const ChatScreen = ({ route, navigation }) => {
             )}
           </View>
 
-          {/* Content Area - แสดง empty state หรือ chat list */}
-          {chats.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>💬</Text>
-              <Text style={styles.emptyText}>ยังไม่มีข้อความ</Text>
-              <Text style={styles.subText}>
-                ค้นหาเพื่อนเพื่อเริ่มแชท
-              </Text>
-             
-              <TouchableOpacity
-                style={styles.searchButton}
-                onPress={navigateToSearch}
-              >
-                <Text style={styles.searchIcon}>🔍</Text>
-                <Text style={styles.searchButtonText}>ค้นหาเพื่อน</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
+          {/* Content Area - แสดงเฉพาะ chat list (ไม่แสดง empty state) */}
           <FlatList
             data={chats}
             keyExtractor={(item) => item._id}
@@ -1063,7 +1046,6 @@ const ChatScreen = ({ route, navigation }) => {
             getItemLayout={null}
             onScrollToIndexFailed={() => {}}
           />
-          )}
         </>
       )}
 

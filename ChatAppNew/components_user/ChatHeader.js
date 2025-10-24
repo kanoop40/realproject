@@ -54,9 +54,7 @@ const ChatHeader = ({
         
         <View style={styles.nameContainer}>
           <Text style={styles.nameText}>
-            {(typeof recipientName === 'string' ? recipientName : '') || 
-             (typeof roomName === 'string' ? roomName : '') || 
-             'แชทส่วนตัว'}
+            {(typeof recipientName === 'string' && recipientName.trim()) ? recipientName : 'แชทส่วนตัว'}
           </Text>
           <Text style={styles.statusText}>ออนไลน์</Text>
         </View>

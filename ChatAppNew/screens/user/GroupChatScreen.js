@@ -2516,7 +2516,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', // ให้กล่องปรับขนาดตามเนื้อหา
   },
   myMessageBubble: { 
-    backgroundColor: '#fff', 
+    backgroundColor: '#000', 
     borderBottomRightRadius: 12, // ปรับให้สม่ำเสมอ
     alignSelf: 'flex-end', // ให้ข้อความของตัวเองชิดขวา
   },
@@ -2537,7 +2537,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap', // ให้ข้อความขึ้นบรรทัดใหม่เมื่อยาวเกินไป
     flexShrink: 1 // ให้ข้อความปรับขนาดได้
   },
-  myMessageText: { color: '#333' },
+  myMessageText: { color: '#fff' },
   otherMessageText: { color: '#333' },
   messageTime: { fontSize: 11, marginTop: 5 },
   myMessageTime: { color: '#666', textAlign: 'right' },
@@ -2579,11 +2579,11 @@ const styles = StyleSheet.create({
   imageMessageBubble: { padding: 4, borderRadius: 18, marginBottom: 4, backgroundColor: 'transparent' },
   myImageBubble: { alignSelf: 'flex-end' },
   otherImageBubble: { alignSelf: 'flex-start' },
-  messageImage: { width: 200, height: 150, borderRadius: 8, marginBottom: 5 },
+  messageImage: { width: 200, height: 150, borderRadius: 8, marginBottom: 5, borderWidth: 2, borderColor: '#000' },
   imageTimeContainer: { marginTop: 4, alignItems: 'flex-end' },
 
   fileMessageBubble: { padding: 8, borderRadius: 18, marginBottom: 4, maxWidth: 250 },
-  myFileBubble: { backgroundColor: '#007AFF', alignSelf: 'flex-end' },
+  myFileBubble: { backgroundColor: '#000', alignSelf: 'flex-end' },
   otherFileBubble: { backgroundColor: '#f0f0f0', alignSelf: 'flex-start' },
   fileAttachment: { flexDirection: 'row', alignItems: 'center', padding: 8 },
   fileIcon: {
