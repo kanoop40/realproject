@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { groupAvatarStorage } = require('../config/cloudinary');
+const { groupAvatarStorage, fileStorage } = require('../config/cloudinary');
 const {
     createGroup,
     getUserGroups,
@@ -110,8 +110,7 @@ const multerFileUpload = require('multer')({
   }
 });
 
-// Import fileStorage and create multer instance similar to chatRoutes
-const { fileStorage } = require('../config/cloudinary');
+// Multer instance for group file uploads (similar to chatRoutes)
 
 // Multer configuration for group file uploads (same as chatRoutes)
 const uploadGroupMessage = multer({ 
