@@ -577,20 +577,33 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     const groupId = req.params.id;
     const { content, fileData, messageType } = req.body;
     const userId = req.user._id;
+    
+    // Handle files array from multer.any() (same as chat controller)
+    let file = req.file;
+    if (!file && req.files && req.files.length > 0) {
+        // Find file field or use the first file
+        file = req.files.find(f => f.fieldname === 'file') || req.files[0];
+        console.log('🚀 Group using file from files array:', {
+            fieldname: file.fieldname,
+            originalname: file.originalname,
+            size: file.size
+        });
+    }
 
     console.log('📨 Group message request received:', {
         groupId,
         content: content ? content.substring(0, 50) : 'No content',
-        hasFile: !!req.file,
+        hasFile: !!file,
         hasFileData: !!fileData,
         messageType,
         contentType: req.get('Content-Type'),
         isMultipart: req.get('Content-Type')?.includes('multipart/form-data'),
-        fileInfo: req.file ? {
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size,
-            path: req.file.path
+        filesArrayLength: req.files?.length || 0,
+        fileInfo: file ? {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            path: file.path
         } : null
     });
 
@@ -603,7 +616,7 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     }
 
     // ตรวจสอบว่ามีไฟล์อัพโหลดหรือไม่
-    const hasFile = req.file;
+    const hasFile = file;
     const hasFileData = fileData;
     const hasContent = content && content.trim() !== '';
 
@@ -637,22 +650,22 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
 
     // ถ้ามีไฟล์ (multipart upload)
     if (hasFile) {
-        const isImage = req.file.mimetype && req.file.mimetype.startsWith('image/');
+        const isImage = file.mimetype && file.mimetype.startsWith('image/');
         
-        console.log('📎 File upload info:', {
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size,
-            cloudinaryPath: req.file.path,
+        console.log('📎 Group file upload info:', {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            cloudinaryPath: file.path,
             isImage: isImage
         });
         
         messageData.content = hasContent ? content.trim() : (isImage ? '📷 รูปภาพ' : '📎 ไฟล์');
         messageData.messageType = isImage ? 'image' : 'file';
-        messageData.fileUrl = req.file.path; // Cloudinary URL
-        messageData.fileName = req.file.originalname;
-        messageData.fileSize = req.file.size;
-        messageData.mimeType = req.file.mimetype;
+        messageData.fileUrl = file.path; // Cloudinary URL
+        messageData.fileName = file.originalname;
+        messageData.fileSize = file.size;
+        messageData.mimeType = file.mimetype;
         
         console.log('💾 Message data with file:', {
             messageType: messageData.messageType,

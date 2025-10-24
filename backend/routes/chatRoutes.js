@@ -24,24 +24,24 @@ const { protect } = require('../Middleware/authMiddleware');
 const { fileStorage } = require('../config/cloudinary');
 const multer = require('multer');
 
-// Multer configuration optimized for React Native FormData
+// Multer configuration with more permissive settings for React Native
 const uploadMessage = multer({ 
   storage: fileStorage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB - match Cloudinary free tier limit
+    fileSize: 10 * 1024 * 1024, // 10MB
     fieldSize: 10 * 1024 * 1024, // 10MB for field data
-    fieldNameSize: 255,
-    fields: 20, // Increase field limit for React Native
-    files: 5,   // Allow multiple files just in case
-    parts: 50,  // Increase parts limit
-    headerPairs: 2000 // Increase header pairs limit
+    fieldNameSize: 1000, // Increase for longer field names
+    fields: 100, // Much higher field limit
+    files: 10,   // Allow multiple files
+    parts: 1000,  // Much higher parts limit
+    headerPairs: 2000 // High header pairs limit
   },
   fileFilter: (req, file, cb) => {
     console.log('🔍 Multer processing file:', {
       fieldname: file.fieldname,
       originalname: file.originalname,
       mimetype: file.mimetype,
-      size: file.size
+      encoding: file.encoding
     });
     
     // Accept all file types

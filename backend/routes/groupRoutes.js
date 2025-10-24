@@ -110,32 +110,105 @@ const multerFileUpload = require('multer')({
   }
 });
 
-// Conditional upload middleware for group messages
-const conditionalUploadGroup = (req, res, next) => {
-  console.log('🔍 Group message - checking content type:', req.get('Content-Type'));
-  
-  if (req.get('Content-Type')?.includes('multipart/form-data')) {
-    console.log('📎 Group multipart request detected - applying multer');
+// Import fileStorage and create multer instance similar to chatRoutes
+const { fileStorage } = require('../config/cloudinary');
+
+// Multer configuration for group file uploads (same as chatRoutes)
+const uploadGroupMessage = multer({ 
+  storage: fileStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+    fieldSize: 10 * 1024 * 1024, // 10MB for field data
+    fieldNameSize: 1000, // Increase for longer field names
+    fields: 100, // Much higher field limit
+    files: 10,   // Allow multiple files
+    parts: 1000,  // Much higher parts limit
+    headerPairs: 2000 // High header pairs limit
+  },
+  fileFilter: (req, file, cb) => {
+    console.log('🔍 Group multer processing file:', {
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      encoding: file.encoding
+    });
     
-    return multerFileUpload.single('file')(req, res, (err) => {
-      if (err) {
-        console.error('❌ Group multer error:', err);
+    // Accept all file types
+    cb(null, true);
+  }
+});
+
+// Improved upload middleware for group messages (same approach as chats)
+const handleGroupUpload = (req, res, next) => {
+  console.log('🔍 Group request details:', {
+    contentType: req.get('Content-Type'),
+    method: req.method,
+    url: req.url,
+    hasBody: !!req.body,
+    bodyKeys: Object.keys(req.body || {}),
+    contentLength: req.get('Content-Length')
+  });
+  
+  // Use any() to handle React Native FormData which might send files with different field names
+  const upload = uploadGroupMessage.any();
+  
+  upload(req, res, (err) => {
+    if (err) {
+      console.error('❌ Group multer error details:', {
+        code: err.code,
+        message: err.message,
+        field: err.field,
+        stack: err.stack
+      });
+      
+      if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ 
-          message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
-          error: err.message 
+          message: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุด 10MB' 
         });
       }
       
-      console.log('📎 Group multer processed file:', req.file ? 'Present' : 'Not present');
-      next();
+      // If it's not a multer-specific error and content-type is not multipart, continue
+      if (!req.get('Content-Type')?.includes('multipart/form-data')) {
+        console.log('💬 Group non-multipart request with multer error, continuing...');
+        return next();
+      }
+      
+      return res.status(500).json({
+        message: 'เกิดข้อผิดพลาดในการอัพโหลดไฟล์',
+        error: err.message,
+        code: err.code
+      });
+    }
+    
+    // Handle files array from multer.any()
+    if (req.files && req.files.length > 0) {
+      req.file = req.files[0]; // Set the first file as req.file for backward compatibility
+    }
+    
+    console.log('📎 Group multer processed:', {
+      hasFile: !!req.file,
+      filesCount: req.files ? req.files.length : 0,
+      isMultipart: req.get('Content-Type')?.includes('multipart/form-data'),
+      bodyKeys: Object.keys(req.body || {}),
+      fileDetails: req.file ? {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        path: req.file.path
+      } : null,
+      allFiles: req.files ? req.files.map(f => ({
+        fieldname: f.fieldname,
+        originalname: f.originalname,
+        size: f.size
+      })) : []
     });
-  } else {
-    console.log('💬 Group JSON request - skipping multer');
+    
     next();
-  }
+  });
 };
 
-router.post('/:id/messages', conditionalUploadGroup, sendGroupMessage);
+router.post('/:id/messages', handleGroupUpload, sendGroupMessage);
 
 // @route   GET /api/groups/:id/messages
 // @desc    ดึงข้อความในกลุ่ม
