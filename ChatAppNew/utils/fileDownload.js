@@ -2,80 +2,121 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../service/api';
 
 /**
- * Get a proper download URL for files, especially for Cloudinary files
+ * Enhanced URL generator for better PDF download success rate
+ * @param {string} originalUrl - The original file URL
+ * @returns {Array<string>} - Array of URLs to try
+ */
+const generateEnhancedDownloadUrls = (originalUrl) => {
+  console.log('� Generating enhanced URLs for:', originalUrl);
+  
+  // If not Cloudinary, return original
+  if (!originalUrl.includes('cloudinary.com')) {
+    return [originalUrl];
+  }
+
+  const baseUrl = originalUrl.replace(/\/fl_[^\/]+/g, ''); // Remove existing flags
+  
+  // Extract Cloudinary parts
+  const cloudinaryMatch = baseUrl.match(/https:\/\/res\.cloudinary\.com\/([^\/]+)\/([^\/]+)\/upload\/(.+)/);
+  
+  if (!cloudinaryMatch) {
+    return [originalUrl];
+  }
+  
+  const [, cloudName, resourceType, pathAndFile] = cloudinaryMatch;
+  const basePath = `https://res.cloudinary.com/${cloudName}`;
+  
+  // Generate multiple URL variations with high success probability
+  const urls = [
+    // Method 1: Try as raw file first (best for PDFs)
+    `${basePath}/raw/upload/${pathAndFile}`,
+    
+    // Method 2: Try with attachment and strip flags
+    `${basePath}/image/upload/fl_attachment,fl_force_strip/${pathAndFile}`,
+    
+    // Method 3: Try original without flags
+    baseUrl,
+    
+    // Method 4: Try with just attachment flag
+    `${basePath}/image/upload/fl_attachment/${pathAndFile}`,
+    
+    // Method 5: Try with auto format
+    `${basePath}/image/upload/f_auto/${pathAndFile}`,
+    
+    // Method 6: Backend proxy as last resort
+    `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(originalUrl)}`
+  ];
+
+  console.log('🔗 Enhanced URLs generated:', urls.length, 'variations');
+  return urls;
+};
+
+/**
+ * Get a proper download URL for files, with enhanced fallback system
  * @param {string} fileUrl - The original file URL
  * @param {string} fileName - The file name (optional)
- * @returns {Promise<string>} - The download URL
+ * @returns {Promise<Array<string>>} - Array of URLs to try
  */
 export const getFileDownloadUrl = async (fileUrl, fileName = null) => {
   try {
-    console.log('🔗 Getting download URL for:', fileUrl);
+    console.log('🔗 Getting enhanced download URLs for:', fileUrl);
     
-    // If it's not a Cloudinary URL, return as is
-    if (!fileUrl.includes('cloudinary.com')) {
-      return fileUrl;
-    }
-
-    const token = await AsyncStorage.getItem('userToken');
+    // Generate enhanced URLs
+    const urls = generateEnhancedDownloadUrls(fileUrl);
+    console.log('📋 Enhanced URLs to try:', urls);
     
-    if (!token) {
-      console.log('⚠️ No token found, using original URL');
-      return fileUrl;
-    }
-
-    const response = await fetch(`${API_URL}/api/files/download-url`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        fileUrl,
-        fileName,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.success && data.downloadUrl) {
-      console.log('✅ Got download URL from server:', data.downloadUrl);
-      return data.downloadUrl;
-    } else {
-      console.log('⚠️ Server did not provide download URL, using original');
-      return fileUrl;
-    }
+    return urls;
   } catch (error) {
-    console.error('❌ Error getting download URL:', error);
+    console.error('❌ Error generating download URLs:', error);
     // Fallback to original URL
-    return fileUrl;
+    return [fileUrl];
   }
 };
 
 /**
- * Download file with proper error handling and fallback URLs
+ * Enhanced download function with multiple URL attempts and better success rate
  * @param {string} fileUrl - The file URL to download
  * @param {string} fileName - The file name
  * @param {Function} downloadFunction - The actual download function to use
  * @returns {Promise<object>} - The download result
  */
 export const downloadFileWithFallback = async (fileUrl, fileName, downloadFunction) => {
-  const maxRetries = 3;
+  console.log('📥 Starting enhanced download with fallback system...');
+  
   let lastError = null;
   
-  // List of URLs to try in order
-  const urlsToTry = [
-    fileUrl, // Original URL
-  ];
+  // Get enhanced URLs to try
+  const urlsToTry = await getFileDownloadUrl(fileUrl, fileName);
+  console.log('🔗 Will try', urlsToTry.length, 'different URLs');
   
-  // For Cloudinary URLs, add variations
-  if (fileUrl.includes('cloudinary.com')) {
-    // Clean the URL first to avoid double processing
-    let cleanUrl = fileUrl;
+  // Try each URL until one succeeds
+  for (let i = 0; i < urlsToTry.length; i++) {
+    const tryUrl = urlsToTry[i];
+    console.log(`🔄 Enhanced attempt ${i + 1}/${urlsToTry.length}:`, tryUrl.substring(0, 80) + '...');
     
-    // Remove any existing fl_attachment to start clean
-    if (cleanUrl.includes('/fl_attachment/')) {
-      cleanUrl = cleanUrl.replace('/fl_attachment/', '/');
+    try {
+      const result = await downloadFunction(tryUrl, fileName);
+      
+      if (result && result.success !== false) {
+        console.log(`✅ Enhanced download succeeded on attempt ${i + 1}!`);
+        return {
+          success: true,
+          result,
+          attemptNumber: i + 1,
+          successUrl: tryUrl
+        };
+      } else {
+        console.log(`⚠️ Enhanced attempt ${i + 1} failed:`, result?.error || 'Unknown error');
+        lastError = new Error(result?.error || `Attempt ${i + 1} failed`);
+      }
+    } catch (error) {
+      console.log(`⚠️ Enhanced attempt ${i + 1} error:`, error.message);
+      lastError = error;
+      
+      // Continue to next URL
+      continue;
     }
+  }
     
     // Try with server-generated download URL
     try {
@@ -140,5 +181,8 @@ export const downloadFileWithFallback = async (fileUrl, fileName, downloadFuncti
   }
   
   // If all attempts failed, throw the last error
-  throw lastError || new Error('All download attempts failed');
+  console.error('❌ All enhanced download attempts failed');
+  throw lastError || new Error('All enhanced download attempts failed');
 };
+
+export default downloadFileWithFallback;
