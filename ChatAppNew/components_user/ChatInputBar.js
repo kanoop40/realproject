@@ -62,7 +62,7 @@ const ChatInputBar = ({
               setShowAttachmentMenu(false);
             }}
           >
-            <Text style={styles.attachmentIcon}>IMG</Text>
+            <Text style={styles.attachmentMenuIcon}>🖼️</Text>
             <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
           </TouchableOpacity>
           
@@ -73,7 +73,7 @@ const ChatInputBar = ({
               setShowAttachmentMenu(false);
             }}
           >
-            <Text style={[styles.attachmentIcon, { color: "#3b82f6" }]}>FILE</Text>
+            <Text style={styles.attachmentMenuIcon}>📁</Text>
             <Text style={styles.attachmentMenuText}>ไฟล์</Text>
           </TouchableOpacity>
         </View>
@@ -119,10 +119,10 @@ const ChatInputBar = ({
 
 const styles = StyleSheet.create({
   inputContainer: {
-    backgroundColor: '#f8f9fa',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingBottom: SPACING.xs,
+    padding: 16, 
+    paddingTop: 8, 
+    backgroundColor: '#ffffff',
+    borderTopWidth: 0,
   },
   selectedFileContainer: {
     backgroundColor: '#f8f9fa',
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     margin: 12,
     padding: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: '#007AFF',
     ...SHADOWS.small
   },
   selectedFileContent: {
@@ -202,12 +202,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8
   },
-  attachmentIcon: {
-    fontSize: 16,
-    color: "#10b981",
-    fontWeight: 'bold',
-    marginRight: 12,
-    width: 35
+  attachmentMenuIcon: { 
+    fontSize: 18, 
+    marginRight: 12 
   },
   attachmentMenuText: {
     fontSize: 16,
@@ -215,54 +212,48 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   messageInputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    gap: SPACING.xs
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    backgroundColor: '#fff',
+    borderRadius: 25, 
+    paddingHorizontal: 4, 
+    paddingVertical: 4,
   },
   leftAttachmentButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 2
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#333',
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 8,
   },
   plusButtonText: {
-    fontSize: 28,
-    color: "#007AFF",
+    fontSize: 20,
+    color: '#fff',
     fontWeight: 'bold'
   },
   textInput: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    backgroundColor: 'white',
-    borderRadius: 22,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    textAlignVertical: 'center'
+    flex: 1, 
+    borderWidth: 0, 
+    borderRadius: 20, 
+    paddingHorizontal: 16, 
+    paddingVertical: 10,
+    marginRight: 8, 
+    maxHeight: 100, 
+    fontSize: 16, 
+    backgroundColor: 'transparent',
   },
   floatingSendButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 22,
-    minWidth: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 20, 
+    backgroundColor: '#333',
   },
   sendButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16
+    fontSize: 16, 
+    color: '#fff', 
+    fontWeight: '500',
   }
 });
 

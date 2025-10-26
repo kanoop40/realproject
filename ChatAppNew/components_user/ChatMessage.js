@@ -93,7 +93,7 @@ const ChatMessage = ({
         styles.messageContentContainer,
         isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
       ]}>
-        {/* Image messages - optimized condition check */}
+        {/* Image messages - only for actual image display without filenames */}
         {(() => {
           // Early exit for pure text messages
           if (item.messageType === 'text' && !item.image && !item.fileUrl && !item.file?.url && item.content !== 'รูปภาพ') {
@@ -101,12 +101,10 @@ const ChatMessage = ({
           }
           
           const shouldShowImage = (
-            item.messageType === 'image' || 
-            item.image || 
-            item.fileUrl?.includes('cloudinary.com') ||
-            (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) || 
-            (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
-            (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.image && !item.file && !item.fileName)
+            item.image || // แสดงเฉพาะที่มี image data จริงๆ
+            (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.image && !item.file && !item.fileName && !item.fileUrl) // placeholder รูปภาพเก่า
+          ) && !(
+            item.fileName || item.fileUrl // ถ้ามี filename หรือ fileUrl ให้แสดงเป็น FileMessage แทน
           );
           
           return shouldShowImage;
@@ -128,7 +126,10 @@ const ChatMessage = ({
         )}
 
         {/* Text messages */}
-        {item.content && item.content !== 'รูปภาพ' && item.content !== 'ไฟล์แนบ' && (
+        {item.content && 
+         item.content !== 'รูปภาพ' && 
+         item.content !== 'ไฟล์แนบ' && 
+         !(item.content.includes('[ไฟล์:') && item.content.includes(']')) && (
           <TextMessage
             item={item}
             index={index}
@@ -144,18 +145,19 @@ const ChatMessage = ({
           />
         )}
 
-        {/* File messages (non-images) - check for actual file data first, then fallback */}
+        {/* File messages (including images with filenames) - check for actual file data first */}
         {(() => {
           const shouldShowFile = (
             item.messageType === 'file' || 
-            (item.fileName && !(item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName))) || 
-            (item.file && !(item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) || 
-            (item.content === 'ไฟล์แนบ' && item.messageType === 'text' && !item.file && !item.fileName)
+            item.fileName || // แสดงไฟล์ทั้งหมดที่มี fileName รวมถึงรูปภาพ
+            item.fileUrl || // แสดงไฟล์ทั้งหมดที่มี fileUrl
+            (item.file && item.file.file_name) || 
+            (item.content === 'ไฟล์แนบ' && item.messageType === 'text' && !item.file && !item.fileName) ||
+            // รองรับ text message ที่มี pattern [ไฟล์: filename.ext]
+            (item.messageType === 'text' && item.content && item.content.includes('[ไฟล์:') && item.content.includes(']'))
           ) && !(
-            item.messageType === 'image' || 
-            item.image || 
-            (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
-            (item.content === 'รูปภาพ' && item.messageType === 'text')
+            item.image || // ยกเว้นเฉพาะที่มี image data จริงๆ
+            (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.fileName && !item.fileUrl) // ยกเว้น placeholder รูปภาพ
           );
           
           // Debug logging for file display (only when there are issues)

@@ -27,6 +27,25 @@ const FileMessage = ({
 }) => {
   // File fallback system working
   
+  // Extract filename from content pattern [ไฟล์: filename.ext]
+  const extractFileNameFromContent = (content) => {
+    if (!content || typeof content !== 'string') return null;
+    const match = content.match(/\[ไฟล์:\s*([^\]]+)\]/);
+    return match ? match[1].trim() : null;
+  };
+  
+  // Get display filename from various sources
+  const getDisplayFileName = () => {
+    if (item.fileName) return item.fileName;
+    if (item.file?.file_name) return item.file.file_name;
+    const extractedName = extractFileNameFromContent(item.content);
+    if (extractedName) {
+      console.log('🔍 Extracted filename from content:', extractedName);
+      return extractedName;
+    }
+    return 'ไฟล์แนบ';
+  };
+  
   // Handle both object and string sender formats with null safety
   const isMyMessage = (
     (item.sender && typeof item.sender === 'object' && item.sender?._id === currentUser._id) ||
@@ -46,7 +65,11 @@ const FileMessage = ({
           styles.fileMessageBubble,
           isMyMessage ? styles.myFileBubble : styles.otherFileBubble,
           item.isOptimistic && styles.optimisticMessage,
-          selectedMessages.includes(item._id) && styles.selectedMessage
+          selectedMessages.includes(item._id) && styles.selectedMessage,
+          // เพิ่ม style สำหรับไฟล์ที่ไม่พร้อมใช้
+          !(item.fileUrl || item.file?.url || item.file?.file_path) && 
+          (item.content && item.content.includes('[ไฟล์:')) && 
+          { opacity: 0.7 }
         ]}
         onPress={() => {
           if (selectionMode) {
@@ -56,15 +79,17 @@ const FileMessage = ({
             // โหมดปกติ ให้แสดงเวลา และเปิดไฟล์
             onMessagePress && onMessagePress(item._id);
             setTimeout(() => {
+              const displayFileName = getDisplayFileName();
               const fileData = {
-                file_name: item.file?.file_name || item.fileName || item.file_name,
-                fileName: item.file?.fileName || item.fileName || item.file_name,
+                file_name: item.file?.file_name || item.fileName || displayFileName,
+                fileName: item.file?.fileName || item.fileName || displayFileName,
                 url: item.file?.url || item.fileUrl || item.url,
                 file_path: item.file?.file_path || item.filePath || item.file_path,
                 size: item.file?.size || item.fileSize || item.size,
                 ...item.file,
                 ...(item.fileName && { fileName: item.fileName }),
-                ...(item.fileUrl && { url: item.fileUrl })
+                ...(item.fileUrl && { url: item.fileUrl }),
+                ...(displayFileName && displayFileName !== 'ไฟล์แนบ' && { fileName: displayFileName })
               };
               onFilePress && onFilePress(fileData);
             }, 200);
@@ -76,24 +101,46 @@ const FileMessage = ({
       >
         <View style={styles.fileAttachment}>
           <View style={styles.fileIcon}>
-            {getFileIcon(decodeFileName(item.fileName || item.file?.file_name || 'unknown_file'))}
+            {(() => {
+              const displayName = getDisplayFileName();
+              const decodedName = decodeFileName(displayName);
+              const icon = getFileIcon(decodedName);
+              console.log('🔧 FileMessage icon debug:', {
+                displayName,
+                decodedName,
+                icon,
+                content: item.content
+              });
+              return icon;
+            })()}
           </View>
           <View style={styles.fileInfo}>
             <Text style={[
               styles.fileName,
               isMyMessage ? styles.myFileName : styles.otherFileName
             ]} numberOfLines={2} ellipsizeMode="middle">
-              {item.fileName || item.file?.file_name ? 
-                (item.fileName?.includes('%') ? decodeURIComponent(item.fileName) : 
-                 item.file?.file_name?.includes('%') ? decodeURIComponent(item.file.file_name) :
-                 decodeFileName(item.fileName || item.file.file_name)) : 
-                'ไฟล์แนบ'}
+              {(() => {
+                const fileName = getDisplayFileName();
+                if (fileName === 'ไฟล์แนบ') return fileName;
+                return fileName?.includes('%') ? decodeURIComponent(fileName) : decodeFileName(fileName);
+              })()}
             </Text>
             <Text style={[
               styles.fileSize,
               isMyMessage ? styles.myFileSize : styles.otherFileSize
             ]}>
-              {(item.fileSize || item.file?.size) ? formatFileSize(item.fileSize || item.file.size) : 'ไฟล์'}
+              {(() => {
+                // ตรวจสอบว่ามี fileUrl หรือไม่
+                const hasFileUrl = item.fileUrl || item.file?.url || item.file?.file_path;
+                
+                if (item.fileSize || item.file?.size) {
+                  return formatFileSize(item.fileSize || item.file.size);
+                } else if (!hasFileUrl && (item.content && item.content.includes('[ไฟล์:'))) {
+                  return 'ไฟล์ไม่พร้อมใช้';
+                } else {
+                  return 'ไฟล์';
+                }
+              })()}
             </Text>
           </View>
         </View>

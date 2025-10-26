@@ -55,7 +55,6 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [messageReadCount, setMessageReadCount] = useState({}); // เก็บจำนวนคนที่อ่านข้อความแต่ละข้อความ
   const [selectionMode, setSelectionMode] = useState(false); // โหมดเลือกข้อความ
   const [selectedMessages, setSelectedMessages] = useState([]); // ข้อความที่เลือก
-  const [successNotification, setSuccessNotification] = useState({ visible: false, message: '' }); // แจ้งเตือนสำเร็จ
   const [showSuccess, setShowSuccess] = useState(false); // สำหรับ SuccessTickAnimation
   
   // States สำหรับโหลดข้อความเก่า
@@ -717,6 +716,8 @@ const GroupChatScreen = ({ route, navigation }) => {
 
               await Promise.all(deletePromises);
 
+              // แสดง SuccessTickAnimation เมื่อลบสำเร็จ
+              setShowSuccess(true);
               
             } catch (error) {
               console.error('❌ Error deleting group messages:', error);
@@ -1176,8 +1177,19 @@ const GroupChatScreen = ({ route, navigation }) => {
         }
         
         // เพิ่มข้อความใหม่จาก server
+        // บังคับให้ไฟล์ที่มี fileName แสดงเป็น FileMessage เสมอ
+        const finalMessageType = (serverMessage.fileName || serverMessage.fileUrl) ? 'file' : serverMessage.messageType;
+        
+        console.log('🔄 GroupChat message type conversion:', {
+          fileName: serverMessage.fileName,
+          fileUrl: serverMessage.fileUrl,
+          originalMessageType: serverMessage.messageType,
+          finalMessageType: finalMessageType
+        });
+        
         const updatedMessages = [...filteredMessages, {
           ...serverMessage,
+          messageType: finalMessageType, // ใช้ messageType ที่แก้ไขแล้ว
           isTemporary: false
         }];
         
@@ -1220,12 +1232,10 @@ const GroupChatScreen = ({ route, navigation }) => {
     setImageModalVisible(true);
   };
 
-  // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จที่หายไปเอง
+  // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จด้วย Tick Animation
   const showSuccessNotification = (message) => {
-    setSuccessNotification({ visible: true, message });
-    setTimeout(() => {
-      setSuccessNotification({ visible: false, message: '' });
-    }, 3000); // หายไปใน 3 วินาที
+    console.log('✅ Showing success animation for:', message);
+    setShowSuccess(true);
   };
 
   const downloadFile = async (fileUrl, fileName) => {
@@ -1347,11 +1357,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                 
                 if (saveResult.success) {
                   console.log('✅ Media file saved to Downloads successfully');
-                  Alert.alert(
-                    'ดาวน์โหลดสำเร็จ',
-                    saveResult.message,
-                    [{ text: 'ตกลง' }]
-                  );
+                  setShowSuccess(true);
                 } else {
                   console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
                   
@@ -1364,10 +1370,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                     });
                     console.log('✅ File shared successfully via system share fallback');
                   } else {
-                    Alert.alert(
-                      'ดาวน์โหลดสำเร็จ', 
-                      `ไฟล์ถูกดาวน์โหลดแล้ว\nขนาด: ${(fileInfo.size / 1024).toFixed(2)} KB\n\nข้อผิดพลาด: ${saveResult.error}`
-                    );
+                    setShowSuccess(true);
                   }
                 }
               } else {
@@ -1403,12 +1406,8 @@ const GroupChatScreen = ({ route, navigation }) => {
               if (downloadResult.status === 200) {
                 const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
                 
-                // แสดงการแจ้งเตือนที่หายไปเอง
-                showSuccessNotification(
-                  isImage ? 
-                    `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
-                    `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
-                );
+                // แสดง SuccessTickAnimation
+                setShowSuccess(true);
                 
                 console.log('✅ Media saved to gallery:', asset);
               } else {
@@ -1429,11 +1428,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                 
                 if (retryResult.status === 200) {
                   const asset = await MediaLibrary.createAssetAsync(retryResult.uri);
-                  showSuccessNotification(
-                    isImage ? 
-                      `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
-                      `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
-                  );
+                  setShowSuccess(true);
                   console.log('✅ Media saved to gallery (retry):', asset);
                   return;
                 }
@@ -1523,7 +1518,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                   dialogTitle: `บันทึกไฟล์: ${finalFileName}`
                 });
               } else {
-                showSuccessNotification(`ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`);
+                setShowSuccess(true);
               }
             } else {
               throw new Error(`HTTP ${downloadResult.status}`);
@@ -1637,11 +1632,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                   
                   if (downloadResult.success) {
                     console.log('✅ File saved to Downloads successfully');
-                    Alert.alert(
-                      'ดาวน์โหลดสำเร็จ',
-                      downloadResult.message,
-                      [{ text: 'ตกลง' }]
-                    );
+                    setShowSuccess(true);
                   } else {
                     console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
                     
@@ -1654,11 +1645,7 @@ const GroupChatScreen = ({ route, navigation }) => {
                       });
                       console.log('✅ File shared successfully via system fallback');
                     } else {
-                      Alert.alert(
-                        'ดาวน์โหลดสำเร็จ',
-                        `ไฟล์ถูกดาวน์โหลดแล้ว\nชื่อไฟล์: ${finalFileName}\nขนาด: ${(fileInfo.size / 1024).toFixed(2)} KB\n\nข้อผิดพลาด: ${downloadResult.error}`,
-                        [{ text: 'ตกลง' }]
-                      );
+                      setShowSuccess(true);
                     }
                   }
                 } else if (fileInfo.exists && fileInfo.size === 0) {
@@ -2784,14 +2771,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Success Notification */}
-      {successNotification.visible && (
-        <View style={styles.successNotification}>
-          <Text style={styles.successNotificationText}>
-            ✅ {successNotification.message}
-          </Text>
-        </View>
-      )}
+
 
       <LoadingOverlay 
         visible={isLoading} 
@@ -2811,29 +2791,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5C842' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5C842' },
   loadingText: { color: '#333', fontSize: 16, marginTop: 10 },
-  
-  // Success Notification Styles
-  successNotification: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: '#4CAF50',
-    padding: 16,
-    borderRadius: 8,
-    zIndex: 10000,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  successNotificationText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+
   
   scrollLoadingOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -2998,7 +2956,7 @@ const styles = StyleSheet.create({
   inputContainer: { 
     padding: 16, 
     paddingTop: 8, 
-    backgroundColor: '#F5C842', // เปลี่ยนเป็นสีเหลือง
+    backgroundColor: '#ffffff', // เปลี่ยนเป็นสีขาว
     borderTopWidth: 0, // เอาเส้นขอบบนออก
   },
   messageInputRow: {

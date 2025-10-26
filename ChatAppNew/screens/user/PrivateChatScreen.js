@@ -489,49 +489,95 @@ const PrivateChatScreen = ({ route, navigation }) => {
       let response;
       
       if (fileToSend) {
-        // ลองใช้ fetch API แทน axios สำหรับ file upload
+        // Debug: ตรวจสอบข้อมูลไฟล์ก่อนส่ง
+        console.log('🔍 File to send details:', {
+          uri: fileToSend.uri,
+          name: fileToSend.name || fileToSend.fileName,
+          type: fileToSend.mimeType || fileToSend.type,
+          size: fileToSend.size || fileToSend.fileSize,
+          allProperties: Object.keys(fileToSend)
+        });
+        
+        // ตรวจสอบว่าไฟล์มี uri หรือไม่
+        if (!fileToSend.uri) {
+          console.error('❌ File has no URI - cannot upload');
+          throw new Error('ไฟล์ไม่มีข้อมูล URI สำหรับการอัปโหลด');
+        }
+        
         console.log('📤 Attempting to send file with proper FormData formatting');
+        console.log('🔧 CODE VERSION: Updated with base64 method');
         
         try {
-          const formData = new FormData();
-          formData.append('content', contentToSend);
-          formData.append('messageType', messageType);
+          const fileName = fileToSend.name || fileToSend.fileName || 'file.txt';
+          const fileType = fileToSend.mimeType || fileToSend.type || 'application/octet-stream';
           
-          // React Native FormData requires specific format
-          formData.append('file', {
-            uri: fileToSend.uri,
-            type: fileToSend.mimeType || fileToSend.type || 'application/octet-stream',
-            name: fileToSend.name || fileToSend.fileName || 'file.txt'
-          });
-          
-          console.log('📋 FormData prepared:', {
+          console.log('📋 File upload details:', {
             content: contentToSend,
             messageType: messageType,
-            fileName: fileToSend.name || fileToSend.fileName
+            fileName: fileName,
+            fileType: fileType,
+            fileUri: fileToSend.uri,
+            fileSize: fileToSend.size
           });
 
-          console.log('📤 FormData created, attempting send...');
+          // วิธีที่ 1: ลอง base64 encoding
+          console.log('📤 Trying base64 encoding method...');
           
-          response = await api.post(`/chats/${chatroomId}/messages`, formData, {
-            headers: {
-              // ให้ axios ตั้งค่า Content-Type เอง สำหรับ FormData
-            },
-            timeout: 60000 // เพิ่ม timeout
+          const base64 = await FileSystem.readAsStringAsync(fileToSend.uri, {
+            encoding: FileSystem.EncodingType.Base64,
           });
           
-          console.log('✅ File sent successfully via FormData');
+          console.log('� Base64 length:', base64.length);
           
-        } catch (formError) {
-          console.log('❌ FormData failed, trying alternative approach:', formError.message);
-          
-          // ถ้า FormData ไม่ได้ผล ให้ส่งเป็น text message แทน
           response = await api.post(`/chats/${chatroomId}/messages`, {
-            content: contentToSend + ' [ไฟล์: ' + (fileToSend.name || fileToSend.fileName || 'unknown') + ']',
-            sender_id: currentUser._id,
-            messageType: 'text'
+            content: contentToSend,
+            messageType: messageType,
+            fileName: fileName,
+            fileType: fileType,
+            fileSize: fileToSend.size,
+            fileData: base64
+          }, {
+            timeout: 120000, // 2 นาที
           });
           
-          console.log('✅ Sent as text message instead of file');
+          console.log('✅ File sent successfully via base64');
+          
+        } catch (base64Error) {
+          console.log('❌ Base64 failed, trying FormData:', base64Error.message);
+          
+          try {
+            // วิธีที่ 2: FormData แบบไม่กำหนด Content-Type
+            const formData = new FormData();
+            formData.append('content', contentToSend);
+            formData.append('messageType', messageType);
+            
+            formData.append('file', {
+              uri: fileToSend.uri,
+              type: fileType,
+              name: fileName
+            });
+            
+            console.log('📤 Trying FormData without Content-Type...');
+            
+            response = await api.post(`/chats/${chatroomId}/messages`, formData, {
+              timeout: 120000,
+              // ไม่กำหนด Content-Type ให้ axios จัดการเอง
+            });
+            
+            console.log('✅ File sent successfully via FormData');
+            
+          } catch (formError) {
+            console.log('❌ All methods failed, sending as text:', formError.message);
+            
+            // สุดท้าย ถ้าทุกอย่างล้มเหลว ให้ส่งเป็น text message
+            response = await api.post(`/chats/${chatroomId}/messages`, {
+              content: contentToSend + ' [ไฟล์: ' + (fileToSend.name || fileToSend.fileName || 'unknown') + ']',
+              sender_id: currentUser._id,
+              messageType: 'text'
+            });
+            
+            console.log('✅ Sent as text message instead of file');
+          }
         }
       } else {
         response = await api.post(`/chats/${chatroomId}/messages`, {
@@ -541,39 +587,61 @@ const PrivateChatScreen = ({ route, navigation }) => {
       }
 
       console.log('📥 File Server response:', response.data);
+      
+      // แก้ไข: ข้อมูลจริงอยู่ใน response.data.message หรือ response.data
+      const actualMessageData = response.data.message || response.data;
+      
       setMessages(prev => {
-        const updatedMessages = prev.map(msg => {
-          if (msg._id === tempId) {
-            const serverMessage = response.data.message || response.data;
-            console.log('🔍 Processing server message:', {
-              fileName: serverMessage.fileName,
-              messageType: serverMessage.messageType || serverMessage.type,
-              mimeType: serverMessage.mimeType,
-              fileUrl: serverMessage.fileUrl || serverMessage.file_url
-            });
-            return {
-              ...serverMessage,
-              _id: serverMessage._id,
-              content: serverMessage.content,
-              sender: serverMessage.sender || currentUser,
-              timestamp: serverMessage.timestamp || serverMessage.createdAt,
-              messageType: serverMessage.messageType || serverMessage.type,
-              fileName: serverMessage.fileName,
-              fileSize: serverMessage.fileSize,
-              mimeType: serverMessage.mimeType,
-              fileUrl: serverMessage.fileUrl || serverMessage.file_url, // เพิ่ม fileUrl
-              file: serverMessage.file || (serverMessage.fileName ? {
-                name: serverMessage.fileName,
-                size: serverMessage.fileSize,
-                type: serverMessage.mimeType
-              } : null),
-              user_id: serverMessage.user_id || serverMessage.sender,
-              isOptimistic: false,
-              isTemporary: false
-            };
-          }
-          return msg;
-        });
+        const filteredMessages = prev.filter(msg => msg._id !== tempId);
+        const optimisticMsg = prev.find(msg => msg._id === tempId);
+        
+        // Debug: แสดงข้อมูลไฟล์ที่ได้รับจาก backend
+        console.log('📥 File Server response:', actualMessageData);
+        if (actualMessageData.fileName) {
+          console.log('✅ File metadata received:', {
+            fileName: actualMessageData.fileName,
+            fileSize: actualMessageData.fileSize,
+            fileUrl: actualMessageData.fileUrl,
+            messageType: actualMessageData.messageType,
+            mimeType: actualMessageData.mimeType
+          });
+        } else {
+          console.log('❌ No fileName in response - this is the problem!');
+        }
+        
+        // ตรวจสอบว่า actualMessageData มี _id ที่ถูกต้องหรือไม่
+        if (!actualMessageData._id) {
+          console.log('❌ Invalid message data - no _id found, keeping temp message');
+          return prev; // คืนค่า messages เดิมรวมทั้ง temp message
+        }
+
+        // ตรวจสอบว่า message นี้มีอยู่แล้วหรือไม่
+        const messageExists = filteredMessages.some(msg => msg._id === actualMessageData._id);
+        if (messageExists) {
+          console.log('⚠️ Message already exists, skipping duplicate');
+          return filteredMessages;
+        }
+        
+        const serverMessage = { 
+          ...actualMessageData, 
+          isTemporary: false,
+          messageType: (actualMessageData.fileUrl || optimisticMsg?.fileName) ? messageType : actualMessageData.messageType,
+          fileName: actualMessageData.fileName || optimisticMsg?.fileName,
+          fileSize: actualMessageData.fileSize || optimisticMsg?.fileSize,
+          mimeType: actualMessageData.mimeType || optimisticMsg?.mimeType,
+          sender: actualMessageData.sender || currentUser,
+          timestamp: actualMessageData.timestamp || actualMessageData.createdAt,
+          fileUrl: actualMessageData.fileUrl || actualMessageData.file_url,
+          file: actualMessageData.file || (actualMessageData.fileName ? {
+            name: actualMessageData.fileName,
+            size: actualMessageData.fileSize,
+            type: actualMessageData.mimeType
+          } : null),
+          user_id: actualMessageData.user_id || actualMessageData.sender,
+          isOptimistic: false,
+        };
+        
+        const updatedMessages = [...filteredMessages, serverMessage];
         
         // เลื่อนไปข้อความล่าสุดหลังจากได้รับตอบกลับจากเซิร์ฟเวอร์ (Normal FlatList)
         setTimeout(() => {
@@ -799,32 +867,67 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const getFileIcon = (fileName) => {
+    console.log('🔍 getFileIcon called with:', fileName);
     if (!fileName) {
-      return '📄';
+      console.log('⚠️ No fileName provided, returning FILE icon');
+      return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
     }
     
-    const extension = fileName.split('.').pop()?.toLowerCase();
+    // Fix: Handle already encoded filenames from backend
+    let decodedName;
+    try {
+      // Check if already encoded (contains %)
+      if (fileName.includes('%')) {
+        decodedName = decodeURIComponent(fileName);
+        console.log('🔧 Decoded URL-encoded fileName:', fileName, '→', decodedName);
+      } else {
+        decodedName = decodeFileName(fileName);
+      }
+    } catch (error) {
+      console.log('⚠️ Error decoding fileName:', error, 'using original:', fileName);
+      decodedName = fileName;
+    }
+    
+    const extension = decodedName.split('.').pop()?.toLowerCase();
     
     switch (extension) {
-      case 'pdf': return '📕';
+      case 'pdf':
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>PDF</Text>;
       case 'doc':
-      case 'docx': return '📘';
+      case 'docx':
+        return <Text style={{ fontSize: 12, color: "#2B6CB0", fontWeight: 'bold' }}>DOC</Text>;
       case 'xls':
-      case 'xlsx': return '📗';
+      case 'xlsx':
+        return <Text style={{ fontSize: 12, color: "#38A169", fontWeight: 'bold' }}>XLS</Text>;
       case 'ppt':
-      case 'pptx': return '📙';
+      case 'pptx':
+        return <Text style={{ fontSize: 12, color: "#D69E2E", fontWeight: 'bold' }}>PPT</Text>;
       case 'jpg':
       case 'jpeg':
       case 'png':
-      case 'gif': return '🖼️';
+      case 'gif':
+      case 'webp':
+      case 'bmp':
+        return <Text style={{ fontSize: 12, color: "#9F7AEA", fontWeight: 'bold' }}>IMG</Text>;
       case 'mp4':
       case 'avi':
-      case 'mov': return '🎬';
+      case 'mov':
+      case 'wmv':
+      case 'flv':
+        return <Text style={{ fontSize: 12, color: "#E53E3E", fontWeight: 'bold' }}>VID</Text>;
       case 'mp3':
-      case 'wav': return '🎵';
+      case 'wav':
+      case 'aac':
+      case 'flac':
+        return <Text style={{ fontSize: 12, color: "#38B2AC", fontWeight: 'bold' }}>AUD</Text>;
       case 'zip':
-      case 'rar': return '🗜️';
-      default: return '📄';
+      case 'rar':
+      case '7z':
+        return <Text style={{ fontSize: 12, color: "#805AD5", fontWeight: 'bold' }}>ZIP</Text>;
+      case 'txt':
+        return <Text style={{ fontSize: 12, color: "#4A5568", fontWeight: 'bold' }}>TXT</Text>;
+      default:
+        return <Text style={{ fontSize: 12, color: "#666", fontWeight: 'bold' }}>FILE</Text>;
     }
   };
 
@@ -993,7 +1096,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
               setMessages(prev => prev.filter(msg => !selectedMessages.includes(msg._id)));
               cancelSelection();
               
-              showSuccessNotification('ลบข้อความสำเร็จ');
+              setShowSuccessAnimation(true);
               console.log('✅ All selected messages processed');
 
             } catch (error) {
@@ -1045,7 +1148,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
         onMessagePress={item._id ? () => handleMessagePress(item._id) : undefined}
         onLongPress={item._id ? () => handleLongPress(item._id) : undefined}
         onImagePress={openImageModal}
-        onFilePress={showFileOptions}
+        onFilePress={(fileData) => {
+          console.log('📁 Direct download called with:', fileData);
+          const fileUrl = fileData?.url || fileData?.fileUrl || fileData?.file_path;
+          const fileName = fileData?.fileName || fileData?.file_name || 'downloaded_file';
+          
+          if (fileUrl) {
+            downloadFile(fileUrl, fileName);
+          } else {
+            showFileOptions(fileData);
+          }
+        }}
         formatDateTime={formatDateTime}
         shouldShowTime={(messageId) => showTimeForMessages.has(messageId)}
         getFileIcon={getFileIcon}
@@ -1205,7 +1318,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
               });
               console.log('✅ Image shared successfully');
             } else {
-              Alert.alert('ดาวน์โหลดสำเร็จ', 'รูปภาพถูกดาวน์โหลดแล้ว');
+              setShowSuccessAnimation(true);
             }
           } else {
             throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
@@ -1379,7 +1492,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 });
                 console.log('✅ Media shared successfully');
               } else {
-                Alert.alert('ดาวน์โหลดสำเร็จ', `ไฟล์ถูกดาวน์โหลดแล้ว: ${downloadResult.uri}`);
+                setShowSuccessAnimation(true);
               }
             } else {
               throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
@@ -1511,10 +1624,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const showFileOptions = (fileUrl, fileName) => {
+  const showFileOptions = (fileData) => {
+    console.log('🔧 showFileOptions called with:', fileData);
+    
+    // Extract data from fileData object
+    const fileUrl = fileData?.url || fileData?.fileUrl || fileData?.file_path;
+    const fileName = fileData?.fileName || fileData?.file_name || 'ไม่ทราบชื่อ';
+    
+    console.log('📁 File details:', { fileUrl, fileName });
+    
+    if (!fileUrl) {
+      Alert.alert(
+        'ไฟล์ไม่พร้อมใช้งาน',
+        `ไฟล์ "${fileName}" ถูกส่งเป็นข้อความเนื่องจากการอัปโหลดล้มเหลว\n\nกรุณาลองส่งไฟล์ใหม่อีกครั้ง`,
+        [{ text: 'ตกลง', style: 'default' }]
+      );
+      return;
+    }
+    
     Alert.alert(
       'ไฟล์แนบ',
-      `ชื่อไฟล์: ${fileName || 'ไม่ทราบชื่อ'}`,
+      `ชื่อไฟล์: ${fileName}`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
@@ -1666,7 +1796,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   setShowAttachmentMenu(false);
                 }}
               >
-                <Text style={{ fontSize: 16, color: "#10b981", fontWeight: 'bold' }}>IMG</Text>
+                <Text style={{ fontSize: 16, color: "#333", fontWeight: 'bold' }}>📷</Text>
                 <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
               </TouchableOpacity>
               
@@ -1677,7 +1807,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   setShowAttachmentMenu(false);
                 }}
               >
-                <Text style={{ fontSize: 16, color: "#3b82f6", fontWeight: 'bold' }}>FILE</Text>
+                <Text style={{ fontSize: 16, color: "#333", fontWeight: 'bold' }}>📁</Text>
                 <Text style={styles.attachmentMenuText}>ไฟล์</Text>
               </TouchableOpacity>
             </View>
@@ -1745,7 +1875,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background
+    backgroundColor: '#ffffffff'
   },
   keyboardAvoidingView: {
     flex: 1
@@ -1802,7 +1932,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 100,
     right: 20,
-    backgroundColor: '#3b82f6',
+    backgroundColor: 'rgba(0, 122, 255, 0.9)',
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -1867,7 +1997,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   downloadButton: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#007AFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -1918,7 +2048,7 @@ const styles = StyleSheet.create({
     zIndex: 999
   },
   modalDownloadButton: {
-    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    backgroundColor: 'rgba(0, 122, 255, 0.9)',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
