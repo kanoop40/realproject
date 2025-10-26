@@ -545,6 +545,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
         const updatedMessages = prev.map(msg => {
           if (msg._id === tempId) {
             const serverMessage = response.data.message || response.data;
+            console.log('🔍 Processing server message:', {
+              fileName: serverMessage.fileName,
+              messageType: serverMessage.messageType || serverMessage.type,
+              mimeType: serverMessage.mimeType,
+              fileUrl: serverMessage.fileUrl || serverMessage.file_url
+            });
             return {
               ...serverMessage,
               _id: serverMessage._id,
