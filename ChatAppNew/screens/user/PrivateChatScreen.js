@@ -240,6 +240,80 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [navigation]);
 
+  // Socket event handlers for real-time chat
+  const handleNewMessage = useCallback((newMessage) => {
+    console.log('📨 New message received via socket:', newMessage);
+    
+    // ตรวจสอบว่าข้อความเป็นของ chatroom นี้
+    if (newMessage.chatroomId === chatroomId || newMessage.chatroom === chatroomId) {
+      // ตรวจสอบว่าข้อความไม่ซ้ำกับที่มีอยู่แล้ว
+      setMessages(prev => {
+        const exists = prev.some(msg => msg._id === newMessage._id);
+        if (exists) {
+          console.log('⚠️ Message already exists, skipping');
+          return prev;
+        }
+        
+        console.log('✅ Adding new message to chat');
+        const updatedMessages = [...prev, {
+          ...newMessage,
+          _id: newMessage._id || newMessage.id,
+          sender: newMessage.sender || { 
+            _id: newMessage.sender_id,
+            firstName: newMessage.senderName || 'Unknown'
+          },
+          timestamp: newMessage.timestamp || newMessage.createdAt || new Date().toISOString()
+        }];
+        
+        // Auto scroll to new message
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        
+        return updatedMessages;
+      });
+    }
+  }, [chatroomId]);
+
+  const handleMessageDeleted = useCallback((deletedData) => {
+    console.log('🗑️ Message deleted via socket:', deletedData);
+    
+    const messageId = deletedData.messageId || deletedData._id || deletedData.id;
+    
+    setMessages(prev => {
+      const filtered = prev.filter(msg => msg._id !== messageId);
+      console.log(`✅ Removed message ${messageId} from chat`);
+      return filtered;
+    });
+  }, []);
+
+  // Setup socket listeners
+  useEffect(() => {
+    if (!socket || !chatroomId) return;
+    
+    console.log('🔌 Setting up socket listeners for private chat:', chatroomId);
+    
+    // Join private chatroom
+    joinChatroom(chatroomId);
+    
+    // Listen for real-time events
+    socket.on('newMessage', handleNewMessage);
+    socket.on('privateMessage', handleNewMessage); // Some backends use different event names
+    socket.on('message_deleted', handleMessageDeleted);
+    socket.on('privateMessageDeleted', handleMessageDeleted);
+    
+    console.log('🔌 Socket connection status:', socket.connected ? 'connected' : 'connecting...');
+    console.log('🔌 Socket ID:', socket.id || 'pending');
+    
+    return () => {
+      console.log('🔌 Cleaning up socket listeners for private chat');
+      socket.off('newMessage', handleNewMessage);
+      socket.off('privateMessage', handleNewMessage);
+      socket.off('message_deleted', handleMessageDeleted);
+      socket.off('privateMessageDeleted', handleMessageDeleted);
+    };
+  }, [socket, chatroomId, handleNewMessage, handleMessageDeleted, joinChatroom]);
+
   const loadMessages = useCallback(async (page = 1, refresh = false) => {
     if (!currentUser || !chatroomId || (page === 1 && isLoading)) return;
     
@@ -652,6 +726,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
       });
       
       console.log('✅ Message sent successfully:', response.data._id);
+      
+      // Emit to socket for real-time updates
+      if (socket && socket.connected) {
+        const socketData = {
+          chatroomId: chatroomId,
+          message: actualMessageData,
+          sender: currentUser,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.log('📡 Emitting message to socket for real-time update');
+        socket.emit('privateMessage', socketData);
+      }
+      
     } catch (error) {
       console.error('❌ Error sending message:', error);
       
