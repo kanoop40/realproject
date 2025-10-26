@@ -56,18 +56,35 @@ const groupAvatarStorage = new CloudinaryStorage({
 // Create storage for chat files
 const fileStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'chat-app-files',
-    resource_type: 'auto', // Automatically detect file type
-    access_mode: 'public', // Ensure files are publicly accessible
-    // เพิ่ม flags เพื่อให้ download ได้
-    flags: 'attachment',
-    // Remove file size limit from Cloudinary config - handle in multer instead
-    public_id: (req, file) => {
-      const timestamp = Date.now();
-      const randomNum = Math.round(Math.random() * 1E9);
-      return `file-${timestamp}-${randomNum}`;
+  params: (req, file) => {
+    const timestamp = Date.now();
+    const randomNum = Math.round(Math.random() * 1E9);
+    
+    // Determine resource type based on file type
+    let resourceType = 'auto';
+    if (file.mimetype) {
+      if (file.mimetype.startsWith('image/')) {
+        resourceType = 'image';
+      } else if (file.mimetype.startsWith('video/')) {
+        resourceType = 'video';
+      } else {
+        resourceType = 'raw'; // For PDFs and other files
+      }
     }
+    
+    console.log('📁 Uploading file:', {
+      filename: file.originalname,
+      mimetype: file.mimetype,
+      resourceType: resourceType
+    });
+    
+    return {
+      folder: 'chat-app-files',
+      resource_type: resourceType,
+      access_mode: 'public',
+      type: 'upload',
+      public_id: `file-${timestamp}-${randomNum}`
+    };
   }
 });
 
@@ -97,11 +114,22 @@ const getOptimizedUrl = (publicId, options = {}) => {
   });
 };
 
+// Helper function to get download URL for files
+const getDownloadUrl = (publicId, fileName, options = {}) => {
+  return cloudinary.url(publicId, {
+    resource_type: 'auto',
+    type: 'upload',
+    flags: 'attachment:' + (fileName || 'file'),
+    ...options
+  });
+};
+
 module.exports = {
   cloudinary,
   avatarStorage,
   groupAvatarStorage,
   fileStorage,
   deleteOldAvatar,
-  getOptimizedUrl
+  getOptimizedUrl,
+  getDownloadUrl
 };

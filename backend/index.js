@@ -18,6 +18,7 @@ const chatRoutes = require('./routes/chatRoutes');
 const authRoutes = require('./routes/authRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const fileRoutes = require('./routes/fileRoutes');
 
 // Middleware imports
 const { errorHandler } = require('./Middleware/errorMiddleware');
@@ -268,6 +269,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/files', fileRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -324,7 +326,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🌍 Server accessible at:`);
     console.log(`   - http://localhost:${PORT}`);
     console.log(`   - http://127.0.0.1:${PORT}`);
-    console.log(`   - http://192.168.2.54:${PORT}`);
+    console.log(`   - http://192.168.1.34:${PORT}`);
     console.log(`📡 SSE server running`);
     console.log(`🌐 Environment: ${NODE_ENV}`);
     console.log(`🔗 CORS Origins: ${ALLOWED_ORIGINS.join(', ')}`);

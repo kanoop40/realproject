@@ -4,8 +4,9 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Development API URL (auto-detect)  
-//const API_URL = 'http://192.168.2.54:5000'; // ใช้ IP เดียวกันทั้ง simulator และ device
-const API_URL = 'https://realproject-mg25.onrender.com';
+// export const BASE_URL = 'https://realproject-mg25.onrender.com';
+export const BASE_URL = 'http://192.168.1.34:5000'; // ใช้ IP ที่ถูกต้องจาก ipconfig
+export const API_URL = BASE_URL; // Export API_URL for compatibility
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
   Platform: Platform.OS,
@@ -14,7 +15,7 @@ console.log('Environment:', {
 console.log('🎯 API will connect to:', API_URL);
 
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: `${BASE_URL}/api`,
   timeout: 60000, // เพิ่มเป็น 60 วินาทีสำหรับ file upload
   // ไม่ตั้ง default Content-Type ให้ axios จัดการเอง (สำหรับ FormData)
 });
@@ -265,5 +266,4 @@ export const deleteGroup = (groupId) => {
   return api.delete(`/groups/${groupId}`);
 };
 
-export { API_URL };
 export default api;

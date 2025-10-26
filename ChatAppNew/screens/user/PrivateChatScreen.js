@@ -35,6 +35,7 @@ import ChatHeader from '../../components_user/ChatHeader';
 import LoadOlderMessagesPrivateChat from '../../components_user/LoadOlderMessagesPrivateChat';
 import LoadingOverlay from '../../components/LoadingOverlay';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import { downloadFileWithFallback } from '../../utils/fileDownload';
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -1267,8 +1268,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
       if (fileUrl.includes('cloudinary.com')) {
-        fullUrl = fileUrl;
-        console.log('🌤️ Using Cloudinary URL directly:', fullUrl);
+        // สำหรับ Cloudinary URL - ประมวลผล URL อย่างระมัดระวัง
+        let processedUrl = fileUrl;
+        
+        try {
+          // ตรวจสอบ URL encoding issues
+          if (processedUrl.includes('%')) {
+            processedUrl = decodeURIComponent(processedUrl);
+          }
+          
+          fullUrl = processedUrl;
+        } catch (urlError) {
+          console.log('⚠️ URL processing error:', urlError.message);
+          // Fallback ใช้ URL เดิม
+          fullUrl = fileUrl;
+        }
+        
+        console.log('🌤️ Using processed Cloudinary URL:', fullUrl);
       } else if (!fileUrl.startsWith('http')) {
         fullUrl = `${API_URL}/${fileUrl.replace(/^\/+/, '')}`;
         console.log('🔗 Converted to full URL:', fullUrl);
@@ -1346,9 +1362,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
         console.log('📍 Target file path:', localUri);
         
         console.log('🔄 Starting file download...');
-        const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
-          headers: headers
-        });
+        const downloadResult = await downloadFileWithFallback(
+          fullUrl,
+          finalFileName,
+          async (urlToTry) => {
+            console.log('🔄 Trying URL:', urlToTry);
+            
+            // Determine headers based on URL type
+            const downloadHeaders = urlToTry.includes('cloudinary.com') ? {} : headers;
+            
+            return await FileSystem.downloadAsync(urlToTry, localUri, {
+              headers: downloadHeaders
+            });
+          }
+        );
 
         console.log('📊 File download result:', downloadResult);
 
@@ -1377,7 +1404,21 @@ const PrivateChatScreen = ({ route, navigation }) => {
         fileUrl: fileUrl,
         fileName: fileName
       });
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดได้: ' + (error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'));
+      
+      // ให้ข้อมูลข้อผิดพลาดที่เป็นประโยชน์
+      let errorMessage = 'ไม่สามารถดาวน์โหลดไฟล์ได้';
+      
+      if (error.message.includes('401')) {
+        errorMessage = 'ไม่มีสิทธิ์เข้าถึงไฟล์นี้ (HTTP 401)\n\nสาเหตุที่เป็นไปได้:\n• ไฟล์อาจถูกลบหรือย้าย\n• ลิงก์ไฟล์หมดอายุ\n• ปัญหาการตั้งค่าเซิร์ฟเวอร์';
+      } else if (error.message.includes('404')) {
+        errorMessage = 'ไม่พบไฟล์ (HTTP 404)\n\nไฟล์อาจถูกลบหรือย้ายตำแหน่งแล้ว';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'ปัญหาการเชื่อมต่อเครือข่าย\n\nกรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+      } else {
+        errorMessage = `ไม่สามารถดาวน์โหลดได้: ${error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`;
+      }
+      
+      Alert.alert('ข้อผิดพลาดในการดาวน์โหลด', errorMessage);
     }
   };
 

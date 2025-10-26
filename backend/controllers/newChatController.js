@@ -588,6 +588,8 @@ const sendMessage = asyncHandler(async (req, res) => {
                             {
                                 resource_type: 'auto',
                                 folder: 'chat-app-files',
+                                access_mode: 'public', // ✅ ทำให้ไฟล์เข้าถึงได้โดยไม่ต้อง auth
+                                type: 'upload'
                             },
                             (error, result) => {
                                 if (error) reject(error);

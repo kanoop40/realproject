@@ -23,6 +23,7 @@ import GroupMessageBubble from '../../components_user/GroupMessageBubble';
 import LoadOlderMessagesGroupChat from '../../components_user/LoadOlderMessagesGroupChat';
 import LoadingOverlay from '../../components/LoadingOverlay';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import { downloadFileWithFallback } from '../../utils/fileDownload';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
@@ -1249,28 +1250,34 @@ const GroupChatScreen = ({ route, navigation }) => {
       
       // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
       if (fileUrl.includes('cloudinary.com')) {
-        // ลองใช้ resource_type 'raw' สำหรับการดาวน์โหลด
+        // สำหรับ Cloudinary URL - ใช้ URL เดิมแต่ตรวจสอบการเข้ารหัส
         let downloadUrl = fileUrl;
         
-        // เปลี่ยนจาก /image/upload/ เป็น /raw/upload/ สำหรับ non-image files
-        if (downloadUrl.includes('/image/upload/')) {
-          const finalFileName = fileName || `file_${new Date().getTime()}`;
-          const fileExtension = finalFileName.split('.').pop()?.toLowerCase() || '';
-          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
-          
-          if (!isImage) {
-            downloadUrl = downloadUrl.replace('/image/upload/', '/raw/upload/');
-            console.log('🔄 Changed to raw URL for non-image file:', downloadUrl);
+        // ตรวจสอบว่ามี URL encoding issues หรือไม่
+        try {
+          // ถ้า URL มี encoding อยู่แล้ว ให้ decode ก่อนแล้ว encode ใหม่
+          if (downloadUrl.includes('%')) {
+            downloadUrl = decodeURIComponent(downloadUrl);
           }
+          
+          // สำหรับไฟล์ PDF และไฟล์อื่นๆ ที่ไม่ใช่รูป ให้เพิ่ม fl_attachment
+          if (!isImage && !downloadUrl.includes('fl_attachment')) {
+            // เพิ่ม fl_attachment flag เพื่อให้ browser download แทนการเปิดในหน้าใหม่
+            const urlParts = downloadUrl.split('/upload/');
+            if (urlParts.length === 2) {
+              downloadUrl = `${urlParts[0]}/upload/fl_attachment/${urlParts[1]}`;
+              console.log('🔗 Added attachment flag to URL:', downloadUrl);
+            }
+          }
+          
+          fullUrl = downloadUrl;
+        } catch (urlError) {
+          console.log('⚠️ URL processing error:', urlError.message);
+          // Fallback ใช้ URL เดิม
+          fullUrl = fileUrl;
         }
         
-        // เพิ่ม fl_attachment transformation เพื่อให้ download ได้
-        if (downloadUrl.includes('/upload/') && !downloadUrl.includes('fl_attachment')) {
-          fullUrl = downloadUrl.replace('/upload/', '/upload/fl_attachment/');
-          console.log('🔧 Added attachment flag to Cloudinary URL:', fullUrl);
-        } else {
-          fullUrl = downloadUrl;
-        }
+        console.log('🌤️ Using processed Cloudinary URL:', fullUrl);
       } else if (!fileUrl.startsWith('http')) {
         // สำหรับไฟล์ที่เก็บบน server เอง
         fullUrl = `${API_URL}${fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl}`;
@@ -1316,8 +1323,16 @@ const GroupChatScreen = ({ route, navigation }) => {
               const fileUri = FileSystem.documentDirectory + finalFileName;
               console.log('💾 Downloading to:', fileUri);
               
-              const downloadResult = await FileSystem.downloadAsync(fullUrl, fileUri);
-              console.log('📁 Download result:', downloadResult.status);
+              // ลอง download ด้วย original URL ก่อน
+              let downloadResult;
+              try {
+                downloadResult = await FileSystem.downloadAsync(fileUrl, fileUri);
+              } catch (firstError) {
+                console.log('⚠️ Original URL failed, trying modified URL:', firstError.message);
+                downloadResult = await FileSystem.downloadAsync(fullUrl, fileUri);
+              }
+              
+              console.log('📁 Download result:', downloadResult.status, 'URI:', downloadResult.uri);
               
               if (downloadResult.status === 200) {
                 const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
@@ -1336,8 +1351,29 @@ const GroupChatScreen = ({ route, navigation }) => {
               return; // สำเร็จแล้ว ออกจาก function
               
             } catch (directError) {
-              console.log('⚠️ Direct download failed, trying temp file method:', directError.message);
-              // ถ้าไม่ได้ ให้ fallback ไปใช้วิธี temp file
+              console.log('⚠️ Direct download failed, trying original URL:', directError.message);
+              
+              // Retry with original URL
+              try {
+                const fileUri = FileSystem.documentDirectory + finalFileName;
+                console.log('💾 Retrying with simple download (no headers):', fileUrl);
+                
+                const retryResult = await FileSystem.downloadAsync(fileUrl, fileUri);
+                console.log('📁 Retry result:', retryResult.status);
+                
+                if (retryResult.status === 200) {
+                  const asset = await MediaLibrary.createAssetAsync(retryResult.uri);
+                  showSuccessNotification(
+                    isImage ? 
+                      `รูปภาพถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}` : 
+                      `วิดีโอถูกบันทึกไปที่แกลเลอรี่แล้ว\nชื่อไฟล์: ${finalFileName}`
+                  );
+                  console.log('✅ Media saved to gallery (retry):', asset);
+                  return;
+                }
+              } catch (retryError) {
+                console.log('⚠️ Retry also failed, trying temp file method:', retryError.message);
+              }
             }
           }
           
@@ -1393,9 +1429,24 @@ const GroupChatScreen = ({ route, navigation }) => {
             const timestamp = new Date().getTime();
             const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
             
-            const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {
-              headers: headers
-            });
+            console.log('📱 iOS: Attempting file download...');
+            let downloadResult;
+            try {
+              // ลอง download ด้วย original URL ก่อน (ไม่ใส่ header)
+              console.log('🔄 First attempt with original URL:', fileUrl);
+              downloadResult = await FileSystem.downloadAsync(fileUrl, tempUri);
+            } catch (downloadError) {
+              console.log('⚠️ First attempt failed, trying with headers:', downloadError.message);
+              // ถ้าไม่ได้ ลองใส่ headers
+              try {
+                downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {
+                  headers: headers
+                });
+              } catch (secondError) {
+                console.log('❌ Both attempts failed:', secondError.message);
+                throw secondError;
+              }
+            }
 
             if (downloadResult.status === 200) {
               // ใช้ Sharing API เพื่อให้ผู้ใช้เลือกที่เก็บ
@@ -1423,9 +1474,39 @@ const GroupChatScreen = ({ route, navigation }) => {
 
             console.log('💾 Downloading to:', localUri);
             
-            const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
-              headers: headers
-            });
+            console.log('📱 Android: Attempting file download...');
+            
+            // Use the new download utility with fallback
+            const downloadResult = await downloadFileWithFallback(
+              fullUrl,
+              finalFileName,
+              async (urlToTry) => {
+                console.log('🔄 Trying URL:', urlToTry);
+                
+                // Determine headers based on URL type
+                let downloadHeaders = {};
+                if (urlToTry.includes('cloudinary.com')) {
+                  downloadHeaders = {}; // No headers for direct Cloudinary URLs
+                } else if (urlToTry.includes('/api/files/proxy')) {
+                  // For proxy URLs, include auth headers if available
+                  const token = await AsyncStorage.getItem('userToken');
+                  if (token) {
+                    downloadHeaders = {
+                      'Authorization': `Bearer ${token}`,
+                      ...headers
+                    };
+                  } else {
+                    downloadHeaders = headers;
+                  }
+                } else {
+                  downloadHeaders = headers; // Use original headers for other URLs
+                }
+                
+                return await FileSystem.downloadAsync(urlToTry, localUri, {
+                  headers: downloadHeaders
+                });
+              }
+            );
 
             console.log('📊 Download result:', downloadResult);
 
@@ -1435,13 +1516,35 @@ const GroupChatScreen = ({ route, navigation }) => {
                 `ไฟล์ถูกบันทึกไปที่ Downloads folder แล้ว\nชื่อไฟล์: ${cleanFileName}_${timestamp}\n\nคุณสามารถหาไฟล์ได้ใน File Manager > Downloads`
               );
             } else {
-              throw new Error(`HTTP ${downloadResult.status}`);
+              const errorDetails = downloadResult.headers ? 
+                JSON.stringify(downloadResult.headers, null, 2) : 
+                'ไม่มีข้อมูล headers';
+              
+              console.error('❌ Download failed with details:', {
+                status: downloadResult.status,
+                headers: downloadResult.headers,
+                url: fullUrl
+              });
+              
+              throw new Error(`HTTP ${downloadResult.status}: การดาวน์โหลดไม่สำเร็จ\n\nรายละเอียดข้อผิดพลาด:\n${errorDetails}`);
             }
           }
           
         } catch (fileError) {
           console.error('❌ Error saving file:', fileError);
-          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้');
+          
+          // ให้ข้อมูลข้อผิดพลาดที่มีประโยชน์มากขึ้น
+          let errorMessage = 'ไม่สามารถดาวน์โหลดไฟล์ได้';
+          
+          if (fileError.message.includes('401')) {
+            errorMessage = 'ไม่มีสิทธิ์เข้าถึงไฟล์นี้ (HTTP 401)\n\nสาเหตุที่เป็นไปได้:\n• ไฟล์อาจถูกลบหรือย้าย\n• ลิงก์ไฟล์หมดอายุ\n• ปัญหาการตั้งค่าเซิร์ฟเวอร์';
+          } else if (fileError.message.includes('404')) {
+            errorMessage = 'ไม่พบไฟล์ (HTTP 404)\n\nไฟล์อาจถูกลบหรือย้ายตำแหน่งแล้ว';
+          } else if (fileError.message.includes('Network')) {
+            errorMessage = 'ปัญหาการเชื่อมต่อเครือข่าย\n\nกรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+          }
+          
+          Alert.alert('ข้อผิดพลาดในการดาวน์โหลด', errorMessage);
         }
       }
     } catch (error) {
@@ -1451,7 +1554,21 @@ const GroupChatScreen = ({ route, navigation }) => {
         url: fileUrl,
         fileName: fileName
       });
-      Alert.alert('ข้อผิดพลาด', `ไม่สามารถดาวน์โหลดได้: ${error.message}`);
+      
+      // Provide more helpful error message
+      let userMessage = 'ไม่สามารถดาวน์โหลดไฟล์ได้';
+      
+      if (error.message.includes('401')) {
+        userMessage = 'ไฟล์นี้ไม่สามารถเข้าถึงได้ในขณะนี้\n\nกรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ส่งไฟล์';
+      } else if (error.message.includes('404')) {
+        userMessage = 'ไม่พบไฟล์\n\nไฟล์นี้อาจถูกลบหรือย้ายตำแหน่งแล้ว';
+      } else if (error.message.includes('Network')) {
+        userMessage = 'ปัญหาการเชื่อมต่อ\n\nกรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่';
+      } else if (error.message.includes('timeout')) {
+        userMessage = 'การดาวน์โหลดใช้เวลานานเกินไป\n\nกรุณาลองใหม่อีกครั้ง';
+      }
+      
+      Alert.alert('ไม่สามารถดาวน์โหลดได้', userMessage);
     }
   };
 

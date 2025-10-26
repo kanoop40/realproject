@@ -713,6 +713,8 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
                         resource_type: 'auto',
                         folder: 'chat-app-files',
                         public_id: `group_${groupId}_${Date.now()}`,
+                        access_mode: 'public', // ✅ ทำให้ไฟล์เข้าถึงได้โดยไม่ต้อง auth
+                        type: 'upload'
                     },
                     (error, result) => {
                         if (error) {
