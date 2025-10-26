@@ -4,8 +4,8 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 // Development API URL (auto-detect)  
-// export const BASE_URL = 'https://realproject-mg25.onrender.com';
-export const BASE_URL = 'http://192.168.1.34:5000'; // ใช้ IP ที่ถูกต้องจาก ipconfig
+export const BASE_URL = 'https://realproject-mg25.onrender.com';
+// export const BASE_URL = 'http://192.168.1.34:5000'; // Local development
 export const API_URL = BASE_URL; // Export API_URL for compatibility
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 
