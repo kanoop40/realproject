@@ -24,6 +24,7 @@ import LoadOlderMessagesGroupChat from '../../components_user/LoadOlderMessagesG
 import LoadingOverlay from '../../components/LoadingOverlay';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import { downloadFileWithFallback } from '../../utils/fileDownload';
+import AndroidDownloads from '../../utils/androidDownloads';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
@@ -1306,10 +1307,75 @@ const GroupChatScreen = ({ route, navigation }) => {
       if (isMedia) {
         // สำหรับรูปภาพและวิดีโอ - บันทึกไปที่ Gallery/Photos
         try {
-          // ขอ permission
-          const { status } = await MediaLibrary.requestPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('ข้อผิดพลาด', 'ต้องการสิทธิ์ในการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ/วิดีโอ');
+          // ขอ permission โดยมี fallback
+          let permissionGranted = false;
+          
+          try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            permissionGranted = (status === 'granted');
+            console.log('📱 MediaLibrary permission status:', status);
+          } catch (permissionError) {
+            console.log('⚠️ MediaLibrary permission request failed:', permissionError.message);
+            // Fall back to file system download instead
+            console.log('🔄 Falling back to file system download...');
+            permissionGranted = false;
+          }
+          
+          if (!permissionGranted) {
+            console.log('� Using sharing fallback for media download');
+            // Use sharing instead of trying to write to Downloads
+            
+            const timestamp = new Date().getTime();
+            const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
+            
+            console.log('📥 Downloading to temp location:', tempUri);
+            const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {});
+            
+            if (downloadResult.status === 200) {
+              const fileInfo = await FileSystem.getInfoAsync(tempUri);
+              console.log('📊 Downloaded file info:', fileInfo);
+              
+              if (fileInfo.exists && fileInfo.size > 0) {
+                console.log('📤 File downloaded successfully, saving to Downloads...');
+                
+                // บันทึกไฟล์สื่อไปที่ Downloads folder โดยตรง
+                const cleanFileName = AndroidDownloads.cleanFileName(
+                  AndroidDownloads.generateUniqueFileName(finalFileName)
+                );
+                
+                const saveResult = await AndroidDownloads.saveToDownloads(downloadResult.uri, cleanFileName);
+                
+                if (saveResult.success) {
+                  console.log('✅ Media file saved to Downloads successfully');
+                  Alert.alert(
+                    'ดาวน์โหลดสำเร็จ',
+                    saveResult.message,
+                    [{ text: 'ตกลง' }]
+                  );
+                } else {
+                  console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
+                  
+                  // Fallback to sharing
+                  const canShare = await Sharing.isAvailableAsync();
+                  if (canShare) {
+                    await Sharing.shareAsync(downloadResult.uri, {
+                      mimeType: isImage ? 'image/*' : (isVideo ? 'video/*' : 'application/octet-stream'),
+                      dialogTitle: `บันทึกไฟล์: ${finalFileName}`
+                    });
+                    console.log('✅ File shared successfully via system share fallback');
+                  } else {
+                    Alert.alert(
+                      'ดาวน์โหลดสำเร็จ', 
+                      `ไฟล์ถูกดาวน์โหลดแล้ว\nขนาด: ${(fileInfo.size / 1024).toFixed(2)} KB\n\nข้อผิดพลาด: ${saveResult.error}`
+                    );
+                  }
+                }
+              } else {
+                throw new Error('ไฟล์ดาวน์โหลดล้มเหลว (0 bytes)');
+              }
+            } else {
+              throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+            }
             return;
           }
           
@@ -1463,16 +1529,14 @@ const GroupChatScreen = ({ route, navigation }) => {
               throw new Error(`HTTP ${downloadResult.status}`);
             }
           } else {
-            // Android: บันทึกตรงไปที่ Downloads folder
-            const downloadDir = `${FileSystem.documentDirectory}Downloads/`;
-            await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
+            // Android: ใช้ Sharing API สำหรับการดาวน์โหลดไฟล์
+            console.log('� Android: Using sharing API for file download...');
             
             const timestamp = new Date().getTime();
-            // ทำความสะอาดชื่อไฟล์
-            const cleanFileName = finalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-            const localUri = `${downloadDir}${cleanFileName}_${timestamp}`;
+            const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
 
-            console.log('💾 Downloading to:', localUri);
+            console.log('📁 Original filename:', finalFileName);
+            console.log('💾 Downloading to temp location:', tempUri);
             
             console.log('📱 Android: Attempting file download...');
             
@@ -1482,6 +1546,29 @@ const GroupChatScreen = ({ route, navigation }) => {
               finalFileName,
               async (urlToTry) => {
                 console.log('🔄 Trying URL:', urlToTry);
+                
+                // ตรวจสอบ URL ก่อนดาวน์โหลด
+                try {
+                  console.log('🔍 Testing URL accessibility...');
+                  const testResponse = await fetch(urlToTry, { method: 'HEAD' });
+                  console.log('📊 URL test result:', {
+                    status: testResponse.status,
+                    contentLength: testResponse.headers.get('content-length'),
+                    contentType: testResponse.headers.get('content-type')
+                  });
+                  
+                  if (testResponse.status === 404) {
+                    throw new Error('URL returns 404 - file not found');
+                  }
+                  
+                  const contentLength = testResponse.headers.get('content-length');
+                  if (contentLength === '0') {
+                    throw new Error('URL returns empty file (0 bytes)');
+                  }
+                } catch (testError) {
+                  console.log('⚠️ URL test failed:', testError.message);
+                  // Continue anyway - some servers don't support HEAD requests
+                }
                 
                 // Determine headers based on URL type
                 let downloadHeaders = {};
@@ -1502,31 +1589,113 @@ const GroupChatScreen = ({ route, navigation }) => {
                   downloadHeaders = headers; // Use original headers for other URLs
                 }
                 
-                return await FileSystem.downloadAsync(urlToTry, localUri, {
+                console.log('📥 Starting actual download to temp location:', tempUri);
+                const result = await FileSystem.downloadAsync(urlToTry, tempUri, {
                   headers: downloadHeaders
                 });
+                
+                console.log('📊 Download result from FileSystem:', {
+                  status: result.status,
+                  uri: result.uri,
+                  headers: result.headers
+                });
+                
+                return result;
               }
             );
 
             console.log('📊 Download result:', downloadResult);
 
-            if (downloadResult.status === 200) {
+            // Handle the new downloadFileWithFallback response structure
+            const actualResult = downloadResult.success ? downloadResult.result : downloadResult;
+            const downloadSuccess = downloadResult.success && 
+              actualResult && 
+              actualResult.status === 200 && 
+              actualResult.headers &&
+              actualResult.headers['content-length'] !== '0' &&
+              !actualResult.headers['x-cld-error'];
+
+            if (downloadSuccess) {
               console.log('✅ Download successful');
-              showSuccessNotification(
-                `ไฟล์ถูกบันทึกไปที่ Downloads folder แล้ว\nชื่อไฟล์: ${cleanFileName}_${timestamp}\n\nคุณสามารถหาไฟล์ได้ใน File Manager > Downloads`
-              );
+              console.log(`📊 Successfully downloaded using attempt ${downloadResult.attemptNumber} with URL: ${downloadResult.successUrl?.substring(0, 50)}...`);
+              
+              // ตรวจสอบไฟล์หลังจากดาวน์โหลดจริง ๆ
+              try {
+                const fileInfo = await FileSystem.getInfoAsync(tempUri);
+                console.log('📁 File verification:', fileInfo);
+                
+                if (fileInfo.exists && fileInfo.size > 0) {
+                  console.log('✅ File actually exists and has content:', fileInfo.size, 'bytes');
+                  
+                  // บันทึกไฟล์ไปที่ Downloads folder โดยตรง
+                  console.log('� Saving file to Downloads folder...');
+                  const cleanFileName = AndroidDownloads.cleanFileName(
+                    AndroidDownloads.generateUniqueFileName(finalFileName)
+                  );
+                  
+                  const downloadResult = await AndroidDownloads.saveToDownloads(actualResult.uri, cleanFileName);
+                  
+                  if (downloadResult.success) {
+                    console.log('✅ File saved to Downloads successfully');
+                    Alert.alert(
+                      'ดาวน์โหลดสำเร็จ',
+                      downloadResult.message,
+                      [{ text: 'ตกลง' }]
+                    );
+                  } else {
+                    console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
+                    
+                    // Fallback to sharing if Downloads save fails
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      await Sharing.shareAsync(actualResult.uri, {
+                        mimeType: 'application/octet-stream',
+                        dialogTitle: `บันทึกไฟล์: ${finalFileName}`
+                      });
+                      console.log('✅ File shared successfully via system fallback');
+                    } else {
+                      Alert.alert(
+                        'ดาวน์โหลดสำเร็จ',
+                        `ไฟล์ถูกดาวน์โหลดแล้ว\nชื่อไฟล์: ${finalFileName}\nขนาด: ${(fileInfo.size / 1024).toFixed(2)} KB\n\nข้อผิดพลาด: ${downloadResult.error}`,
+                        [{ text: 'ตกลง' }]
+                      );
+                    }
+                  }
+                } else if (fileInfo.exists && fileInfo.size === 0) {
+                  console.error('⚠️ File exists but is empty (0 bytes)');
+                  throw new Error('ไฟล์ถูกสร้างแต่ว่างเปล่า (0 bytes)\nอาจเป็นปัญหาจาก URL หรือการเชื่อมต่อ');
+                } else {
+                  console.error('❌ File does not exist after download');
+                  throw new Error('ไฟล์ไม่ถูกสร้างหลังจากดาวน์โหลด\nอาจเป็นปัญหาการเชื่อมต่อ');
+                }
+              } catch (verificationError) {
+                console.error('❌ File verification failed:', verificationError);
+                throw new Error('ไม่สามารถตรวจสอบไฟล์หลังดาวน์โหลด: ' + verificationError.message);
+              }
             } else {
-              const errorDetails = downloadResult.headers ? 
-                JSON.stringify(downloadResult.headers, null, 2) : 
+              const errorDetails = actualResult?.headers ? 
+                JSON.stringify(actualResult.headers, null, 2) : 
                 'ไม่มีข้อมูล headers';
               
               console.error('❌ Download failed with details:', {
-                status: downloadResult.status,
-                headers: downloadResult.headers,
-                url: fullUrl
+                status: actualResult?.status,
+                headers: actualResult?.headers,
+                url: fullUrl,
+                attemptNumber: downloadResult.attemptNumber,
+                successUrl: downloadResult.successUrl
               });
               
-              throw new Error(`HTTP ${downloadResult.status}: การดาวน์โหลดไม่สำเร็จ\n\nรายละเอียดข้อผิดพลาด:\n${errorDetails}`);
+              let errorMessage = 'การดาวน์โหลดไม่สำเร็จ';
+              
+              if (actualResult?.status === 404 || actualResult?.headers?.['x-cld-error']) {
+                errorMessage = 'ไม่พบไฟล์ (HTTP 404)\n\nไฟล์อาจถูกลบหรือย้ายตำแหน่งแล้ว';
+              } else if (actualResult?.headers?.['content-length'] === '0') {
+                errorMessage = 'ไฟล์ว่างเปล่า (0 bytes)\n\nไฟล์อาจเสียหายหรือไม่สมบูรณ์';
+              } else {
+                errorMessage = `HTTP ${actualResult?.status || 'unknown'}: การดาวน์โหลดไม่สำเร็จ\n\nรายละเอียดข้อผิดพลาด:\n${errorDetails}`;
+              }
+              
+              throw new Error(errorMessage);
             }
           }
           

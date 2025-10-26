@@ -477,7 +477,14 @@ const sendMessage = asyncHandler(async (req, res) => {
                 
                 // Determine message type based on file
                 const isImage = file.mimetype && file.mimetype.startsWith('image/');
+                console.log('🔍 File MIME type check:', {
+                    fileName: file.originalname,
+                    mimetype: file.mimetype,
+                    isImage: isImage,
+                    incomingMessageType: incomingMessageType
+                });
                 messageType = isImage ? 'image' : 'file';
+                console.log('✅ Final messageType set to:', messageType);
                 
                 // File is already uploaded to Cloudinary by multer
                 console.log('✅ File uploaded to Cloudinary:', file.path);

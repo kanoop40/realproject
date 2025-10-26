@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../service/api';
+import { Platform } from 'react-native';
 
 /**
  * Enhanced URL generator for better PDF download success rate
@@ -7,7 +8,8 @@ import { API_URL } from '../service/api';
  * @returns {Array<string>} - Array of URLs to try
  */
 const generateEnhancedDownloadUrls = (originalUrl) => {
-  console.log('� Generating enhanced URLs for:', originalUrl);
+  console.log('🔧 Generating enhanced URLs for:', originalUrl);
+  console.log('📱 Platform:', Platform.OS);
   
   // If not Cloudinary, return original
   if (!originalUrl.includes('cloudinary.com')) {
@@ -26,33 +28,39 @@ const generateEnhancedDownloadUrls = (originalUrl) => {
   const [, cloudName, resourceType, pathAndFile] = cloudinaryMatch;
   const basePath = `https://res.cloudinary.com/${cloudName}`;
   
-  // Generate multiple URL variations with high success probability
-  const urls = [
-    // Method 1: Try as raw file first (best for PDFs)
-    `${basePath}/raw/upload/${pathAndFile}`,
-    
-    // Method 2: Try with attachment and strip flags
-    `${basePath}/image/upload/fl_attachment,fl_force_strip/${pathAndFile}`,
-    
-    // Method 3: Try original without flags
-    baseUrl,
-    
-    // Method 4: Try with just attachment flag
-    `${basePath}/image/upload/fl_attachment/${pathAndFile}`,
-    
-    // Method 5: Try with auto format
-    `${basePath}/image/upload/f_auto/${pathAndFile}`,
-    
-    // Method 6: Backend proxy as last resort
-    `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(originalUrl)}`
-  ];
+  // Platform-specific URL prioritization
+  let urls = [];
+  
+  if (Platform.OS === 'android') {
+    console.log('📱 Optimizing URLs for Android...');
+    urls = [
+      // Android works better with these approaches
+      `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(originalUrl)}`,
+      `${basePath}/image/upload/fl_attachment,fl_force_strip/${pathAndFile}`,
+      `${basePath}/raw/upload/${pathAndFile}`,
+      baseUrl,
+      `${basePath}/image/upload/fl_attachment/${pathAndFile}`,
+      `${basePath}/image/upload/f_auto/${pathAndFile}`
+    ];
+  } else {
+    console.log('📱 Optimizing URLs for iOS...');
+    urls = [
+      // iOS works well with raw uploads
+      `${basePath}/raw/upload/${pathAndFile}`,
+      `${basePath}/image/upload/fl_attachment,fl_force_strip/${pathAndFile}`,
+      baseUrl,
+      `${basePath}/image/upload/fl_attachment/${pathAndFile}`,
+      `${basePath}/image/upload/f_auto/${pathAndFile}`,
+      `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(originalUrl)}`
+    ];
+  }
 
   console.log('🔗 Enhanced URLs generated:', urls.length, 'variations');
   return urls;
 };
 
 /**
- * Get a proper download URL for files, with enhanced fallback system
+ * Get enhanced download URLs for files
  * @param {string} fileUrl - The original file URL
  * @param {string} fileName - The file name (optional)
  * @returns {Promise<Array<string>>} - Array of URLs to try
@@ -95,10 +103,29 @@ export const downloadFileWithFallback = async (fileUrl, fileName, downloadFuncti
     console.log(`🔄 Enhanced attempt ${i + 1}/${urlsToTry.length}:`, tryUrl.substring(0, 80) + '...');
     
     try {
+      console.log('🔄 Trying URL:', tryUrl);
       const result = await downloadFunction(tryUrl, fileName);
       
-      if (result && result.success !== false) {
+      // Enhanced validation for download success
+      const isValidDownload = result && 
+        result.success !== false && 
+        result.status !== 404 &&
+        result.headers &&
+        result.headers['content-length'] !== '0' &&
+        !result.headers['x-cld-error'];
+      
+      if (isValidDownload) {
         console.log(`✅ Enhanced download succeeded on attempt ${i + 1}!`);
+        console.log('📊 Download result:', JSON.stringify({
+          attemptNumber: i + 1,
+          result: {
+            headers: result.headers,
+            status: result.status,
+            uri: result.uri
+          },
+          success: true,
+          successUrl: tryUrl
+        }));
         return {
           success: true,
           result,
@@ -106,8 +133,27 @@ export const downloadFileWithFallback = async (fileUrl, fileName, downloadFuncti
           successUrl: tryUrl
         };
       } else {
-        console.log(`⚠️ Enhanced attempt ${i + 1} failed:`, result?.error || 'Unknown error');
-        lastError = new Error(result?.error || `Attempt ${i + 1} failed`);
+        // Check specific failure reasons
+        let failureReason = 'Unknown error';
+        if (result?.status === 404) {
+          failureReason = 'File not found (404)';
+        } else if (result?.headers && result.headers['content-length'] === '0') {
+          failureReason = 'Empty file (0 bytes)';
+        } else if (result?.headers && result.headers['x-cld-error']) {
+          failureReason = `Cloudinary error: ${result.headers['x-cld-error']}`;
+        } else if (!result) {
+          failureReason = 'No result returned';
+        }
+        
+        console.log(`⚠️ Enhanced attempt ${i + 1} failed: ${failureReason}`);
+        console.log('📊 Failed result details:', {
+          status: result?.status,
+          contentLength: result?.headers?.['content-length'],
+          cloudinaryError: result?.headers?.['x-cld-error'],
+          hasResult: !!result
+        });
+        
+        lastError = new Error(failureReason);
       }
     } catch (error) {
       console.log(`⚠️ Enhanced attempt ${i + 1} error:`, error.message);
@@ -115,68 +161,6 @@ export const downloadFileWithFallback = async (fileUrl, fileName, downloadFuncti
       
       // Continue to next URL
       continue;
-    }
-  }
-    
-    // Try with server-generated download URL
-    try {
-      const serverUrl = await getFileDownloadUrl(cleanUrl, fileName);
-      if (serverUrl !== cleanUrl) {
-        urlsToTry.unshift(serverUrl); // Add to beginning of array
-      }
-    } catch (serverError) {
-      console.log('⚠️ Could not get download URL from server:', serverError.message);
-    }
-    
-    // Try the clean original URL
-    if (cleanUrl !== fileUrl) {
-      urlsToTry.push(cleanUrl);
-    }
-    
-    // For PDF files, try converting from /image/upload/ to /raw/upload/
-    const isPDFFile = fileName && fileName.toLowerCase().includes('.pdf');
-    if (isPDFFile && cleanUrl.includes('/image/upload/')) {
-      const rawUrl = cleanUrl.replace('/image/upload/', '/raw/upload/');
-      urlsToTry.push(rawUrl);
-      console.log('📄 Added PDF raw URL to try:', rawUrl);
-    }
-    
-    // Try with simple attachment flag (only if it's not an image)
-    const isImageFile = fileName && /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(fileName);
-    if (!isImageFile) {
-      const attachmentUrl = cleanUrl.replace('/upload/', '/upload/fl_attachment/');
-      urlsToTry.push(attachmentUrl);
-    }
-    
-    // Add proxy URL as final fallback (no auth required now)
-    try {
-      const proxyUrl = `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(cleanUrl)}`;
-      urlsToTry.push(proxyUrl);
-      console.log('🔗 Added proxy URL as fallback');
-    } catch (proxyError) {
-      console.log('⚠️ Could not create proxy URL:', proxyError.message);
-    }
-  }
-  
-  console.log('📋 URLs to try:', urlsToTry);
-  
-  for (let i = 0; i < urlsToTry.length; i++) {
-    const currentUrl = urlsToTry[i];
-    console.log(`🔄 Attempt ${i + 1}/${urlsToTry.length} with URL:`, currentUrl);
-    
-    try {
-      const result = await downloadFunction(currentUrl);
-      
-      if (result && result.status === 200) {
-        console.log(`✅ Download successful on attempt ${i + 1}`);
-        return result;
-      } else if (result) {
-        console.log(`⚠️ Attempt ${i + 1} failed with status:`, result.status);
-        lastError = new Error(`HTTP ${result.status}`);
-      }
-    } catch (error) {
-      console.log(`❌ Attempt ${i + 1} failed:`, error.message);
-      lastError = error;
     }
   }
   

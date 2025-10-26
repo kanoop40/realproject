@@ -459,13 +459,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
       fileName: selectedFile ? (selectedFile.name || selectedFile.fileName) : null,
       fileSize: selectedFile ? (selectedFile.size || selectedFile.fileSize) : null,
       mimeType: selectedFile ? (selectedFile.mimeType || selectedFile.type) : null,
+      fileUrl: selectedFile ? selectedFile.uri : null, // เพิ่ม fileUrl เหมือนในแชทกลุ่ม
       file: selectedFile ? {
         name: selectedFile.name || selectedFile.fileName,
         uri: selectedFile.uri,
         size: selectedFile.size || selectedFile.fileSize
       } : null,
       user_id: currentUser,
-      isOptimistic: true
+      isOptimistic: true,
+      isTemporary: true // เพิ่ม flag เหมือนในแชทกลุ่ม
     };
     
     setMessages(prev => {
@@ -553,13 +555,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
               fileName: serverMessage.fileName,
               fileSize: serverMessage.fileSize,
               mimeType: serverMessage.mimeType,
+              fileUrl: serverMessage.fileUrl || serverMessage.file_url, // เพิ่ม fileUrl
               file: serverMessage.file || (serverMessage.fileName ? {
                 name: serverMessage.fileName,
                 size: serverMessage.fileSize,
                 type: serverMessage.mimeType
               } : null),
               user_id: serverMessage.user_id || serverMessage.sender,
-              isOptimistic: false
+              isOptimistic: false,
+              isTemporary: false
             };
           }
           return msg;
@@ -1166,21 +1170,49 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.log('📥 Starting image download from modal...');
       console.log('🖼️ Image URL:', selectedModalImage);
       
-      // ตรวจสอบสิทธิ์การเข้าถึงไฟล์
+      // ตรวจสอบสิทธิ์การเข้าถึงไฟล์ แบบมี fallback
+      let permissionGranted = false;
+      
       try {
         const permissionResult = await MediaLibrary.requestPermissionsAsync();
         console.log('🔐 Permission result:', permissionResult);
-        
-        if (!permissionResult || permissionResult.status !== 'granted') {
-          Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกรูปภาพ');
+        permissionGranted = (permissionResult && permissionResult.status === 'granted');
+      } catch (permissionError) {
+        console.error('⚠️ Permission request error:', permissionError.message);
+        console.log('🔄 Using sharing fallback for image download...');
+        permissionGranted = false;
+      }
+      
+      if (!permissionGranted) {
+        console.log('📤 Using sharing fallback for image');
+        // Fall back to download and share
+        try {
+          const tempUri = `${FileSystem.documentDirectory}temp_image_${Date.now()}.jpg`;
+          const downloadResult = await FileSystem.downloadAsync(selectedModalImage, tempUri, {});
+          
+          if (downloadResult.status === 200) {
+            const canShare = await Sharing.isAvailableAsync();
+            if (canShare) {
+              await Sharing.shareAsync(downloadResult.uri, {
+                mimeType: 'image/*',
+                dialogTitle: 'บันทึกรูปภาพ'
+              });
+              console.log('✅ Image shared successfully');
+            } else {
+              Alert.alert('ดาวน์โหลดสำเร็จ', 'รูปภาพถูกดาวน์โหลดแล้ว');
+            }
+          } else {
+            throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+          }
+          return;
+        } catch (fallbackError) {
+          console.error('❌ Sharing fallback failed:', fallbackError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดรูปภาพได้: ' + fallbackError.message);
           return;
         }
-      } catch (permissionError) {
-        console.error('❌ Permission request error:', permissionError);
-        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถขอสิทธิ์การเข้าถึงไฟล์ได้');
-        return;
       }
-
+      
+      // ถ้ามี permission แล้ว ให้ทำต่อตามเดิม
       // ปิด modal ก่อน
       setImageModalVisible(false);
 
@@ -1311,11 +1343,41 @@ const PrivateChatScreen = ({ route, navigation }) => {
         console.log('📷 Processing as media file...');
         
         try {
-          const permissionResult = await MediaLibrary.requestPermissionsAsync();
-          console.log('🔐 Media permission result:', permissionResult);
+          let permissionGranted = false;
           
-          if (!permissionResult || permissionResult.status !== 'granted') {
-            Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงไฟล์เพื่อบันทึกสื่อ');
+          try {
+            const permissionResult = await MediaLibrary.requestPermissionsAsync();
+            console.log('🔐 Media permission result:', permissionResult);
+            permissionGranted = (permissionResult && permissionResult.status === 'granted');
+          } catch (permissionError) {
+            console.log('⚠️ MediaLibrary permission request failed:', permissionError.message);
+            console.log('🔄 Will use sharing instead of media library...');
+            permissionGranted = false;
+          }
+          
+          if (!permissionGranted) {
+            console.log('📤 Using sharing fallback for media download');
+            // Fall back to regular file download and sharing
+            const tempUri = `${FileSystem.documentDirectory}temp_${Date.now()}_${finalFileName}`;
+            
+            const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, { headers });
+            
+            if (downloadResult.status === 200) {
+              console.log('📤 Sharing downloaded media file...');
+              const canShare = await Sharing.isAvailableAsync();
+              
+              if (canShare) {
+                await Sharing.shareAsync(downloadResult.uri, {
+                  mimeType: isImage ? 'image/*' : 'video/*',
+                  dialogTitle: 'บันทึกไฟล์สื่อ'
+                });
+                console.log('✅ Media shared successfully');
+              } else {
+                Alert.alert('ดาวน์โหลดสำเร็จ', `ไฟล์ถูกดาวน์โหลดแล้ว: ${downloadResult.uri}`);
+              }
+            } else {
+              throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+            }
             return;
           }
         } catch (permissionError) {
@@ -1379,12 +1441,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
         console.log('📊 File download result:', downloadResult);
 
-        if (downloadResult.status === 200) {
+        // Handle the new downloadFileWithFallback response structure
+        const actualResult = downloadResult.success ? downloadResult.result : downloadResult;
+        const downloadSuccess = downloadResult.success && 
+          actualResult && 
+          actualResult.status === 200 && 
+          actualResult.headers &&
+          actualResult.headers['content-length'] !== '0' &&
+          !actualResult.headers['x-cld-error'];
+
+        if (downloadSuccess) {
+          console.log('✅ Download successful');
+          console.log(`📊 Successfully downloaded using attempt ${downloadResult.attemptNumber} with URL: ${downloadResult.successUrl?.substring(0, 50)}...`);
           console.log('📤 Sharing downloaded file...');
           
           const canShare = await Sharing.isAvailableAsync();
           if (canShare) {
-            await Sharing.shareAsync(downloadResult.uri, {
+            await Sharing.shareAsync(actualResult.uri, {
               mimeType: 'application/octet-stream',
               dialogTitle: 'บันทึกไฟล์'
             });
@@ -1394,7 +1467,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
             console.log('✅ File downloaded (sharing not available)');
           }
         } else {
-          throw new Error('Download failed with status: ' + downloadResult.status);
+          let errorMessage = 'การดาวน์โหลดไม่สำเร็จ';
+          
+          if (actualResult?.status === 404 || actualResult?.headers?.['x-cld-error']) {
+            errorMessage = 'ไม่พบไฟล์ (HTTP 404)\n\nไฟล์อาจถูกลบหรือย้ายตำแหน่งแล้ว';
+          } else if (actualResult?.headers?.['content-length'] === '0') {
+            errorMessage = 'ไฟล์ว่างเปล่า (0 bytes)\n\nไฟล์อาจเสียหายหรือไม่สมบูรณ์';
+          } else {
+            errorMessage = `HTTP ${actualResult?.status || 'unknown'}: การดาวน์โหลดไม่สำเร็จ`;
+          }
+          
+          throw new Error(errorMessage);
         }
       }
     } catch (error) {

@@ -28,10 +28,22 @@ const ImageMessage = ({
   
   // ฟังก์ชันสำหรับสร้าง URI รูปภาพ
   const getImageUri = (item) => {
+    // Debug log for image URI resolution (only when needed)
+    if (item.messageType !== 'image' || !item.fileUrl) {
+      console.log('🖼️ ImageMessage resolving URI for non-standard image:', {
+        messageId: item._id,
+        messageType: item.messageType,
+        fileUrl: item.fileUrl,
+        image: item.image,
+        file: item.file
+      });
+    }
+    
     // ลำดับความสำคัญในการหา URI รูปภาพ
     
     // 0. Optimistic message - ใช้ local URI โดยตรง
     if (item.isOptimistic && item.image) {
+      console.log('🖼️ Using optimistic image URI:', item.image);
       return item.image;
     }
     
@@ -118,7 +130,22 @@ const ImageMessage = ({
       >
         <View style={styles.imageContainer}>
           {/* Check if we have actual image data */}
-          {(item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path || item.fileUrl || item.image) ? (
+          {(() => {
+            const hasImageData = (item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path || item.fileUrl || item.image);
+            const resolvedUri = getImageUri(item);
+            
+            // Only log if there are issues
+            if (!hasImageData || !resolvedUri) {
+              console.log('🖼️ Image display issue:', {
+                messageId: item._id,
+                hasImageData,
+                resolvedUri,
+                messageType: item.messageType
+              });
+            }
+            
+            return hasImageData;
+          })() ? (
             <Image
               source={{ 
                 uri: getImageUri(item)

@@ -93,14 +93,24 @@ const ChatMessage = ({
         styles.messageContentContainer,
         isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
       ]}>
-        {/* Image messages - check for actual image data first, then fallback */}
-        {(
-          item.messageType === 'image' || 
-          item.image || 
-          (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) || 
-          (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
-          (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.image && !item.file && !item.fileName)
-        ) && (
+        {/* Image messages - optimized condition check */}
+        {(() => {
+          // Early exit for pure text messages
+          if (item.messageType === 'text' && !item.image && !item.fileUrl && !item.file?.url && item.content !== 'รูปภาพ') {
+            return false;
+          }
+          
+          const shouldShowImage = (
+            item.messageType === 'image' || 
+            item.image || 
+            item.fileUrl?.includes('cloudinary.com') ||
+            (item.file && item.file.file_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name)) || 
+            (item.fileName && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.fileName)) || 
+            (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.image && !item.file && !item.fileName)
+          );
+          
+          return shouldShowImage;
+        })() && (
           <ImageMessage
             item={item}
             index={index}
@@ -148,14 +158,13 @@ const ChatMessage = ({
             (item.content === 'รูปภาพ' && item.messageType === 'text')
           );
           
-          // Debug logging for file display
-          if (item.fileName || item.fileUrl || item.messageType === 'file') {
-            console.log('🔍 File message check:', {
+          // Debug logging for file display (only when there are issues)
+          if ((item.fileName || item.fileUrl || item.messageType === 'file' || item.content === 'ไฟล์แนบ') && !shouldShowFile) {
+            console.log('🔍 File message not showing:', {
               messageId: item._id,
               messageType: item.messageType,
               fileName: item.fileName,
               fileUrl: item.fileUrl,
-              content: item.content,
               shouldShowFile
             });
           }
