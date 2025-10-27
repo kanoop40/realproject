@@ -9,7 +9,8 @@ const UserChatItem = ({
   onPress, 
   formatTime, 
   API_URL,
-  onPressWithAnimation 
+  onPressWithAnimation,
+  showUnreadIndicator = false
 }) => {
   const [chatData, setChatData] = useState(item);
   const otherParticipant = chatData.participants?.find(p => p._id !== currentUser._id);

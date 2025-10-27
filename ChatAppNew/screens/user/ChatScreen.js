@@ -53,7 +53,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [showSuccess, setShowSuccess] = useState(false); // สำหรับ SuccessTickAnimation
   const [isSelectMode, setIsSelectMode] = useState(false); // สำหรับโหมดเลือกแชทเพื่อลบ
   const [selectedChats, setSelectedChats] = useState(new Set()); // เก็บ ID ของแชทที่เลือก
-  const [notificationBanner, setNotificationBanner] = useState(null); // สำหรับแสดง notification banner
+  // ไม่ใช้ notification banner แล้ว - ใช้ mark indicator เท่านั้น
   const recentlyViewedChatsRef = useRef(new Set()); // เก็บ ID ของแชทที่เพิ่งดูมา
   
   // รับ params เฉพาะที่จำเป็น
@@ -268,28 +268,9 @@ const ChatScreen = ({ route, navigation }) => {
         console.log(`🔍 Recently viewed check for ${chatName}: ${isRecentlyViewed}`);
         console.log(`🔍 Currently recently viewed chats:`, Array.from(recentlyViewedChatsRef.current));
         
-        if (isRecentlyViewed) {
-          console.log('🚫 Skipping notification - recently viewed this chat');
-          // ลบออกจาก recently viewed เพื่อให้แจ้งเตือนได้ในครั้งถัดไป
-          recentlyViewedChatsRef.current.delete(chatId);
-        } else {
-          // แสดง notification banner
-          setNotificationBanner({
-            chatName,
-            newMessages: newMessageCount,
-            chatType: chat.isGroup ? 'group' : 'private',
-            chatId: chatId,
-            timestamp: Date.now()
-          });
-          
-          console.log('📱 Notification banner set!');
-          
-          // ซ่อน banner หลังจาก 4 วินาที
-          setTimeout(() => {
-            console.log('🔇 Auto-hiding notification banner');
-            setNotificationBanner(null);
-          }, 4000);
-        }
+        // ข้อความใหม่จะแสดงผ่าน mark (newMessageIndicator) เท่านั้น
+        // ไม่แสดง notification banner popup
+        console.log(`📬 ข้อความใหม่: ${chatName} (${newMessageCount} ข้อความ) - แสดงเป็น mark`);
       }
 
       // อัพเดท previous unread count
@@ -839,10 +820,7 @@ const ChatScreen = ({ route, navigation }) => {
             console.log(`🕐 Removed ${chat.roomName || 'Private'} from recently viewed`);
           }, 30000); // 30 วินาที
           
-          // ซ่อน notification banner ถ้ากำลังแสดงสำหรับแชทนี้
-          if (notificationBanner && notificationBanner.chatId === chat._id) {
-            setNotificationBanner(null);
-          }
+          // mark indicator จะหายไปเองเมื่อ unreadCount กลายเป็น 0
           
           console.log('✅ Messages marked as read and UI updated');
           
@@ -886,9 +864,6 @@ const ChatScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
           )}
-          {hasUnreadMessages && (
-            <View style={styles.newMessageIndicator} />
-          )}
           <GroupChatItem
             item={item}
             onPress={handleChatPress}
@@ -914,9 +889,6 @@ const ChatScreen = ({ route, navigation }) => {
                 {isSelected ? '✓' : '○'}
               </Text>
             </TouchableOpacity>
-          )}
-          {hasUnreadMessages && (
-            <View style={styles.newMessageIndicator} />
           )}
           <UserChatItem
             item={item}
@@ -999,43 +971,7 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
       ) : (
         <>
-          {/* Notification Banner */}
-          {notificationBanner && (
-            <TouchableOpacity 
-              style={styles.notificationBanner}
-              activeOpacity={0.8}
-              onPress={() => {
-                // เปิดแชทที่มีข้อความใหม่
-                const targetChat = chats.find(chat => chat._id === notificationBanner.chatId);
-                if (targetChat) {
-                  setNotificationBanner(null);
-                  handleChatPress(targetChat);
-                }
-              }}
-            >
-              <View style={styles.notificationContent}>
-                <Text style={styles.notificationIcon}>
-                  {notificationBanner.chatType === 'group' ? '👥' : '💬'}
-                </Text>
-                <View style={styles.notificationText}>
-                  <Text style={styles.notificationTitle}>ข้อความใหม่</Text>
-                  <Text style={styles.notificationSubtitle}>
-                    {notificationBanner.newMessages} ข้อความใหม่จาก {notificationBanner.chatName}
-                  </Text>
-                  <Text style={styles.notificationHint}>แตะเพื่อเปิดแชท</Text>
-                </View>
-                <TouchableOpacity 
-                  style={styles.notificationClose}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setNotificationBanner(null);
-                  }}
-                >
-                  <Text style={styles.notificationCloseText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          )}
+          {/* ข้อความใหม่จะแสดงเป็น mark เล็กๆ ที่แต่ละแชท - ไม่มี notification banner */}
 
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
@@ -1420,56 +1356,7 @@ const styles = StyleSheet.create({
   },
 
   // Notification Banner Styles
-  notificationBanner: {
-    position: 'absolute',
-    top: 50,
-    left: 16,
-    right: 16,
-    backgroundColor: '#2196F3',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    zIndex: 9999,
-  },
-  notificationContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  notificationIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  notificationText: {
-    flex: 1,
-  },
-  notificationTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 2,
-  },
-  notificationSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.95)',
-    marginBottom: 2,
-  },
-  notificationHint: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    fontStyle: 'italic',
-  },
-  notificationClose: {
-    padding: 6,
-  },
-  notificationCloseText: {
-    fontSize: 18,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
+  // ไม่ใช้ notification banner styles แล้ว - ใช้ newMessageIndicator เท่านั้น
 });
 
 const ChatScreenWithTabBar = (props) => (

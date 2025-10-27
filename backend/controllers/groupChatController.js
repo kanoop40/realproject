@@ -1459,7 +1459,9 @@ const setGroupTypingStatus = asyncHandler(async (req, res) => {
             throw new Error('ไม่พบกลุ่ม');
         }
 
-        const isMember = group.members.includes(userId);
+        const isMember = group.members.some(member => 
+            member.user.toString() === userId || member.user._id?.toString() === userId
+        );
         if (!isMember) {
             res.status(403);
             throw new Error('คุณไม่ใช่สมาชิกของกลุ่มนี้');
@@ -1526,7 +1528,9 @@ const getGroupTypingUsers = asyncHandler(async (req, res) => {
             throw new Error('ไม่พบกลุ่ม');
         }
 
-        const isMember = group.members.includes(currentUserId);
+        const isMember = group.members.some(member => 
+            member.user.toString() === currentUserId || member.user._id?.toString() === currentUserId
+        );
         if (!isMember) {
             res.status(403);
             throw new Error('คุณไม่ใช่สมาชิกของกลุ่มนี้');
