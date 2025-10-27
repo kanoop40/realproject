@@ -141,17 +141,72 @@ const PrivateChatScreen = ({ route, navigation }) => {
       loadMessages(1, false);
       setHasScrolledToEnd(false);
       setCurrentPage(1);
-      
-      // Force scroll to bottom after loading - only for initial load
-      if (!hasScrolledToEnd) {
-        setTimeout(() => {
-          console.log('🎯 Force scrolling to latest message');
-          flatListRef.current?.scrollToEnd({ animated: true });
-          setHasScrolledToEnd(true);
-        }, 800);
-      }
     }
   }, [currentUser, chatroomId]);
+
+  // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด) - GroupChat Style
+  useEffect(() => {
+    if (messages.length > 0 && !hasScrolledToEnd) {
+      // รอให้ FlatList render เสร็จแล้วค่อย scroll (ไม่ต้องรอ loading เสร็จ)
+      const timeoutId = setTimeout(() => {
+        const scrollToEnd = () => {
+          try {
+            if (messages.length > 0 && flatListRef.current) {
+              flatListRef.current.scrollToEnd({ 
+                animated: false
+              });
+            }
+          } catch (error) {
+            console.log('ScrollToEnd failed:', error);
+          }
+          setHasScrolledToEnd(true);
+        };
+        requestAnimationFrame(scrollToEnd);
+      }, 100); // ลดเวลา delay เหลือ 100ms
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages.length, hasScrolledToEnd]); // ไม่ใส่ isLoading ใน dependency
+
+  // เพิ่ม useEffect เพื่อ scroll ทันทีเมื่อมี messages (ไม่รอ loading) - GroupChat Style
+  useEffect(() => {
+    if (messages.length > 0) {
+      // scroll ทันทีเมื่อมี messages โดยไม่ต้องรอ loading เสร็จ
+      const immediateScrollTimeout = setTimeout(() => {
+        try {
+          if (messages.length > 0 && flatListRef.current) {
+            flatListRef.current.scrollToEnd({ 
+              animated: false
+            });
+          }
+        } catch (error) {
+          console.log('ScrollToEnd immediate failed:', error);
+        }
+      }, 50); // เริ่ม scroll เร็วมาก
+      
+      return () => clearTimeout(immediateScrollTimeout);
+    }
+  }, [messages.length]); // ไม่ใส่ isLoading ใน dependency
+
+  // เพิ่ม useEffect เพื่อ force scroll หลังจาก component mount และมีข้อความ - GroupChat Style
+  useEffect(() => {
+    if (messages.length > 0) {
+      // รอ 1 วินาทีแล้วลอง scroll อีกครั้ง ในกรณีที่ useEffect อื่นไม่ทำงาน
+      const finalScrollTimeout = setTimeout(() => {
+        try {
+          if (messages.length > 0) {
+            flatListRef.current?.scrollToEnd({ 
+              animated: false
+            });
+          }
+        } catch (error) {
+          console.log('Final scroll attempt failed:', error);
+        }
+      }, 1000);
+      
+      return () => clearTimeout(finalScrollTimeout);
+    }
+  }, [messages.length]);
 
   // Mark messages as read when screen is focused
   useFocusEffect(
@@ -205,9 +260,33 @@ const PrivateChatScreen = ({ route, navigation }) => {
         const typingUsers = typingResponse.data?.data?.users || [];
         
         // อัปเดตสถานะ typing ของผู้ใช้อื่น
-        setOtherUserTyping(typingUsers.length > 0);
-        if (typingUsers.length > 0) {
+        const wasTyping = otherUserTyping;
+        const isNowTyping = typingUsers.length > 0;
+        
+        setOtherUserTyping(isNowTyping);
+        if (isNowTyping) {
           console.log(`👀 Users typing: ${typingUsers.map(u => u.firstName || u.username).join(', ')}`);
+          
+          // Scroll เมื่อมี typing indicator ใหม่แสดงขึ้นมา (GroupChat Style)
+          if (!wasTyping && !showScrollToBottom) {
+            setTimeout(() => {
+              try {
+                if (messages.length > 0) {
+                  flatListRef.current?.scrollToIndex({ 
+                    index: messages.length - 1, 
+                    animated: false,
+                    viewPosition: 1
+                  });
+                }
+              } catch (error) {
+                console.error('Error scrolling for typing indicator:', error);
+                // Fallback to scrollToEnd if scrollToIndex fails
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }, 100);
+              }
+            }, 200);
+          }
         }
         
         // Reset failures on success
@@ -280,11 +359,28 @@ const PrivateChatScreen = ({ route, navigation }) => {
             return updated;
           });
           
-          // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด (ไม่รบกวนเมื่อกำลังดูข้อความเก่า)
-          if (!showScrollToBottom) {
+          // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด (ไม่รบกวนเมื่อกำลังดูข้อความเก่า) - GroupChat Style
+          if (!showScrollToBottom && trulyNewMessages.length > 0) {
             setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 200);
+              try {
+                setMessages(currentMessages => {
+                  if (currentMessages.length > 0) {
+                    flatListRef.current?.scrollToIndex({ 
+                      index: currentMessages.length - 1, 
+                      animated: false,
+                      viewPosition: 1
+                    });
+                  }
+                  return currentMessages;
+                });
+              } catch (error) {
+                console.error('Error scrolling to synced message:', error);
+                // Fallback to scrollToEnd if scrollToIndex fails
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }, 100);
+              }
+            }, 100);
           }
         } else {
           // ไม่มีข้อความใหม่ - ช้าลงแต่ไม่มาก
@@ -400,9 +496,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         const updatedMessages = [...prev, safeMessage];
         
-        // Auto scroll to new message
+        // Auto scroll to new message (GroupChat Style)
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
+          try {
+            if (updatedMessages.length > 0) {
+              flatListRef.current?.scrollToIndex({ 
+                index: updatedMessages.length - 1, 
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          } catch (error) {
+            console.error('Error scrolling to new message:', error);
+            // Fallback to scrollToEnd if scrollToIndex fails
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }, 100);
+          }
         }, 100);
         
         return updatedMessages;
@@ -549,16 +659,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       setCurrentPage(page);
       
-      // Auto scroll to latest message (Normal FlatList) - Always scroll when loading page 1
+      // Auto scroll to latest message (GroupChat Style) - Always scroll when loading page 1
       if (page === 1) {
         console.log('🎯 Auto-scrolling to latest message...');
+        
+        // Force scroll to bottom หลังโหลดข้อความครั้งแรก (GroupChat Style)
+        setHasScrolledToEnd(false);
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 300);
-        // Additional scroll after a bit more delay to ensure content is rendered
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }, 600);
+          [50, 100, 200, 400, 600].forEach((delay) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }, delay);
+          });
+          
+          setTimeout(() => {
+            setHasScrolledToEnd(true);
+          }, 650);
+        }, 100);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -694,9 +811,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     setMessages(prev => {
       const newMessages = [...prev, optimisticMessage];
-      // เลื่อนไปข้อความล่าสุดทันทีหลังส่งข้อความ (Normal FlatList)
+      // เลื่อนไปข้อความล่าสุดทันทีหลังส่งข้อความ (GroupChat Style)
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        try {
+          if (newMessages.length > 0) {
+            flatListRef.current?.scrollToIndex({ 
+              index: newMessages.length - 1, 
+              animated: false,
+              viewPosition: 1
+            });
+          }
+        } catch (error) {
+          console.error('Error scrolling to sent message:', error);
+          // Fallback to scrollToEnd if scrollToIndex fails
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }, 100);
+        }
       }, 100);
       return newMessages;
     });
@@ -865,9 +996,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         const updatedMessages = [...filteredMessages, serverMessage];
         
-        // เลื่อนไปข้อความล่าสุดหลังจากได้รับตอบกลับจากเซิร์ฟเวอร์ (Normal FlatList)
+        // เลื่อนไปข้อความล่าสุดหลังจากได้รับตอบกลับจากเซิร์ฟเวอร์ (GroupChat Style)
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
+          try {
+            if (updatedMessages.length > 0) {
+              flatListRef.current?.scrollToIndex({ 
+                index: updatedMessages.length - 1, 
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          } catch (error) {
+            console.error('Error scrolling to server message:', error);
+            // Fallback to scrollToEnd if scrollToIndex fails
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }, 100);
+          }
         }, 150);
         
         return updatedMessages;
@@ -983,8 +1128,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
       // เพิ่ม optimistic message และ scroll
       setMessages(prev => {
         const newMessages = [...prev, optimisticMessage];
+        // Auto scroll to image message (GroupChat Style)
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
+          try {
+            if (newMessages.length > 0) {
+              flatListRef.current?.scrollToIndex({ 
+                index: newMessages.length - 1, 
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          } catch (error) {
+            console.error('Error scrolling to image message:', error);
+            // Fallback to scrollToEnd if scrollToIndex fails
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }, 100);
+          }
         }, 100);
         return newMessages;
       });
@@ -1092,8 +1252,23 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         console.log('📋 Updated messages count:', updatedMessages.length);
         
+        // Auto scroll to updated image message (GroupChat Style)
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
+          try {
+            if (updatedMessages.length > 0) {
+              flatListRef.current?.scrollToIndex({ 
+                index: updatedMessages.length - 1, 
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          } catch (error) {
+            console.error('Error scrolling to updated message:', error);
+            // Fallback to scrollToEnd if scrollToIndex fails
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }, 100);
+          }
         }, 100);
         
         return updatedMessages;
@@ -2083,6 +2258,38 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 </Text>
               </View>
             )}
+            onContentSizeChange={(contentWidth, contentHeight) => {
+              // Auto-scroll ไปข้อความล่าสุดเฉพาะเมื่อมีข้อความใหม่ (ไม่ใช่เมื่อแสดง/ซ่อน timestamp) - GroupChat Style
+              if (messages.length > 0 && !hasScrolledToEnd && !isLoadingMore) {
+                console.log('📏 Private Chat - Content size changed, scrolling to end due to new messages. Messages:', messages.length);
+                // หลายครั้งเพื่อให้แน่ใจ - เหมือน GroupChat
+                [10, 50, 100, 200].forEach((delay) => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }, delay);
+                });
+                
+                setTimeout(() => {
+                  setHasScrolledToEnd(true);
+                }, 250);
+              }
+            }}
+            onLayout={() => {
+              // เมื่อ FlatList layout เสร็จ - scroll เฉพาะเมื่อยังไม่เคย scroll (ระหว่างโหลด) - GroupChat Style
+              if (messages.length > 0 && !hasScrolledToEnd && !isLoadingMore) {
+                console.log('📐 Private Chat - FlatList layout complete, scrolling to end due to initial load');
+                // หลายครั้งเพื่อให้แน่ใจ - เหมือน GroupChat
+                [20, 100, 200, 400].forEach((delay) => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }, delay);
+                });
+                
+                setTimeout(() => {
+                  setHasScrolledToEnd(true);
+                }, 500);
+              }
+            }}
           />
 
           <ChatInputBar

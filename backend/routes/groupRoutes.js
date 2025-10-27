@@ -224,4 +224,12 @@ router.put('/:id/read', protect, markGroupMessagesAsRead);
 // @desc    อัพโหลดไฟล์ในกลุ่ม (alias สำหรับ messages endpoint)
 router.post('/:id/upload', handleGroupUpload, sendGroupMessage);
 
+// @route   POST /api/groups/:id/typing
+// @desc    Set typing status for user in group
+router.post('/:id/typing', require('../controllers/groupChatController').setGroupTypingStatus);
+
+// @route   GET /api/groups/:id/typing
+// @desc    Get typing users in group
+router.get('/:id/typing', require('../controllers/groupChatController').getGroupTypingUsers);
+
 module.exports = router;

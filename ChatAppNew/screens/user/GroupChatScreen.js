@@ -26,6 +26,7 @@ import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import FullscreenImageViewer from '../../components/FullscreenImageViewer';
 import { downloadFileWithFallback } from '../../utils/fileDownload';
 import AndroidDownloads from '../../utils/androidDownloads';
+import TypingIndicator from '../../components/TypingIndicator';
 
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
@@ -57,6 +58,11 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [selectedMessages, setSelectedMessages] = useState([]); // ข้อความที่เลือก
   const [showSuccess, setShowSuccess] = useState(false); // สำหรับ SuccessTickAnimation
   
+  // Typing indicator states
+  const [isTyping, setIsTyping] = useState(false);
+  const [groupMembersTyping, setGroupMembersTyping] = useState([]); // Array of typing members
+  const typingTimeoutRef = useRef(null);
+  
   // States สำหรับโหลดข้อความเก่า
   const [showLoadOlderButton, setShowLoadOlderButton] = useState(false);
   const [canLoadMore, setCanLoadMore] = useState(true);
@@ -76,6 +82,38 @@ const GroupChatScreen = ({ route, navigation }) => {
     showInitialLoading = false,
     fromCreate = false
   } = route.params || {};
+
+  // Typing indicator functions
+  const handleTypingStart = useCallback(() => {
+    if (!isTyping) {
+      setIsTyping(true);
+      // ส่งสถานะ typing ไปยังเซิร์ฟเวอร์ (HTTP polling approach for groups)
+      sendGroupTypingStatus(true);
+    }
+    
+    // Reset timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // หยุด typing หลังจาก 2 วินาที (เร็วขึ้น)
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      sendGroupTypingStatus(false);
+    }, 2000);
+  }, [isTyping, groupId]);
+
+  const sendGroupTypingStatus = useCallback(async (typing) => {
+    try {
+      console.log(`📝 Group Typing: Sending status: ${typing ? 'เริ่มพิม' : 'หยุดพิม'} for group: ${groupId}`);
+      await api.post(`/groups/${groupId}/typing`, { 
+        isTyping: typing
+      });
+      console.log(`✅ Group typing status sent: ${typing}`);
+    } catch (error) {
+      console.log('❌ Failed to send group typing status:', error.message);
+    }
+  }, [groupId]);
 
   // กำหนด initial loading state สำหรับ iOS เมื่อสร้างกลุ่มใหม่
   useEffect(() => {
@@ -452,10 +490,43 @@ const GroupChatScreen = ({ route, navigation }) => {
               flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
           }
+
+          // เช็ค typing status ของสมาชิกกลุ่ม
+          try {
+            console.log('📝 Checking group typing status...');
+            const typingResponse = await api.get(`/groups/${groupId}/typing`);
+            console.log('✅ Group typing response:', typingResponse.data);
+            
+            if (typingResponse.data && Array.isArray(typingResponse.data.typingMembers)) {
+              // กรองสมาชิกที่กำลังพิมพ์ (ยกเว้นตัวเอง)
+              const membersTyping = typingResponse.data.typingMembers.filter(
+                member => member._id !== authUser?._id
+              );
+              
+              // Update typing state with member info
+              const wasTyping = groupMembersTyping.length > 0;
+              setGroupMembersTyping(membersTyping);
+              
+              // Scroll เมื่อมี typing indicator ใหม่แสดงขึ้นมา (GroupChat Style)
+              if (!wasTyping && membersTyping.length > 0 && !showScrollToBottom) {
+                setTimeout(() => {
+                  try {
+                    if (messages.length > 0) {
+                      flatListRef.current?.scrollToEnd({ animated: false });
+                    }
+                  } catch (error) {
+                    console.error('Error scrolling for group typing indicator:', error);
+                  }
+                }, 200);
+              }
+            }
+          } catch (typingError) {
+            console.log('❌ Failed to check group typing status:', typingError.message);
+          }
         } catch (error) {
           console.log('� Group background sync failed:', error.message);
         }
-      }, 10000); // เช็คทุก 10 วินาที - ช้าลงเพื่อ debug
+      }, 3000); // เช็คทุก 3 วินาทีสำหรับ typing และ messages
     }
 
     return () => {
@@ -2601,6 +2672,18 @@ const GroupChatScreen = ({ route, navigation }) => {
               />
             );
           }}
+          ListFooterComponent={() => (
+            <TypingIndicator 
+              isVisible={groupMembersTyping.length > 0}
+              userName={
+                groupMembersTyping.length === 1 
+                  ? `${groupMembersTyping[0].firstName || 'สมาชิก'} ${groupMembersTyping[0].lastName || ''}`.trim()
+                  : groupMembersTyping.length > 1 
+                    ? `${groupMembersTyping.length} คนกำลังพิมพ์`
+                    : ''
+              }
+            />
+          )}
         />
       </TouchableOpacity>
 
@@ -2651,6 +2734,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         onPickFile={() => pickFile(false)}
         onRemoveFile={() => setSelectedFile(null)}
         getFileIcon={getFileIcon}
+        onTypingStart={handleTypingStart}
       />
 
 

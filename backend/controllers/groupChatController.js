@@ -1437,6 +1437,141 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
     }
 });
 
+// Group typing status storage (in-memory)
+const groupTypingStatus = new Map();
+
+// @desc    Set typing status for user in group
+// @route   POST /api/groups/:id/typing
+// @access  Private
+const setGroupTypingStatus = asyncHandler(async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const { isTyping } = req.body;
+        const userId = req.user._id.toString();
+        const username = req.user.firstName || req.user.username;
+
+        console.log(`📝 Group Typing: User ${username} (${userId}) ${isTyping ? 'started' : 'stopped'} typing in group ${groupId}`);
+
+        // ตรวจสอบว่าเป็นสมาชิกของกลุ่มหรือไม่
+        const group = await GroupChat.findById(groupId);
+        if (!group) {
+            res.status(404);
+            throw new Error('ไม่พบกลุ่ม');
+        }
+
+        const isMember = group.members.includes(userId);
+        if (!isMember) {
+            res.status(403);
+            throw new Error('คุณไม่ใช่สมาชิกของกลุ่มนี้');
+        }
+
+        const groupKey = `group_${groupId}`;
+        
+        if (!groupTypingStatus.has(groupKey)) {
+            groupTypingStatus.set(groupKey, new Map());
+        }
+        
+        const groupTyping = groupTypingStatus.get(groupKey);
+        
+        if (isTyping) {
+            // เพิ่ม user ที่กำลังพิม พร้อม timestamp
+            groupTyping.set(userId, {
+                _id: userId,
+                userId: userId,
+                username: username,
+                firstName: req.user.firstName,
+                lastName: req.user.lastName,
+                avatar: req.user.avatar,
+                timestamp: Date.now()
+            });
+        } else {
+            // ลบ user ที่หยุดพิม
+            groupTyping.delete(userId);
+        }
+
+        // ลบ typing status ที่เก่าเกิน 4 วินาที
+        const now = Date.now();
+        for (const [uid, data] of groupTyping.entries()) {
+            if (now - data.timestamp > 4000) {
+                groupTyping.delete(uid);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: isTyping ? 'Group typing status set' : 'Group typing status removed'
+        });
+
+    } catch (error) {
+        console.error('❌ Set group typing status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to set group typing status'
+        });
+    }
+});
+
+// @desc    Get typing users in group
+// @route   GET /api/groups/:id/typing
+// @access  Private
+const getGroupTypingUsers = asyncHandler(async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const currentUserId = req.user._id.toString();
+        
+        // ตรวจสอบว่าเป็นสมาชิกของกลุ่มหรือไม่
+        const group = await GroupChat.findById(groupId);
+        if (!group) {
+            res.status(404);
+            throw new Error('ไม่พบกลุ่ม');
+        }
+
+        const isMember = group.members.includes(currentUserId);
+        if (!isMember) {
+            res.status(403);
+            throw new Error('คุณไม่ใช่สมาชิกของกลุ่มนี้');
+        }
+
+        const groupKey = `group_${groupId}`;
+        const groupTyping = groupTypingStatus.get(groupKey) || new Map();
+        
+        // ลบ typing status ที่เก่าเกิน 4 วินาที
+        const now = Date.now();
+        for (const [uid, data] of groupTyping.entries()) {
+            if (now - data.timestamp > 4000) {
+                groupTyping.delete(uid);
+            }
+        }
+        
+        // ดึงรายชื่อผู้กำลังพิม (ยกเว้นตัวเอง)
+        const typingMembers = Array.from(groupTyping.values())
+            .filter(user => user.userId !== currentUserId)
+            .map(user => ({
+                _id: user._id,
+                userId: user.userId,
+                username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                avatar: user.avatar
+            }));
+
+        console.log(`👀 Getting typing users for group ${groupId}: ${typingMembers.length} users typing`);
+
+        res.json({
+            success: true,
+            typingMembers,
+            count: typingMembers.length
+        });
+
+    } catch (error) {
+        console.error('❌ Get group typing users error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get group typing users'
+        });
+    }
+});
+
 module.exports = {
     createGroup,
     getUserGroups,
@@ -1456,5 +1591,7 @@ module.exports = {
     deleteGroupMessage,
     editGroupMessage,
     markGroupMessagesAsRead,
-    checkNewGroupMessages
+    checkNewGroupMessages,
+    setGroupTypingStatus,
+    getGroupTypingUsers
 };

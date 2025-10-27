@@ -43,6 +43,10 @@ const ChatScreen = ({ route, navigation }) => {
   const [serverStatus, setServerStatus] = useState('checking'); // checking, cold_start, ready, error
   // Removed loading hook - no longer using loading functionality
   const [hasShownInitialAnimation, setHasShownInitialAnimation] = useState(false); // ตรวจสอบว่าแสดง animation ครั้งแรกแล้วหรือยัง
+  
+  // Request deduplication
+  const loadCurrentUserRef = useRef(false);
+  const loadChatsRef = useRef(false);
   const [showChatListAnimation, setShowChatListAnimation] = useState(false); // เริ่มต้นเป็น false
   const [showChatListContent, setShowChatListContent] = useState(true); // แสดงเนื้อหาทันทีถ้าไม่มี animation
   const [showDropdown, setShowDropdown] = useState(false); // สำหรับ dropdown menu
@@ -143,8 +147,13 @@ const ChatScreen = ({ route, navigation }) => {
 
   // Load current user when auth is ready
   useEffect(() => {
-    if (!authLoading && !currentUser) {
-      loadCurrentUser();
+    if (!authLoading && !currentUser && !loadCurrentUserRef.current) {
+      // Add a small delay to prevent rapid fire requests
+      const timeoutId = setTimeout(() => {
+        loadCurrentUser();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [authLoading]);
 
@@ -169,7 +178,7 @@ const ChatScreen = ({ route, navigation }) => {
 
   // Load chats when user is ready และจัดการ animation ครั้งแรก
   useEffect(() => {
-    if (!authLoading && currentUser) {
+    if (!authLoading && currentUser && !loadChatsRef.current) {
       // ถ้ายังไม่เคยแสดง animation ในเซสชันนี้ ให้แสดงครั้งเดียว
       if (!hasShownInitialAnimation) {
         setShowChatListAnimation(true);
@@ -178,30 +187,25 @@ const ChatScreen = ({ route, navigation }) => {
         // บันทึกว่าได้แสดง animation แล้วในเซสชันนี้
         AsyncStorage.setItem('chatListAnimationShown', 'true');
       }
-      loadChats();
+      
+      // Add a small delay to prevent rapid fire requests
+      const timeoutId = setTimeout(() => {
+        loadChats();
+      }, 200);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [authLoading, currentUser]);
 
-  // Real-time polling เพื่อตรวจจับข้อความใหม่ในแชทต่างๆ (ไม่ reload หน้า)
+  // Real-time polling เพื่อตรวจจับข้อความใหม่ในแชทต่างๆ (ไม่ reload หน้า) - DISABLED DUE TO RATE LIMITING
   useEffect(() => {
-    let pollingInterval;
-
-    if (currentUser && chats.length > 0 && hasShownInitialAnimation) {
-      console.log('🔄 Starting ChatScreen real-time polling...');
-      
-      pollingInterval = setInterval(async () => {
-        try {
-          // โหลดข้อมูลแชทใหม่แบบเงียบๆ ไม่ให้แสดง loading
-          console.log('🔄 ChatScreen: Quietly polling for chat updates...');
-          
-          // โหลดข้อมูลโดยไม่ trigger loading state
-          await loadChatsQuietly(); 
-          
-        } catch (error) {
-          console.log('❌ ChatScreen polling error:', error.message);
-        }
-      }, 10000); // ทุก 10 วินาที
-    }
+    // DISABLED: Real-time polling causes too many API requests and rate limiting
+    // The app will rely on manual refresh and focus refresh instead
+    console.log('⚠️ Real-time polling disabled to prevent rate limiting');
+    
+    return () => {
+      console.log('🔄 No polling cleanup needed - feature disabled');
+    };
 
     return () => {
       if (pollingInterval) {
@@ -306,10 +310,15 @@ const ChatScreen = ({ route, navigation }) => {
     // ลบ complex logic ทั้งหมด - ใช้ Force Refresh แทน
   useFocusEffect(
     React.useCallback(() => {
-      if (!authLoading && currentUser) {
+      if (!authLoading && currentUser && !loadChatsRef.current) {
         console.log('🔄 ChatScreen focused - Force refresh chat list');
         // เมื่อกลับมาหน้านี้ ให้โหลดข้อมูลแบบเงียบๆ ไม่ต้องแสดง animation
-        loadChatsQuietly();
+        // Add delay to prevent rapid requests when navigating
+        const timeoutId = setTimeout(() => {
+          loadChatsQuietly();
+        }, 300);
+        
+        return () => clearTimeout(timeoutId);
       }
     }, [authLoading, currentUser])
   );
@@ -317,8 +326,11 @@ const ChatScreen = ({ route, navigation }) => {
   // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount
   useEffect(() => {
     return () => {
-      console.log('🧹 ChatScreen unmounting, clearing joined chatrooms tracking');
+      console.log('🧹 ChatScreen unmounting, clearing tracking and request flags');
       joinedChatroomsRef.current.clear();
+      // Reset request flags to prevent memory leaks
+      loadCurrentUserRef.current = false;
+      loadChatsRef.current = false;
     };
   }, []);
 
@@ -359,6 +371,23 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const loadCurrentUser = async (retryCount = 0) => {
+    // Prevent duplicate requests
+    if (loadCurrentUserRef.current) {
+      console.log('⚠️ loadCurrentUser already in progress, skipping...');
+      return;
+    }
+    
+    // If we already have AuthContext data and it's valid, use it to avoid rate limiting
+    if (authUser && authUser._id && authUser.token && retryCount === 0) {
+      console.log('✅ Using valid AuthContext data to avoid API call');
+      setCurrentUser(authUser);
+      NotificationService.setCurrentUser(authUser);
+      setServerStatus('ready');
+      return;
+    }
+    
+    loadCurrentUserRef.current = true;
+    
     try {
       console.log('ChatScreen: Loading current user...');
       console.log('ChatScreen: AuthUser from context:', authUser);
@@ -452,6 +481,7 @@ const ChatScreen = ({ route, navigation }) => {
       }
     } finally {
       console.log('ChatScreen: Loading complete');
+      loadCurrentUserRef.current = false; // Reset flag
     }
   };
 
@@ -462,6 +492,13 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('ChatScreen: Cannot load chats - no current user');
       return;
     }
+    
+    // Prevent duplicate requests
+    if (loadChatsRef.current) {
+      console.log('⚠️ loadChats already in progress, skipping...');
+      return;
+    }
+    loadChatsRef.current = true;
     
     try {
       setIsLoadingChats(true); // เริ่ม loading
@@ -541,17 +578,27 @@ const ChatScreen = ({ route, navigation }) => {
     } catch (error) {
       console.error('ChatScreen: Error loading chats:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
-      setChats([]);
+      
+      if (error.response?.status === 429) {
+        console.log('⚠️ Rate limited while loading chats, keeping existing data');
+        // ไม่ต้องรีเซ็ตแชท เก็บข้อมูลเดิมไว้
+      } else {
+        setChats([]);
+      }
       
       if (error.response?.status === 401) {
         Alert.alert('เซสชันหมดอายุ', 'กรุณาเข้าสู่ระบบใหม่', [
           { text: 'ตกลง', onPress: () => navigation.replace('Login') }
         ]);
+      } else if (error.response?.status === 429) {
+        // ไม่แสดง alert สำหรับ rate limiting
+        console.log('🚫 Skipping rate limit error alert');
       }
     } finally {
       // เสร็จสิ้นการโหลดข้อมูลแชท
       console.log('📊 Loading chats finished');
       setIsLoadingChats(false);
+      loadChatsRef.current = false; // Reset flag
       // ไม่ต้องเริ่ม animation ที่นี่ เพราะเริ่มไว้แล้วตั้งแต่ต้น
     }
   };
@@ -662,6 +709,12 @@ const ChatScreen = ({ route, navigation }) => {
   // ฟังก์ชันโหลดแชทแบบเงียบๆ (ไม่แสดง loading)
   const loadChatsQuietly = async () => {
     if (!currentUser) {
+      return;
+    }
+    
+    // Prevent duplicate requests
+    if (loadChatsRef.current) {
+      console.log('⚠️ loadChatsQuietly already in progress, skipping...');
       return;
     }
     
@@ -934,7 +987,7 @@ const ChatScreen = ({ route, navigation }) => {
             activeOpacity={0.8}
           >
             <Lottie
-              source={require('../../assets/Community V2.json')}
+              source={require('../../assets/Mobile chat dialog application interface.json')}
               autoPlay={true}
               loop={true}
               speed={0.8}

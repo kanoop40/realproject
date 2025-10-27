@@ -343,7 +343,11 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       ) : showProfileContent ? (
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <TouchableOpacity 
@@ -722,6 +726,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 120, // เพิ่มพื้นที่ด้านล่างเพื่อให้เลื่อนได้จนสุด
   },
   profileSection: {
     backgroundColor: COLORS.background,
