@@ -133,6 +133,11 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('🧹 ChatScreen unmounting, clearing joined chatrooms tracking');
       joinedChatroomsRef.current.clear();
       recentlyViewedChatsRef.current.clear(); // เคลียร์ recently viewed ด้วย
+      
+      // เคลียร์ animation flag เมื่อ ChatScreen unmount 
+      // เพื่อให้เล่น animation ใหม่ในครั้งถัดไปที่เปิดแอพ
+      AsyncStorage.removeItem('chatListAnimationShown');
+      console.log('🎬 Cleared animation flag for next session');
     };
   }, []);
 
@@ -143,14 +148,35 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading]);
 
+  // ตรวจสอบ animation flag จาก AsyncStorage เมื่อ component โหลด
+  useEffect(() => {
+    const checkAnimationFlag = async () => {
+      try {
+        const animationShown = await AsyncStorage.getItem('chatListAnimationShown');
+        if (animationShown === 'true') {
+          console.log('🎬 Animation already shown in this session, skipping');
+          setHasShownInitialAnimation(true);
+          setShowChatListAnimation(false);
+          setShowChatListContent(true);
+        }
+      } catch (error) {
+        console.log('❌ Error checking animation flag:', error);
+      }
+    };
+    
+    checkAnimationFlag();
+  }, []);
+
   // Load chats when user is ready และจัดการ animation ครั้งแรก
   useEffect(() => {
     if (!authLoading && currentUser) {
-      // ถ้ายังไม่เคยแสดง animation ให้แสดงครั้งเดียว
+      // ถ้ายังไม่เคยแสดง animation ในเซสชันนี้ ให้แสดงครั้งเดียว
       if (!hasShownInitialAnimation) {
         setShowChatListAnimation(true);
         setShowChatListContent(false);
         setHasShownInitialAnimation(true);
+        // บันทึกว่าได้แสดง animation แล้วในเซสชันนี้
+        AsyncStorage.setItem('chatListAnimationShown', 'true');
       }
       loadChats();
     }
@@ -281,12 +307,9 @@ const ChatScreen = ({ route, navigation }) => {
   useFocusEffect(
     React.useCallback(() => {
       if (!authLoading && currentUser) {
-        console.log('� ChatScreen focused - Force refresh chat list');
-        if (hasShownInitialAnimation) {
-          loadChatsQuietly(); // ใช้ quiet loading แทน
-        } else {
-          loadChats();
-        }
+        console.log('🔄 ChatScreen focused - Force refresh chat list');
+        // เมื่อกลับมาหน้านี้ ให้โหลดข้อมูลแบบเงียบๆ ไม่ต้องแสดง animation
+        loadChatsQuietly();
       }
     }, [authLoading, currentUser])
   );
@@ -559,6 +582,16 @@ const ChatScreen = ({ route, navigation }) => {
     navigation.navigate('Profile');
   };
 
+  // ฟังก์ชันสำหรับรีเซ็ต animation flag (สำหรับ debug)
+  const resetAnimationFlag = async () => {
+    try {
+      await AsyncStorage.removeItem('chatListAnimationShown');
+      console.log('🎬 Animation flag reset - will show animation on next load');
+    } catch (error) {
+      console.log('❌ Error resetting animation flag:', error);
+    }
+  };
+
   // จัดการ dropdown menu
   const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
@@ -622,6 +655,8 @@ const ChatScreen = ({ route, navigation }) => {
     console.log('🎬 Chat list animation finished, showing content');
     setShowChatListAnimation(false);
     setShowChatListContent(true);
+    // อัปเดต AsyncStorage เพื่อบันทึกว่าแสดง animation แล้ว
+    AsyncStorage.setItem('chatListAnimationShown', 'true');
   };
 
   // ฟังก์ชันโหลดแชทแบบเงียบๆ (ไม่แสดง loading)

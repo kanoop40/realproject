@@ -93,19 +93,10 @@ const ChatMessage = ({
         styles.messageContentContainer,
         isMyMessage ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }
       ]}>
-        {/* Image messages - only for actual image display without filenames */}
+        {/* Image messages - แสดงเมื่อ messageType เป็น image */}
         {(() => {
-          // Early exit for pure text messages
-          if (item.messageType === 'text' && !item.image && !item.fileUrl && !item.file?.url && item.content !== 'รูปภาพ') {
-            return false;
-          }
-          
-          const shouldShowImage = (
-            item.image || // แสดงเฉพาะที่มี image data จริงๆ
-            (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.image && !item.file && !item.fileName && !item.fileUrl) // placeholder รูปภาพเก่า
-          ) && !(
-            item.fileName || item.fileUrl // ถ้ามี filename หรือ fileUrl ให้แสดงเป็น FileMessage แทน
-          );
+          // แสดง ImageMessage เมื่อ messageType เป็น image
+          const shouldShowImage = item.messageType === 'image';
           
           return shouldShowImage;
         })() && (
@@ -145,31 +136,20 @@ const ChatMessage = ({
           />
         )}
 
-        {/* File messages (including images with filenames) - check for actual file data first */}
+        {/* File messages - เฉพาะ messageType เป็น file เท่านั้น (ไม่ใช่ image) */}
         {(() => {
+          // ห้ามแสดง FileMessage เมื่อ messageType เป็น image
+          if (item.messageType === 'image') {
+            return false;
+          }
+          
           const shouldShowFile = (
             item.messageType === 'file' || 
-            item.fileName || // แสดงไฟล์ทั้งหมดที่มี fileName รวมถึงรูปภาพ
-            item.fileUrl || // แสดงไฟล์ทั้งหมดที่มี fileUrl
             (item.file && item.file.file_name) || 
             (item.content === 'ไฟล์แนบ' && item.messageType === 'text' && !item.file && !item.fileName) ||
             // รองรับ text message ที่มี pattern [ไฟล์: filename.ext]
             (item.messageType === 'text' && item.content && item.content.includes('[ไฟล์:') && item.content.includes(']'))
-          ) && !(
-            item.image || // ยกเว้นเฉพาะที่มี image data จริงๆ
-            (item.content === 'รูปภาพ' && item.messageType === 'text' && !item.fileName && !item.fileUrl) // ยกเว้น placeholder รูปภาพ
           );
-          
-          // Debug logging for file display (only when there are issues)
-          if ((item.fileName || item.fileUrl || item.messageType === 'file' || item.content === 'ไฟล์แนบ') && !shouldShowFile) {
-            console.log('🔍 File message not showing:', {
-              messageId: item._id,
-              messageType: item.messageType,
-              fileName: item.fileName,
-              fileUrl: item.fileUrl,
-              shouldShowFile
-            });
-          }
           
           return shouldShowFile;
         })() && (

@@ -73,7 +73,7 @@ const FileMessage = ({
         ]}
         onPress={() => {
           if (selectionMode) {
-            // ในโหมดจัดการแชท ให้เลือกข้อความ
+            // ใน selection mode ให้เรียก onMessagePress เพื่อเลือก/ยกเลิกการเลือก
             onMessagePress && onMessagePress(item._id);
           } else {
             // โหมดปกติ ให้แสดงเวลา และเปิดไฟล์

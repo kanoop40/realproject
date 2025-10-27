@@ -19,7 +19,7 @@ import {
   Dimensions,
   RefreshControl
 } from 'react-native';
-import ImageViewer from 'react-native-image-zoom-viewer';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,6 +28,7 @@ import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
+import TypingIndicator from '../../components/TypingIndicator';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import ChatMessage from '../../components_user/ChatMessage';
 import ChatInputBar from '../../components_user/ChatInputBar';
@@ -35,6 +36,7 @@ import ChatHeader from '../../components_user/ChatHeader';
 import LoadOlderMessagesPrivateChat from '../../components_user/LoadOlderMessagesPrivateChat';
 import LoadingOverlay from '../../components/LoadingOverlay';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import FullscreenImageViewer from '../../components/FullscreenImageViewer';
 import { downloadFileWithFallback } from '../../utils/fileDownload';
 
 const PrivateChatScreen = ({ route, navigation }) => {
@@ -56,11 +58,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showChatContent, setShowChatContent] = useState(true);
+  
+  // Typing indicator states
+  const [isTyping, setIsTyping] = useState(false);
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const typingTimeoutRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
-  const [imageModalVisible, setImageModalVisible] = useState(false);
-  const [selectedModalImage, setSelectedModalImage] = useState(null);
+
+  const [fullscreenImageVisible, setFullscreenImageVisible] = useState(false);
+  const [fullscreenImageUri, setFullscreenImageUri] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
@@ -72,6 +80,38 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const flatListRef = React.useRef(null);
+
+  // Typing indicator functions
+  const handleTypingStart = useCallback(() => {
+    if (!isTyping) {
+      setIsTyping(true);
+      // ส่งสถานะ typing ไปยังเซิร์ฟเวอร์ (HTTP polling approach)
+      sendTypingStatus(true);
+    }
+    
+    // Reset timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // หยุด typing หลังจาก 3 วินาที
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      sendTypingStatus(false);
+    }, 3000);
+  }, [isTyping, chatroomId]);
+
+  const sendTypingStatus = useCallback(async (typing) => {
+    try {
+      console.log(`📝 Sending typing status: ${typing ? 'เริ่มพิม' : 'หยุดพิม'}`);
+      await api.post(`/chats/${chatroomId}/typing`, { 
+        isTyping: typing
+      });
+      console.log(`✅ Typing status sent: ${typing}`);
+    } catch (error) {
+      console.log('❌ Failed to send typing status:', error.message);
+    }
+  }, [chatroomId]);
 
   // ข้อมูลแชทจาก route params
   const { 
@@ -136,86 +176,147 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
 
 
-  // Smart Background Sync (ไม่รีเฟรชหน้าจอ)
+  // Monitor selectionMode changes for debugging if needed
+  useEffect(() => {
+    // Force re-render เมื่อ selectionMode เปลี่ยน (เพื่อให้แน่ใจว่า UI อัปเดต)
+    if (selectionMode) {
+      setMessages(prev => [...prev]);
+    }
+  }, [selectionMode, selectedMessages]);
+
+  // Adaptive Background Sync with Rate Limiting Protection
   useEffect(() => {
     let backgroundSync;
+    let currentInterval = 1500; // เริ่มต้น 1.5 วินาที (เร็วขึ้น!)
+    let consecutiveFailures = 0;
+    let isActive = true;
+    
+    const performSync = async () => {
+      if (!isActive) return;
+      
+      try {
+        // เช็คข้อความใหม่และสถานะ typing
+        const [messagesResponse, typingResponse] = await Promise.all([
+          api.get(`/chats/${chatroomId}/messages?page=1&limit=5`),
+          api.get(`/chats/${chatroomId}/typing`).catch(() => ({ data: { data: { users: [] } } }))
+        ]);
+        
+        const latestMessages = messagesResponse.data.messages || [];
+        const typingUsers = typingResponse.data?.data?.users || [];
+        
+        // อัปเดตสถานะ typing ของผู้ใช้อื่น
+        setOtherUserTyping(typingUsers.length > 0);
+        if (typingUsers.length > 0) {
+          console.log(`👀 Users typing: ${typingUsers.map(u => u.firstName || u.username).join(', ')}`);
+        }
+        
+        // Reset failures on success
+        consecutiveFailures = 0;
+        
+        // เช็คข้อความใหม่โดยเปรียบเทียบทุกข้อความจากเซิร์ฟเวอร์
+        console.log('🔍 Checking for new messages...');
+        console.log('📊 Local messages:', messages.length, 'Server messages:', latestMessages.length);
+        
+        // กรองเฉพาะข้อความใหม่ที่ยังไม่มีในระบบท้องถิ่น
+        const newMessages = latestMessages.filter(serverMsg => {
+          const exists = messages.some(localMsg => localMsg._id === serverMsg._id);
+          if (!exists) {
+            console.log('🆕 Found new message:', serverMsg._id, serverMsg.content?.substring(0, 50));
+          }
+          return !exists;
+        });
+        
+        const hasNewMessages = newMessages.length > 0;
+        
+        if (hasNewMessages) {
+          console.log('📨 New messages detected:', newMessages.length, 'messages, increasing sync frequency...');
+          currentInterval = Math.max(1000, currentInterval * 0.7); // เร็วขึ้นเมื่อมีกิจกรรม (1 วินาทีขั้นต่ำ)
+          
+          // Add comprehensive safety checks to new messages too
+          const safeNewMessages = newMessages
+            .filter((msg, index) => {
+              if (!msg.sender && !msg.sender_id && !msg.user_id) {
+                console.warn(`⚠️ Filtering out new message ${index} - no sender info:`, msg);
+                return false;
+              }
+              return true;
+            })
+            .map((msg, index) => {
+              const safeSender = msg.sender ? {
+                ...msg.sender,
+                _id: msg.sender._id || null,
+                firstName: msg.sender.firstName || 'Unknown',
+                lastName: msg.sender.lastName || '',
+                username: msg.sender.username || msg.sender.firstName || 'Unknown'
+              } : {
+                _id: msg.sender_id || msg.user_id || 'unknown',
+                firstName: 'Unknown User',
+                lastName: '',
+                username: 'unknown'
+              };
+              
+              return {
+                ...msg,
+                sender: safeSender,
+                sender_id: msg.sender_id || (msg.sender?._id) || null,
+                user_id: msg.user_id || (msg.sender?._id) || null
+              };
+            });
+          
+          // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช (Normal FlatList)
+          setMessages(prev => {
+            const updated = [...prev, ...safeNewMessages];
+            console.log('✅ Added new messages to chat. Total messages:', updated.length);
+            return updated;
+          });
+          
+          // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด (ไม่รบกวนเมื่อกำลังดูข้อความเก่า)
+          if (!showScrollToBottom) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 200);
+          }
+        } else {
+          // ไม่มีข้อความใหม่ - ช้าลงแต่ไม่มาก
+          console.log('😴 No new messages found, slowing down sync...');
+          currentInterval = Math.min(4000, currentInterval * 1.15); // ช้าลงน้อยกว่าเดิม (4 วินาทีสูงสุด)
+        }
+        
+        console.log(`⏱️ Next sync in ${currentInterval/1000}s`);
+        
+      } catch (error) {
+        consecutiveFailures++;
+        
+        if (error.response?.status === 429) {
+          // Rate limiting - exponential backoff
+          currentInterval = Math.min(30000, currentInterval * 2);
+          console.log(`⚠️ Rate limited - backing off to ${currentInterval/1000}s interval`);
+        } else {
+          console.log('🔄 Background sync failed:', error.message);
+        }
+        
+        // หยุดชั่วคราวถ้าล้มเหลวติดต่อกัน
+        if (consecutiveFailures >= 3) {
+          currentInterval = Math.min(15000, currentInterval * 1.5);
+          console.log('🚫 Multiple sync failures - reducing frequency');
+        }
+      }
+      
+      // Schedule next sync with adaptive interval
+      if (isActive) {
+        backgroundSync = setTimeout(performSync, currentInterval);
+      }
+    };
     
     if (currentUser && chatroomId) {
-      console.log('� Starting background sync...');
-      
-      backgroundSync = setInterval(async () => {
-        try {
-          // เช็คข้อความใหม่โดยการโหลดข้อความล่าสุด
-          const response = await api.get(`/chats/${chatroomId}/messages?page=1&limit=5`);
-          const latestMessages = response.data.messages || [];
-          
-          // เช็คว่ามีข้อความใหม่หรือไม่
-          const currentLatestId = messages[messages.length - 1]?._id;
-          const serverLatestId = latestMessages[0]?._id;
-          
-          const hasNewMessages = latestMessages.length > 0 && 
-            currentLatestId !== serverLatestId &&
-            !messages.some(msg => msg._id === serverLatestId);
-          
-          if (hasNewMessages) {
-            console.log('📨 New messages detected, adding to existing list...');
-            
-            // กรองเฉพาะข้อความใหม่ที่ยังไม่มีในระบบ
-            const newMessages = latestMessages.filter(serverMsg => 
-              !messages.some(localMsg => localMsg._id === serverMsg._id)
-            );
-            
-            // Add comprehensive safety checks to new messages too
-            const safeNewMessages = newMessages
-              .filter((msg, index) => {
-                if (!msg.sender && !msg.sender_id && !msg.user_id) {
-                  console.warn(`⚠️ Filtering out new message ${index} - no sender info:`, msg);
-                  return false;
-                }
-                return true;
-              })
-              .map((msg, index) => {
-                const safeSender = msg.sender ? {
-                  ...msg.sender,
-                  _id: msg.sender._id || null,
-                  firstName: msg.sender.firstName || 'Unknown',
-                  lastName: msg.sender.lastName || '',
-                  username: msg.sender.username || msg.sender.firstName || 'Unknown'
-                } : {
-                  _id: msg.sender_id || msg.user_id || 'unknown',
-                  firstName: 'Unknown User',
-                  lastName: '',
-                  username: 'unknown'
-                };
-                
-                return {
-                  ...msg,
-                  sender: safeSender,
-                  sender_id: msg.sender_id || (msg.sender?._id) || null,
-                  user_id: msg.user_id || (msg.sender?._id) || null
-                };
-              });
-            
-            // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช (Normal FlatList)
-            setMessages(prev => [...prev, ...safeNewMessages]);
-            
-            // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด (ไม่รบกวนเมื่อกำลังดูข้อความเก่า)
-            if (!showScrollToBottom) {
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, 200);
-            }
-          }
-        } catch (error) {
-          console.log('🔄 Background sync failed:', error.message);
-          // ไม่ต้องแสดง error เพราะ background sync ล้มเหลวเป็นเรื่องปกติ
-        }
-      }, 5000); // เช็คทุก 5 วินาที แต่ไม่รีเฟรช
+      console.log('🔄 Starting adaptive background sync...');
+      performSync(); // เริ่มทันที
     }
 
     return () => {
+      isActive = false;
       if (backgroundSync) {
-        clearInterval(backgroundSync);
+        clearTimeout(backgroundSync);
       }
     };
   }, [currentUser, chatroomId, messages.length]);
@@ -242,28 +343,52 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
   // Socket event handlers for real-time chat
   const handleNewMessage = useCallback((newMessage) => {
-    console.log('📨 New message received via socket:', newMessage);
+    console.log('📨 New message received via socket:', {
+      messageId: newMessage._id || newMessage.id,
+      chatroomId: newMessage.chatroomId || newMessage.chatroom,
+      currentChatroomId: chatroomId,
+      sender: newMessage.sender?.firstName || newMessage.senderName,
+      content: newMessage.content?.substring(0, 50)
+    });
     
     // ตรวจสอบว่าข้อความเป็นของ chatroom นี้
-    if (newMessage.chatroomId === chatroomId || newMessage.chatroom === chatroomId) {
+    const messageChatroomId = newMessage.chatroomId || newMessage.chatroom || newMessage.room;
+    if (messageChatroomId === chatroomId) {
       // ตรวจสอบว่าข้อความไม่ซ้ำกับที่มีอยู่แล้ว
       setMessages(prev => {
-        const exists = prev.some(msg => msg._id === newMessage._id);
+        const messageId = newMessage._id || newMessage.id;
+        const exists = prev.some(msg => msg._id === messageId);
         if (exists) {
           console.log('⚠️ Message already exists, skipping');
           return prev;
         }
         
-        console.log('✅ Adding new message to chat');
-        const updatedMessages = [...prev, {
+        // ตรวจสอบว่าเป็นข้อความของตัวเองหรือไม่ (เพื่อไม่ให้ duplicate)
+        const isMyMessage = (newMessage.sender?._id || newMessage.sender_id) === currentUser?._id;
+        if (isMyMessage) {
+          console.log('⚠️ Skipping my own message from socket to avoid duplicate');
+          return prev;
+        }
+        
+        console.log('✅ Adding new message from socket to chat');
+        
+        // สร้างข้อความที่ปลอดภัย
+        const safeMessage = {
           ...newMessage,
-          _id: newMessage._id || newMessage.id,
+          _id: messageId,
           sender: newMessage.sender || { 
-            _id: newMessage.sender_id,
-            firstName: newMessage.senderName || 'Unknown'
+            _id: newMessage.sender_id || 'unknown',
+            firstName: newMessage.senderName || 'Unknown User',
+            lastName: '',
+            username: newMessage.senderName || 'unknown'
           },
-          timestamp: newMessage.timestamp || newMessage.createdAt || new Date().toISOString()
-        }];
+          timestamp: newMessage.timestamp || newMessage.createdAt || new Date().toISOString(),
+          messageType: newMessage.messageType || 'text',
+          // แก้ไขข้อมูลรูปภาพ
+          image: newMessage.messageType === 'image' ? (newMessage.image || newMessage.fileUrl) : undefined
+        };
+        
+        const updatedMessages = [...prev, safeMessage];
         
         // Auto scroll to new message
         setTimeout(() => {
@@ -272,8 +397,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         return updatedMessages;
       });
+    } else {
+      console.log('⚠️ Message not for this chatroom:', {
+        messageChatroomId,
+        currentChatroomId: chatroomId
+      });
     }
-  }, [chatroomId]);
+  }, [chatroomId, currentUser]);
 
   const handleMessageDeleted = useCallback((deletedData) => {
     console.log('🗑️ Message deleted via socket:', deletedData);
@@ -287,32 +417,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
     });
   }, []);
 
-  // Setup socket listeners
+  // HTTP-only mode: No socket listeners needed
   useEffect(() => {
-    if (!socket || !chatroomId) return;
+    if (!chatroomId) return;
     
-    console.log('🔌 Setting up socket listeners for private chat:', chatroomId);
+    console.log('� HTTP-only mode: Using background sync instead of socket listeners for chat:', chatroomId);
+    console.log('🔄 Real-time updates provided by 1-second background polling');
     
-    // Join private chatroom
-    joinChatroom(chatroomId);
-    
-    // Listen for real-time events
-    socket.on('newMessage', handleNewMessage);
-    socket.on('privateMessage', handleNewMessage); // Some backends use different event names
-    socket.on('message_deleted', handleMessageDeleted);
-    socket.on('privateMessageDeleted', handleMessageDeleted);
-    
-    console.log('🔌 Socket connection status:', socket.connected ? 'connected' : 'connecting...');
-    console.log('🔌 Socket ID:', socket.id || 'pending');
-    
+    // No socket setup needed - background sync handles message updates
     return () => {
-      console.log('🔌 Cleaning up socket listeners for private chat');
-      socket.off('newMessage', handleNewMessage);
-      socket.off('privateMessage', handleNewMessage);
-      socket.off('message_deleted', handleMessageDeleted);
-      socket.off('privateMessageDeleted', handleMessageDeleted);
+      console.log('� HTTP-only mode: No socket cleanup needed');
     };
-  }, [socket, chatroomId, handleNewMessage, handleMessageDeleted, joinChatroom]);
+  }, [chatroomId]);
 
   const loadMessages = useCallback(async (page = 1, refresh = false) => {
     if (!currentUser || !chatroomId || (page === 1 && isLoading)) return;
@@ -361,12 +477,22 @@ const PrivateChatScreen = ({ route, navigation }) => {
               username: 'unknown'
             };
             
-            const processedMsg = {
+            // แก้ไขข้อมูลรูปภาพที่ไม่มี image field
+            let processedMsg = {
               ...msg,
               sender: safeSender, // Always provide a valid sender object
               sender_id: msg.sender_id || (msg.sender?._id) || null,
               user_id: msg.user_id || (msg.sender?._id) || null
             };
+            
+            // แก้ไข image messages ที่ไม่มี image field
+            if (processedMsg.messageType === 'image' && !processedMsg.image) {
+              const imageUrl = processedMsg.fileUrl || processedMsg.file_url || (processedMsg.file?.url);
+              if (imageUrl) {
+                processedMsg.image = imageUrl;
+                console.log('🔧 Fixed image field for old message:', processedMsg._id, 'URL:', imageUrl);
+              }
+            }
             
             // Debug log removed for performance
             
@@ -483,12 +609,24 @@ const PrivateChatScreen = ({ route, navigation }) => {
               username: 'unknown'
             };
             
-            return {
+            // แก้ไขข้อมูลรูปภาพที่ไม่มี image field
+            let processedMsg = {
               ...msg,
               sender: safeSender,
               sender_id: msg.sender_id || (msg.sender?._id) || null,
               user_id: msg.user_id || (msg.sender?._id) || null
             };
+            
+            // แก้ไข image messages ที่ไม่มี image field
+            if (processedMsg.messageType === 'image' && !processedMsg.image) {
+              const imageUrl = processedMsg.fileUrl || processedMsg.file_url || (processedMsg.file?.url);
+              if (imageUrl) {
+                processedMsg.image = imageUrl;
+                console.log('🔧 Fixed image field for old message:', processedMsg._id, 'URL:', imageUrl);
+              }
+            }
+            
+            return processedMsg;
           });
         
         // Prevent duplicate messages
@@ -727,18 +865,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       console.log('✅ Message sent successfully:', response.data._id);
       
-      // Emit to socket for real-time updates
-      if (socket && socket.connected) {
-        const socketData = {
-          chatroomId: chatroomId,
-          message: actualMessageData,
-          sender: currentUser,
-          timestamp: new Date().toISOString()
-        };
-        
-        console.log('📡 Emitting message to socket for real-time update');
-        socket.emit('privateMessage', socketData);
-      }
+      // HTTP-only approach: Skip immediate check to avoid rate limiting
+      console.log('📡 HTTP-only mode: Message sent via API, adaptive sync will handle delivery confirmation');
       
     } catch (error) {
       console.error('❌ Error sending message:', error);
@@ -817,115 +945,168 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const sendImageDirectly = async (imageAsset) => {
-    if (!chatroomId || isSending) return;
+    if (!chatroomId || isSending || !currentUser) return;
     
     setIsSending(true);
-    const tempId = 'temp_' + Date.now() + '_' + Math.random() + '_' + currentUser._id;
+    const tempId = `temp_image_${Date.now()}_${Math.random()}_${currentUser._id}`;
     
     try {
-    const optimisticMessage = {
-      _id: tempId,
-      content: 'รูปภาพ',
-      sender: currentUser,
-      timestamp: new Date().toISOString(),
-      messageType: 'image',
-      image: imageAsset.uri, // เพิ่ม local URI สำหรับ optimistic display
-      fileUrl: imageAsset.uri, // เพิ่ม fileUrl สำหรับ fallback
-      user_id: currentUser,
-      isOptimistic: true
-    };      setMessages(prev => {
+      console.log('📸 Starting image upload:', imageAsset.uri);
+
+      // สร้าง optimistic message
+      const optimisticMessage = {
+        _id: tempId,
+        content: 'รูปภาพ',
+        sender: currentUser,
+        timestamp: new Date().toISOString(),
+        messageType: 'image',
+        fileUrl: imageAsset.uri, // ใช้ local URI ก่อน
+        image: imageAsset.uri, // เพิ่ม image field สำหรับ ImageMessage
+        fileName: imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`,
+        fileSize: imageAsset.fileSize || 0,
+        mimeType: imageAsset.mimeType || imageAsset.type || 'image/jpeg',
+        user_id: currentUser._id,
+        isTemporary: true,
+        isOptimistic: true // เพิ่ม flag สำหรับ ImageMessage
+      };
+
+      // เพิ่ม optimistic message และ scroll
+      setMessages(prev => {
         const newMessages = [...prev, optimisticMessage];
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
-        }, 150);
+        }, 100);
         return newMessages;
       });
       
-      const fileName = imageAsset.fileName || imageAsset.filename || ('image_' + Date.now() + '.jpg');
+      // เตรียมข้อมูลไฟล์
+      const fileName = imageAsset.fileName || imageAsset.filename || `image_${Date.now()}.jpg`;
       
       const fileObject = {
         uri: imageAsset.uri,
+        type: imageAsset.mimeType || imageAsset.type || 'image/jpeg', 
         name: fileName,
-        type: 'image/jpeg'
       };
       
-      const base64 = await FileSystem.readAsStringAsync(fileObject.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      console.log('📁 File object:', fileObject);
+      
+      // แปลงเป็น base64
+      console.log('🔄 About to read image URI:', fileObject.uri);
+      
+      // Check if file exists first
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(fileObject.uri);
+        console.log('📋 Image file info:', fileInfo);
+        
+        if (!fileInfo.exists) {
+          throw new Error(`Image file does not exist at URI: ${fileObject.uri}`);
+        }
+        
+        if (fileInfo.size === 0) {
+          throw new Error(`Image file is empty (0 bytes): ${fileObject.uri}`);
+        }
+      } catch (infoError) {
+        console.error('❌ Error getting image file info:', infoError);
+        throw new Error(`Cannot access image file: ${infoError.message}`);
+      }
+      
+      let base64;
+      try {
+        base64 = await FileSystem.readAsStringAsync(fileObject.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
 
+        console.log('🔤 Base64 conversion completed, length:', base64.length);
+        
+        if (!base64 || base64.length === 0) {
+          throw new Error('Base64 encoding returned empty string');
+        }
+      } catch (fileError) {
+        console.error('❌ Error reading image as base64:', fileError);
+        throw new Error(`Failed to read image: ${fileError.message}`);
+      }
+
+      // ส่งไปยัง server (ใช้รูปแบบเดียวกับ GroupChat)
       const response = await api.post(`/chats/${chatroomId}/messages`, {
         content: 'รูปภาพ',
-        sender_id: currentUser._id,
         messageType: 'image',
-        fileName: fileName,
         fileData: {
-          name: fileName,
-          type: 'image/jpeg',
-          base64: base64
-        },
-        mimeType: 'image/jpeg'
+          base64: base64,
+          name: fileObject.name,
+          type: fileObject.type,
+        }
       });
 
-      console.log('📥 Server response for image:', response.data);
-      console.log('🔍 Full response structure:', {
-        message: response.data.message,
-        fileUrl: response.data.fileUrl || response.data.message?.fileUrl,
-        image: response.data.image || response.data.message?.image,
-        file: response.data.file || response.data.message?.file
-      });
+      // อัปเดตข้อความด้วยข้อมูลจาก server
 
       setMessages(prev => {
-        const updatedMessages = prev.map(msg => {
-          if (msg._id === tempId) {
-            const serverMessage = response.data.message || response.data;
-            console.log('🖼️ Processing server image message:', {
-              serverMessage,
-              fileUrl: serverMessage.fileUrl,
-              image: serverMessage.image,
-              file: serverMessage.file
-            });
-            
-            return {
-              ...serverMessage,
-              _id: serverMessage._id,
-              content: serverMessage.content,
-              sender: serverMessage.sender || currentUser,
-              timestamp: serverMessage.timestamp || serverMessage.time, // Backend ใช้ field 'time'
-              messageType: serverMessage.messageType || 'image',
-              fileName: serverMessage.fileName,
-              fileSize: serverMessage.fileSize,
-              mimeType: serverMessage.mimeType || 'image/jpeg',
-              fileUrl: serverMessage.fileUrl, // URL จาก Cloudinary
-              image: serverMessage.fileUrl || serverMessage.image, // ใช้ fileUrl เป็น image
-              file: serverMessage.file || {
-                name: serverMessage.fileName,
-                size: serverMessage.fileSize,
-                type: serverMessage.mimeType || 'image/jpeg',
-                url: serverMessage.fileUrl
-              },
-              user_id: serverMessage.user_id || serverMessage.sender,
-              isOptimistic: false
-            };
-          }
-          return msg;
-        });        
+        console.log('📋 Raw server response:', response.data);
+        
+        // ตรวจสอบว่า response เป็น object หรือ string
+        if (typeof response.data === 'string') {
+          console.log('⚠️ Server returned string instead of message object, keeping optimistic message');
+          return prev.map(msg => 
+            msg._id === tempId 
+              ? { ...msg, isTemporary: false, sent: true }
+              : msg
+          );
+        }
+        
+        const filteredMessages = prev.filter(msg => msg._id !== tempId);
+        
+        // ใช้ข้อมูลจาก response.data หรือ response.data.message
+        const serverMessage = response.data.message || response.data;
+        console.log('� Server message data:', serverMessage);
+        
+        if (!serverMessage || !serverMessage._id) {
+          console.log('⚠️ Invalid server message data, keeping optimistic message');
+          return prev.map(msg => 
+            msg._id === tempId 
+              ? { ...msg, isTemporary: false, sent: true }
+              : msg
+          );
+        }
+        
+        // เพิ่มข้อความใหม่จาก server (ใช้ messageType เดิมจากเซิร์ฟเวอร์)
+        console.log('🔄 PrivateChat using server messageType:', {
+          fileName: serverMessage.fileName,
+          fileUrl: serverMessage.fileUrl,
+          messageType: serverMessage.messageType
+        });
+        
+        const updatedMessages = [...filteredMessages, {
+          ...serverMessage,
+          messageType: serverMessage.messageType, // ใช้ messageType เดิมจากเซิร์ฟเวอร์
+          isTemporary: false
+        }];
+        
+        console.log('📋 Updated messages count:', updatedMessages.length);
+        
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        
         return updatedMessages;
       });
+
+      // HTTP-only approach: Skip immediate check to avoid rate limiting  
+      console.log('📡 HTTP-only mode: Image sent via API, adaptive sync will handle delivery confirmation');
 
       console.log('✅ Image sent successfully');
     } catch (error) {
       console.error('❌ Error sending image:', error);
+      console.error('Error details:', error.response?.data || error.message);
       
+      // ลบ optimistic message เมื่อเกิด error
       setMessages(prev => prev.filter(msg => msg._id !== tempId));
       
       let errorMessage = 'ไม่สามารถส่งรูปภาพได้';
-      
-      if (error.response?.status === 500) {
-        errorMessage = 'เซิร์ฟเวอร์มีปัญหา กรุณาเริ่มเซิร์ฟเวอร์ backend';
-      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
-        errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์ backend ทำงานอยู่';
-      } else {
-        errorMessage = 'เกิดข้อผิดพลาด: ' + (error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ');
+      if (error.response?.status === 413) {
+        errorMessage = 'รูปภาพใหญ่เกินไป กรุณาเลือกรูปภาพที่เล็กกว่า';
+      } else if (error.response?.status === 400) {
+        errorMessage = 'ข้อมูลรูปภาพไม่ถูกต้อง';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
       }
       
       Alert.alert('ข้อผิดพลาด', errorMessage);
@@ -1222,6 +1403,22 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     // Debug removed for performance
     
+    // Debug message types
+    if (item.messageType === 'image') {
+      console.log('🖼️ Rendering IMAGE message:', {
+        id: item._id,
+        hasImage: !!item.image,
+        hasFileUrl: !!item.fileUrl,
+        fileName: item.fileName
+      });
+    } else if (item.messageType === 'file') {
+      console.log('📁 Rendering FILE message:', {
+        id: item._id,
+        fileName: item.fileName,
+        content: item.content
+      });
+    }
+    
     return (
       <ChatMessage
         item={item}
@@ -1254,7 +1451,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         formatFileSize={formatFileSize}
       />
     );
-  }, [currentUser, selectedMessages, showTimeForMessages]); // Added showTimeForMessages back
+  }, [currentUser, selectedMessages, showTimeForMessages, selectionMode]); // Added selectionMode for proper re-render
 
   // Utility functions for ChatMessage
   const formatDate = (timestamp) => {
@@ -1362,20 +1559,28 @@ const PrivateChatScreen = ({ route, navigation }) => {
   };
 
   const openImageModal = (imageUri) => {
-    setSelectedModalImage(imageUri);
-    setImageModalVisible(true);
+    console.log('🖼️ Opening fullscreen image viewer:', imageUri);
+    setFullscreenImageUri(imageUri);
+    setFullscreenImageVisible(true);
+  };
+
+  const closeFullscreenImage = () => {
+    setFullscreenImageVisible(false);
+    setTimeout(() => {
+      setFullscreenImageUri(null);
+    }, 300); // หน่วงเวลาให้ animation เสร็จก่อน
   };
 
   // ฟังก์ชันดาวน์โหลดรูปภาพจาก Modal
   const downloadImageFromModal = async () => {
-    if (!selectedModalImage) {
+    if (!fullscreenImageUri) {
       Alert.alert('ข้อผิดพลาด', 'ไม่พบรูปภาพที่จะดาวน์โหลด');
       return;
     }
 
     try {
       console.log('📥 Starting image download from modal...');
-      console.log('🖼️ Image URL:', selectedModalImage);
+      console.log('🖼️ Image URL:', fullscreenImageUri);
       
       // ตรวจสอบสิทธิ์การเข้าถึงไฟล์ แบบมี fallback
       let permissionGranted = false;
@@ -1395,7 +1600,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         // Fall back to download and share
         try {
           const tempUri = `${FileSystem.documentDirectory}temp_image_${Date.now()}.jpg`;
-          const downloadResult = await FileSystem.downloadAsync(selectedModalImage, tempUri, {});
+          const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, {});
           
           if (downloadResult.status === 200) {
             const canShare = await Sharing.isAvailableAsync();
@@ -1421,16 +1626,16 @@ const PrivateChatScreen = ({ route, navigation }) => {
       
       // ถ้ามี permission แล้ว ให้ทำต่อตามเดิม
       // ปิด modal ก่อน
-      setImageModalVisible(false);
+      setFullscreenImageVisible(false);
 
       const timestamp = new Date().getTime();
       const fileName = `image_${timestamp}.jpg`;
 
       // สำหรับ Cloudinary URL ลองใช้วิธีตรง
-      if (selectedModalImage.includes('cloudinary.com')) {
+      if (fullscreenImageUri.includes('cloudinary.com')) {
         try {
           console.log('🌤️ Trying direct Cloudinary save...');
-          const asset = await MediaLibrary.saveToLibraryAsync(selectedModalImage);
+          const asset = await MediaLibrary.saveToLibraryAsync(fullscreenImageUri);
           console.log('✅ Direct save successful:', asset);
           setShowSuccessAnimation(true);
           return;
@@ -1442,14 +1647,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       // วิธี fallback: ดาวน์โหลดไฟล์ชั่วคราว
       const token = await AsyncStorage.getItem('userToken'); // Fixed: should be 'userToken' not 'token'
-      const headers = selectedModalImage.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
+      const headers = fullscreenImageUri.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
       
       const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
       
       console.log('📍 Temp file path:', tempUri);
       console.log('🔄 Starting download with headers:', headers);
       
-      const downloadResult = await FileSystem.downloadAsync(selectedModalImage, tempUri, {
+      const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, {
         headers: headers
       });
 
@@ -1479,7 +1684,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       console.error('❌ Error downloading image from modal:', error);
       console.error('Error details:', {
         message: error.message,
-        selectedModalImage: selectedModalImage,
+        fullscreenImageUri: fullscreenImageUri,
         error: error.message
       });
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดรูปภาพได้: ' + (error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'));
@@ -1839,7 +2044,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 messagesCount={messages.filter(msg => msg.type !== 'date_separator').length}
               />
             )}
-            ListFooterComponent={() => null}
+            ListFooterComponent={() => (
+              <TypingIndicator 
+                isVisible={otherUserTyping} 
+                userName={recipientName || 'Someone'} 
+              />
+            )}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -1872,6 +2082,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
             onPickFile={pickFile}
             onRemoveFile={() => setSelectedFile(null)}
             getFileIcon={getFileIcon}
+            onTypingStart={handleTypingStart}
           />
 
           {/* Attachment Menu */}
@@ -1916,45 +2127,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
         </KeyboardAvoidingView>
       )}
       
-      {/* Image Zoom Modal */}
-      <Modal
-        visible={imageModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setImageModalVisible(false)}
-      >
-        <ImageViewer
-          imageUrls={selectedModalImage ? [{ url: selectedModalImage }] : []}
-          index={0}
-          onCancel={() => setImageModalVisible(false)}
-          enableSwipeDown={true}
-          renderHeader={() => (
-            <View style={styles.modalHeader}>
-              <TouchableOpacity
-                style={styles.modalDownloadButton}
-                onPress={downloadImageFromModal}
-              >
-                <Text style={styles.modalDownloadText}>📥 บันทึกรูปภาพ</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setImageModalVisible(false)}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          renderFooter={() => null}
-          backgroundColor="rgba(0,0,0,0.9)"
-          enablePreload={true}
-          saveToLocalByLongPress={false}
-        />
-      </Modal>
+
       
       {/* Success Tick Animation */}
       <SuccessTickAnimation
         visible={showSuccessAnimation}
         onComplete={handleSuccessAnimationComplete}
+      />
+
+      {/* Fullscreen Image Viewer */}
+      <FullscreenImageViewer
+        visible={fullscreenImageVisible}
+        imageUri={fullscreenImageUri}
+        onClose={closeFullscreenImage}
+        onDownload={downloadImageFromModal}
       />
     </View>
   );
@@ -2123,41 +2309,7 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center'
   },
-  // Modal Header Styles
-  modalHeader: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    zIndex: 999
-  },
-  modalDownloadButton: {
-    backgroundColor: 'rgba(0, 122, 255, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  modalDownloadText: {
-    color: 'white', 
-    fontSize: 16, 
-    fontWeight: '600'
-  },
-  modalCloseButton: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 8
-  },
-  modalCloseText: {
-    color: 'white', 
-    fontSize: 18, 
-    fontWeight: 'bold'
-  },
+
   // Selection Banner Styles
   selectionBanner: {
     backgroundColor: '#FF3B30',

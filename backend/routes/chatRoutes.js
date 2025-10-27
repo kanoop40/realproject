@@ -16,7 +16,9 @@ const {
     getUnreadCount,
     markAllAsRead,
     getChatParticipants,
-    checkNewMessages
+    checkNewMessages,
+    setTypingStatus,
+    getTypingUsers
 } = require('../controllers/newChatController');
 const { protect } = require('../Middleware/authMiddleware');
 
@@ -243,6 +245,16 @@ router.get('/:id/read-counts', protect, getMessageReadCounts);
 // @desc    Mark all messages in chat as read
 // @access  Private
 router.post('/:id/read-all', markAllAsRead);
+
+// @route   POST /api/chats/:id/typing
+// @desc    Set typing status for user in chat
+// @access  Private
+router.post('/:id/typing', protect, setTypingStatus);
+
+// @route   GET /api/chats/:id/typing
+// @desc    Get typing users in chat
+// @access  Private
+router.get('/:id/typing', protect, getTypingUsers);
 
 // @route   DELETE /api/chats/:id
 // @desc    Delete chatroom

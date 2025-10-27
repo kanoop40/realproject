@@ -1506,6 +1506,113 @@ const hideChatrooms = asyncHandler(async (req, res) => {
     }
 });
 
+// In-memory storage สำหรับ typing status (สำหรับ demo - ใช้ Redis ใน production)
+const typingStatus = new Map();
+
+// @desc    Set typing status for user in chat
+// @route   POST /api/chats/:id/typing
+// @access  Private
+const setTypingStatus = asyncHandler(async (req, res) => {
+    try {
+        const chatId = req.params.id;
+        const { isTyping } = req.body;
+        const userId = req.user._id.toString();
+        const username = req.user.firstName || req.user.username;
+
+        console.log(`📝 Typing status: User ${username} (${userId}) ${isTyping ? 'started' : 'stopped'} typing in chat ${chatId}`);
+
+        const chatKey = `chat_${chatId}`;
+        
+        if (!typingStatus.has(chatKey)) {
+            typingStatus.set(chatKey, new Map());
+        }
+        
+        const chatTyping = typingStatus.get(chatKey);
+        
+        if (isTyping) {
+            // เพิ่ม user ที่กำลังพิม พร้อม timestamp
+            chatTyping.set(userId, {
+                _id: userId,
+                userId: userId,
+                username: username,
+                firstName: req.user.firstName,
+                timestamp: Date.now()
+            });
+        } else {
+            // ลบ user ที่หยุดพิม
+            chatTyping.delete(userId);
+        }
+
+        // ลบ typing status ที่เก่าเกิน 5 วินาที
+        const now = Date.now();
+        for (const [uid, data] of chatTyping.entries()) {
+            if (now - data.timestamp > 5000) {
+                chatTyping.delete(uid);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: isTyping ? 'Typing status set' : 'Typing status removed'
+        });
+
+    } catch (error) {
+        console.error('❌ Set typing status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to set typing status'
+        });
+    }
+});
+
+// @desc    Get typing users in chat
+// @route   GET /api/chats/:id/typing
+// @access  Private
+const getTypingUsers = asyncHandler(async (req, res) => {
+    try {
+        const chatId = req.params.id;
+        const currentUserId = req.user._id.toString();
+        
+        const chatKey = `chat_${chatId}`;
+        const chatTyping = typingStatus.get(chatKey) || new Map();
+        
+        // ลบ typing status ที่เก่าเกิน 5 วินาที
+        const now = Date.now();
+        for (const [uid, data] of chatTyping.entries()) {
+            if (now - data.timestamp > 5000) {
+                chatTyping.delete(uid);
+            }
+        }
+        
+        // ดึงรายชื่อผู้กำลังพิม (ยกเว้นตัวเอง)
+        const users = Array.from(chatTyping.values())
+            .filter(user => user.userId !== currentUserId)
+            .map(user => ({
+                _id: user._id,
+                userId: user.userId,
+                username: user.username,
+                firstName: user.firstName
+            }));
+
+        console.log(`👀 Getting typing users for chat ${chatId}: ${users.length} users typing`);
+
+        res.json({
+            success: true,
+            data: {
+                users: users,
+                count: users.length
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Get typing users error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get typing users'
+        });
+    }
+});
+
 module.exports = {
     getChats,
     getMessages,
@@ -1522,5 +1629,7 @@ module.exports = {
     getUnreadCount,
     markAllAsRead,
     getChatParticipants,
-    checkNewMessages
+    checkNewMessages,
+    setTypingStatus,
+    getTypingUsers
 };

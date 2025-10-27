@@ -28,16 +28,15 @@ const ImageMessage = ({
   
   // ฟังก์ชันสำหรับสร้าง URI รูปภาพ
   const getImageUri = (item) => {
-    // Debug log for image URI resolution (only when needed)
-    if (item.messageType !== 'image' || !item.fileUrl) {
-      console.log('🖼️ ImageMessage resolving URI for non-standard image:', {
-        messageId: item._id,
-        messageType: item.messageType,
-        fileUrl: item.fileUrl,
-        image: item.image,
-        file: item.file
-      });
-    }
+    console.log('🖼️ getImageUri called for:', {
+      messageId: item._id,
+      messageType: item.messageType,
+      fileUrl: item.fileUrl,
+      image: item.image,
+      file: item.file,
+      isTemporary: item.isTemporary,
+      isOptimistic: item.isOptimistic
+    });
     
     // ลำดับความสำคัญในการหา URI รูปภาพ
     
@@ -89,6 +88,7 @@ const ImageMessage = ({
     }
     
     // 7. Fallback
+    console.log('⚠️ No valid image URI found for:', item._id);
     return null;
   };
   
@@ -115,7 +115,7 @@ const ImageMessage = ({
         ]}
         onPress={() => {
           if (selectionMode) {
-            // ในโหมดจัดการแชท ให้เลือกข้อความแทนการเปิดรูป
+            // ใน selection mode ให้เรียก onMessagePress เพื่อเลือก/ยกเลิกการเลือก
             onMessagePress && onMessagePress(item._id);
           } else {
             // โหมดปกติ แสดงเวลา และเปิดรูป
@@ -131,8 +131,8 @@ const ImageMessage = ({
         <View style={styles.imageContainer}>
           {/* Check if we have actual image data */}
           {(() => {
-            const hasImageData = (item.image?.file_path || item.image?.uri || item.file?.url || item.file?.file_path || item.fileUrl || item.image);
             const resolvedUri = getImageUri(item);
+            const hasImageData = !!resolvedUri;
             
             // Only log if there are issues
             if (!hasImageData || !resolvedUri) {
@@ -140,7 +140,10 @@ const ImageMessage = ({
                 messageId: item._id,
                 hasImageData,
                 resolvedUri,
-                messageType: item.messageType
+                messageType: item.messageType,
+                fileUrl: item.fileUrl,
+                image: item.image,
+                file: item.file
               });
             }
             

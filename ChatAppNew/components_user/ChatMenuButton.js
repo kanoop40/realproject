@@ -35,7 +35,9 @@ const ChatMenuButton = ({
 
   const handleMenuOption = (action) => {
     closeMenu();
-    setTimeout(action, 200);
+    setTimeout(() => {
+      action();
+    }, 200);
   };
 
   return (
@@ -77,7 +79,14 @@ const ChatMenuButton = ({
           >
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => handleMenuOption(onManageMessages || onManageChat)}
+              onPress={() => {
+                const action = onManageMessages || onManageChat;
+                if (action) {
+                  handleMenuOption(action);
+                } else {
+                  console.error('❌ No action provided to ChatMenuButton');
+                }
+              }}
             >
               <Text style={styles.menuItemIcon}>📝</Text>
               <Text style={styles.menuItemText}>จัดการข้อความ</Text>

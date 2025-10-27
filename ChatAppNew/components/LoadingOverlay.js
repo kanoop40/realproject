@@ -5,7 +5,7 @@ import LottieView from 'lottie-react-native';
 const LoadingOverlay = ({ 
   visible = false, 
   message = 'กำลังโหลด...', 
-  animationSize = 100,
+  animationSize = 300,
   backgroundColor = 'rgba(255, 255, 255, 1)'
 }) => {
   if (!visible) return null;
@@ -30,7 +30,7 @@ const LoadingOverlay = ({
         minWidth: 150
       }}>
         <LottieView
-          source={require('../assets/Loading.json')}
+          source={require('../assets/loading.json')}
           autoPlay
           loop
           style={{ width: animationSize, height: animationSize }}

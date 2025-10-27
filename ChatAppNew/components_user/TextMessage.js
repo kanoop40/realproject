@@ -43,7 +43,14 @@ const TextMessage = ({
           (item.image || (item.file && /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file.file_name))) && styles.messageWithMedia,
           selectedMessages.includes(item._id) && styles.selectedMessage
         ]}
-        onPress={() => onMessagePress && onMessagePress(item._id)}
+        onPress={() => {
+          if (selectionMode) {
+            // ใน selection mode ให้เรียก onMessagePress เพื่อเลือก/ยกเลิกการเลือก
+            onMessagePress && onMessagePress(item._id);
+          } else {
+            onMessagePress && onMessagePress(item._id);
+          }
+        }}
         onLongPress={() => onLongPress && onLongPress(item._id)}
         delayLongPress={500}
         activeOpacity={0.7}

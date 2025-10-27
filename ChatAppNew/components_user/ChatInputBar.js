@@ -20,8 +20,17 @@ const ChatInputBar = ({
   onPickImage,
   onPickFile,
   onRemoveFile,
-  getFileIcon
+  getFileIcon,
+  onTypingStart
 }) => {
+  
+  const handleTextChange = (text) => {
+    setNewMessage(text);
+    // เรียก typing indicator เมื่อมีการพิม
+    if (onTypingStart && text.length > 0) {
+      onTypingStart();
+    }
+  };
   return (
     <View style={styles.inputContainer}>
       {/* แสดงไฟล์/รูปภาพที่เลือก แบบ Telegram */}
@@ -93,7 +102,7 @@ const ChatInputBar = ({
         <TextInput
           style={styles.textInput}
           value={newMessage}
-          onChangeText={setNewMessage}
+          onChangeText={handleTextChange}
           placeholder="พิมพ์ข้อความ..."
           placeholderTextColor="#999"
           multiline

@@ -4,7 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList,
   Image, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Animated, RefreshControl
 } from 'react-native';
-import ImageViewer from 'react-native-image-zoom-viewer';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +23,7 @@ import GroupMessageBubble from '../../components_user/GroupMessageBubble';
 import LoadOlderMessagesGroupChat from '../../components_user/LoadOlderMessagesGroupChat';
 import LoadingOverlay from '../../components/LoadingOverlay';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
+import FullscreenImageViewer from '../../components/FullscreenImageViewer';
 import { downloadFileWithFallback } from '../../utils/fileDownload';
 import AndroidDownloads from '../../utils/androidDownloads';
 
@@ -40,9 +41,8 @@ const GroupChatScreen = ({ route, navigation }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [imageModalVisible, setImageModalVisible] = useState(false);
-  // Removed loading hook - no longer using loading functionality
-  const [selectedModalImage, setSelectedModalImage] = useState(null);
+  const [fullscreenImageVisible, setFullscreenImageVisible] = useState(false);
+  const [fullscreenImageUri, setFullscreenImageUri] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [groupInfo, setGroupInfo] = useState(null);
@@ -1177,19 +1177,16 @@ const GroupChatScreen = ({ route, navigation }) => {
         }
         
         // เพิ่มข้อความใหม่จาก server
-        // บังคับให้ไฟล์ที่มี fileName แสดงเป็น FileMessage เสมอ
-        const finalMessageType = (serverMessage.fileName || serverMessage.fileUrl) ? 'file' : serverMessage.messageType;
-        
-        console.log('🔄 GroupChat message type conversion:', {
+        // ใช้ messageType ที่เซิร์ฟเวอร์ส่งมา ไม่แก้ไข
+        console.log('🔄 GroupChat using server messageType:', {
           fileName: serverMessage.fileName,
           fileUrl: serverMessage.fileUrl,
-          originalMessageType: serverMessage.messageType,
-          finalMessageType: finalMessageType
+          messageType: serverMessage.messageType
         });
         
         const updatedMessages = [...filteredMessages, {
           ...serverMessage,
-          messageType: finalMessageType, // ใช้ messageType ที่แก้ไขแล้ว
+          messageType: serverMessage.messageType, // ใช้ messageType เดิมจากเซิร์ฟเวอร์
           isTemporary: false
         }];
         
@@ -1228,8 +1225,41 @@ const GroupChatScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันเปิดรูปภาพในโหมดเต็มจอ
   const openImageModal = (imageUri) => {
-    setSelectedModalImage(imageUri);
-    setImageModalVisible(true);
+    console.log('🖼️ Opening fullscreen image viewer:', imageUri);
+    setFullscreenImageUri(imageUri);
+    setFullscreenImageVisible(true);
+  };
+
+  const closeFullscreenImage = () => {
+    setFullscreenImageVisible(false);
+    setTimeout(() => {
+      setFullscreenImageUri(null);
+    }, 300);
+  };
+
+  // ฟังก์ชันดาวน์โหลดรูปภาพจาก Modal
+  const downloadImageFromModal = async () => {
+    if (!fullscreenImageUri) {
+      Alert.alert('ข้อผิดพลาด', 'ไม่พบรูปภาพที่จะดาวน์โหลด');
+      return;
+    }
+
+    try {
+      console.log('📥 Starting image download from modal...');
+      console.log('🖼️ Image URL:', fullscreenImageUri);
+      
+      // ปิด modal ก่อน
+      setFullscreenImageVisible(false);
+      
+      // รอให้ Modal ปิดแล้วค่อยดาวน์โหลด
+      setTimeout(() => {
+        downloadFile(fullscreenImageUri, `image_${Date.now()}.jpg`);
+      }, 300);
+
+    } catch (error) {
+      console.error('❌ Error downloading image from modal:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดรูปภาพได้: ' + (error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'));
+    }
   };
 
   // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จด้วย Tick Animation
@@ -2658,73 +2688,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Image Zoom Modal */}
-      <Modal
-        visible={imageModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setImageModalVisible(false)}
-      >
-        <ImageViewer
-          imageUrls={selectedModalImage ? [{ url: selectedModalImage }] : []}
-          index={0}
-          onCancel={() => setImageModalVisible(false)}
-          enableSwipeDown={true}
-          renderHeader={() => (
-            <View style={{
-              position: 'absolute',
-              top: 50,
-              left: 0,
-              right: 0,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingHorizontal: 20,
-              zIndex: 999
-            }}>
-              <TouchableOpacity 
-                style={{
-                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 20,
-                  flexDirection: 'row',
-                  alignItems: 'center'
-                }}
-                onPress={() => {
-                  // ปิด Modal ก่อน
-                  setImageModalVisible(false);
-                  // รอให้ Modal ปิดแล้วค่อยดาวน์โหลด
-                  setTimeout(() => {
-                    downloadFile(selectedModalImage, `image_${Date.now()}.jpg`);
-                  }, 300);
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>📥 ดาวน์โหลด</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                onPress={() => setImageModalVisible(false)}
-                style={{
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  borderRadius: 20,
-                  padding: 8
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          renderFooter={() => null}
-          backgroundColor="rgba(0,0,0,0.9)"
-          enablePreload={true}
-          saveToLocalByLongPress={false}
-          menuContext={{
-            saveToLocal: 'บันทึกรูปภาพ',
-            cancel: 'ยกเลิก'
-          }}
-        />
-      </Modal>
+
 
       {/* Modal แก้ไขข้อความ */}
       <Modal
@@ -2781,6 +2745,14 @@ const GroupChatScreen = ({ route, navigation }) => {
       <SuccessTickAnimation
         visible={showSuccess}
         onComplete={() => setShowSuccess(false)}
+      />
+
+      {/* Fullscreen Image Viewer */}
+      <FullscreenImageViewer
+        visible={fullscreenImageVisible}
+        imageUri={fullscreenImageUri}
+        onClose={closeFullscreenImage}
+        onDownload={downloadImageFromModal}
       />
 
     </KeyboardAvoidingView>
