@@ -17,7 +17,9 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: false,
+        required: false,function() {
+            return this.role !== 'staff'; // เจ้าหน้าที่ไม่ต้องมีนามสกุล
+        },
         unique: true,
         sparse: true // อนุญาตให้เป็น null และไม่ซ้ำกัน
     },

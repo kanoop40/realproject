@@ -105,7 +105,7 @@ const AddUserScreen = ({ navigation }) => {
     if (formData.role === 'staff') {
       newFormData.firstName = faculty.label; // ใช้ชื่อหน่วยงานเป็นชื่อ
       newFormData.lastName = ''; // นามสกุลเป็นค่าว่าง
-      newFormData.email = ''; // อีเมลเป็นค่าว่าง
+      newFormData.email = '-'; // อีเมลเป็นค่าว่าง
     }
 
     setFormData(newFormData);
