@@ -77,12 +77,7 @@ const UserInfoSection = ({ user }) => {
         </View>
       )}
 
-      <View style={styles.infoItem}>
-        <Text style={styles.infoLabel}>สถานะ:</Text>
-        <Text style={[styles.infoValue, { color: user.isOnline ? '#34C759' : '#8E8E93' }]}>
-          {user.isOnline ? '🟢 กำลังใช้งาน' : '⚪ ออฟไลน์'}
-        </Text>
-      </View>
+     
 
       <View style={styles.infoItem}>
         <Text style={styles.infoLabel}>วันที่สร้าง:</Text>

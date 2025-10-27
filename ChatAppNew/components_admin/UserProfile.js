@@ -152,11 +152,7 @@ const UserProfile = ({ user, onDelete }) => {
             <Text style={styles.userEmail}>{user.email}</Text>
             
             {/* Status Badge */}
-            <View style={[styles.statusBadge, { backgroundColor: user.isOnline ? '#34C759' : '#8E8E93' }]}>
-              <Text style={styles.statusBadgeText}>
-                {user.isOnline ? '🟢 กำลังใช้งาน' : '⚪ ออฟไลน์'}
-              </Text>
-            </View>
+           
 
 
           </TouchableOpacity>

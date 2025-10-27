@@ -203,66 +203,115 @@ const AddUserScreen = ({ navigation }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.username) newErrors.username = 'กรุณากรอกชื่อผู้ใช้';
-    if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
     
-    // เจ้าหน้าที่ไม่ต้องกรอกชื่อและนามสกุล
+    // ตรวจสอบฟิลด์พื้นฐาน
+    if (!formData.username) newErrors.username = '• กรุณากรอกชื่อผู้ใช้';
+    if (!formData.password) newErrors.password = '• กรุณากรอกรหัสผ่าน';
+    
+    // เจ้าหน้าที่ไม่ต้องกรอกชื่อและนามสกุล (จะใช้ชื่อหน่วยงาน)
     if (formData.role !== 'staff') {
-      if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
-      if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
+      if (!formData.firstName || formData.firstName.trim() === '') {
+        newErrors.firstName = '• กรุณากรอกชื่อ';
+      }
+      if (!formData.lastName || formData.lastName.trim() === '') {
+        newErrors.lastName = '• กรุณากรอกนามสกุล';
+      }
+    } else {
+      // สำหรับเจ้าหน้าที่ ตรวจสอบเฉพาะว่าได้เลือกหน่วยงานแล้ว
+      console.log('Staff validation - no firstName/lastName required');
     }
     
-    // อีเมลไม่จำเป็นสำหรับทุก role แต่ถ้ากรอกมาต้องถูกรูปแบบ
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && formData.email.trim() !== '' && !emailRegex.test(formData.email)) {
-      newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
+    // อีเมลเป็น optional สำหรับทุก role (เจ้าหน้าที่จะสร้างอัตโนมัติ)
+    // เช็ครูปแบบอีเมลเฉพาะเมื่อไม่ใช่เจ้าหน้าที่และมีการกรอกอีเมลมา
+    if (formData.role !== 'staff' && formData.email && formData.email.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        newErrors.email = '• รูปแบบอีเมลไม่ถูกต้อง (example@domain.com)';
+      }
     }
     
     // ตรวจสอบเงื่อนไขตาม role
     if (formData.role === 'student') {
       // นักศึกษา: ต้องกรอกคณะ สาขา และกลุ่มเรียน
       if (formData.faculty === '1') {
-        newErrors.faculty = 'กรุณาเลือกคณะ';
+        newErrors.faculty = '• กรุณาเลือกคณะ (สำหรับนักศึกษา)';
       }
       if (formData.major === '1') {
-        newErrors.major = 'กรุณาเลือกสาขา';
+        newErrors.major = '• กรุณาเลือกสาขา (สำหรับนักศึกษา)';
       }
       if (formData.groupCode === '1') {
-        newErrors.groupCode = 'กรุณาเลือกกลุ่มเรียน';
+        newErrors.groupCode = '• กรุณาเลือกกลุ่มเรียน (สำหรับนักศึกษา)';
       }
     } else if (formData.role === 'teacher') {
       // อาจารย์: ต้องกรอกคณะ และสาขา (ไม่ต้องกลุ่มเรียน)
       if (formData.faculty === '1') {
-        newErrors.faculty = 'กรุณาเลือกคณะ';
+        newErrors.faculty = '• กรุณาเลือกคณะ (สำหรับอาจารย์)';
       }
       if (formData.major === '1') {
-        newErrors.major = 'กรุณาเลือกสาขา';
+        newErrors.major = '• กรุณาเลือกสาขา (สำหรับอาจารย์)';
       }
     } else if (formData.role === 'staff') {
       // เจ้าหน้าที่: ต้องกรอกเฉพาะหน่วยงาน
-      if (formData.faculty === '1') {
-        newErrors.faculty = 'กรุณาเลือกหน่วยงาน';
+      if (!formData.faculty || formData.faculty === '1') {
+        newErrors.faculty = '• กรุณาเลือกหน่วยงาน (สำหรับเจ้าหน้าที่)';
       }
+      console.log('Staff validation - faculty check:', formData.faculty);
     }
     // admin: ไม่ต้องกรอกอะไรเพิ่ม
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const isValid = Object.keys(newErrors).length === 0;
+    
+    console.log('Validation result:', {
+      isValid,
+      errors: newErrors,
+      formData: {
+        username: formData.username,
+        password: formData.password,
+        role: formData.role,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        faculty: formData.faculty
+      }
+    });
+    
+    return isValid;
   };
 
   const handleSubmit = async () => {
+    console.log('Submit button clicked');
+    
     if (!validateForm()) {
-      Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน\n(อีเมลไม่จำเป็น แต่ถ้ากรอกต้องถูกรูปแบบ)');
+      // แสดงข้อผิดพลาดแบบละเอียด
+      const errorMessages = Object.values(errors).join('\n');
+      console.log('Validation failed, showing errors:', errorMessages);
+      Alert.alert('กรุณาแก้ไขข้อมูลที่ไม่ถูกต้อง', errorMessages);
       return;
     }
+    
+    console.log('Validation passed, proceeding with user creation');
 
     try {
       setIsLoading(true);
+      
+      // ตรวจสอบ token ก่อน
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
+        Alert.alert('ข้อผิดพลาด', 'กรุณาเข้าสู่ระบบใหม่');
         navigation.replace('Login');
         return;
       }
+
+      // ตรวจสอบข้อมูลอีกครั้งก่อนส่ง
+      console.log('Form data before submit:', {
+        username: formData.username,
+        role: formData.role,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        faculty: formData.faculty
+      });
 
       const config = {
         headers: {
@@ -271,9 +320,10 @@ const AddUserScreen = ({ navigation }) => {
         }
       };
 
+      // เตรียมข้อมูลพื้นฐาน
       let dataToSend = {
-        username: formData.username,
-        password: formData.password,
+        username: formData.username.trim(),
+        password: formData.password.trim(),
         role: formData.role
       };
 
@@ -282,15 +332,28 @@ const AddUserScreen = ({ navigation }) => {
         const selectedDepartment = departments.find(d => d.value === formData.faculty);
         dataToSend.firstName = selectedDepartment ? selectedDepartment.label : '';
         dataToSend.lastName = ''; // ส่งค่าว่าง เพราะ model แก้ไขแล้ว
-        // เจ้าหน้าที่ไม่มีอีเมล - ไม่ส่งฟิลด์ email เลย
+        
+        // สร้างอีเมลสุ่มสำหรับเจ้าหน้าที่
+        const timestamp = Date.now().toString().slice(-6); // ใช้ 6 หลักสุดท้ายของ timestamp
+        const randomId = Math.random().toString(36).substring(2, 4); // สุ่ม 2 ตัวอักษร
+        const departmentCode = selectedDepartment ? 
+          selectedDepartment.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase() : 'staff';
+        dataToSend.email = `${departmentCode}.${timestamp}${randomId}@organization.local`;
+        
+        console.log('Generated staff email:', dataToSend.email);
       } else {
         // สำหรับ role อื่นๆ ใช้ข้อมูลจาก form
-        dataToSend.firstName = formData.firstName;
-        dataToSend.lastName = formData.lastName;
+        dataToSend.firstName = formData.firstName.trim();
+        dataToSend.lastName = formData.lastName.trim();
         
         // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมาจริงๆ และไม่เป็นค่าว่าง
         if (formData.email && formData.email.trim() !== '' && formData.email.trim() !== '-') {
-          dataToSend.email = formData.email.trim();
+          const cleanEmail = formData.email.trim();
+          // ตรวจสอบรูปแบบอีเมลอีกครั้งก่อนส่ง
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (emailRegex.test(cleanEmail)) {
+            dataToSend.email = cleanEmail;
+          }
         }
         // ถ้าไม่กรอกอีเมล หรือเป็นค่าว่าง จะไม่ส่งฟิลด์ email ไปใน request
       }
@@ -333,7 +396,15 @@ const AddUserScreen = ({ navigation }) => {
         };
       }
 
-      await axios.post(`${API_URL}/api/users`, dataToSend, config);
+      const response = await axios.post(`${API_URL}/api/users`, dataToSend, config);
+
+      // แสดงข้อมูลที่สร้างสำเร็จ
+      console.log('User created successfully:', {
+        username: dataToSend.username,
+        role: dataToSend.role,
+        email: dataToSend.email,
+        firstName: dataToSend.firstName
+      });
 
       // Reset form หลังจากสร้างผู้ใช้สำเร็จ
       setFormData({
@@ -352,20 +423,30 @@ const AddUserScreen = ({ navigation }) => {
       // แสดง SuccessTickAnimation แทน Alert.alert
       setShowSuccess(true);
     } catch (error) {
-      console.log('Error creating user:', error.response?.data || error.message);
-      let errorMessage = 'ไม่สามารถเพิ่มผู้ใช้ได้';
+      console.error('Error creating user:', error.response?.data || error.message);
+      let errorMessage = 'เกิดข้อผิดพลาดในการเพิ่มผู้ใช้';
       
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.response?.status === 400) {
-        errorMessage = 'ข้อมูลไม่ถูกต้องหรือมีผู้ใช้นี้ในระบบแล้ว';
+        // แสดงข้อผิดพลาดจาก backend
+        const backendError = error.response?.data?.error || error.response?.data?.message;
+        if (backendError && backendError.includes('username')) {
+          errorMessage = 'ชื่อผู้ใช้นี้มีในระบบแล้ว กรุณาเปลี่ยนชื่อผู้ใช้';
+        } else if (backendError && backendError.includes('email')) {
+          errorMessage = 'อีเมลนี้มีในระบบแล้ว กรุณาเปลี่ยนอีเมล';
+        } else {
+          errorMessage = 'ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง';
+        }
       } else if (error.response?.status === 401) {
-        errorMessage = 'ไม่มีสิทธิ์ในการเพิ่มผู้ใช้';
+        errorMessage = 'ไม่มีสิทธิ์ในการเพิ่มผู้ใช้ กรุณาเข้าสู่ระบบใหม่';
         navigation.replace('Login');
         return;
+      } else if (error.response?.status === 500) {
+        errorMessage = 'เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง';
       }
       
-      Alert.alert('ผิดพลาด', errorMessage);
+      Alert.alert('ไม่สามารถเพิ่มผู้ใช้ได้', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -471,7 +552,7 @@ const AddUserScreen = ({ navigation }) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              อีเมล {formData.role === 'staff' ? '(เจ้าหน้าที่ไม่จำเป็น)' : '(ไม่จำเป็น)'}
+              อีเมล {formData.role === 'staff' ? '(สร้างอัตโนมัติ)' : '(ไม่จำเป็น)'}
             </Text>
             {formData.role !== 'staff' && (
               <TextInput
@@ -489,9 +570,14 @@ const AddUserScreen = ({ navigation }) => {
             {formData.role === 'staff' && (
               <View style={styles.disabledInput}>
                 <Text style={styles.disabledInputText}>
-                  เจ้าหน้าที่ไม่ต้องระบุอีเมล
+                  อีเมลจะถูกสร้างให้อัตโนมัติสำหรับเจ้าหน้าที่
                 </Text>
               </View>
+            )}
+            {formData.role === 'staff' && formData.faculty !== '1' && (
+              <Text style={styles.previewText}>
+                💡 อีเมลที่จะสร้างอัตโนมัติ: {departments.find(d => d.value === formData.faculty)?.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
+              </Text>
             )}
             {errors.email && (
               <Text style={styles.errorText}>{errors.email}</Text>
@@ -545,7 +631,7 @@ const AddUserScreen = ({ navigation }) => {
               {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
               {formData.role === 'staff' && formData.faculty !== '1' && (
                 <Text style={styles.previewText}>
-                  ชื่อผู้ใช้จะเป็น: {getFacultyLabel()} (ไม่มีนามสกุล)
+                  👤 ชื่อ: {getFacultyLabel()} | นามสกุล: (ไม่มี) | อีเมล: สร้างอัตโนมัติ
                 </Text>
               )}
             </View>
@@ -590,7 +676,9 @@ const AddUserScreen = ({ navigation }) => {
             onPress={handleSubmit}
             disabled={isLoading}
           >
-            <Text style={styles.submitButtonText}>สร้างบัญชีผู้ใช้</Text>
+            <Text style={styles.submitButtonText}>
+              {isLoading ? 'กำลังสร้างบัญชี...' : 'สร้างบัญชีผู้ใช้'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -898,7 +986,13 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 12,
     marginTop: 5,
-    fontWeight: '500'
+    fontWeight: '500',
+    fontStyle: 'italic',
+    backgroundColor: '#f0f8ff',
+    padding: 8,
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF'
   },
   disabledInput: {
     borderWidth: 1,
@@ -910,9 +1004,10 @@ const styles = StyleSheet.create({
     minHeight: 50
   },
   disabledInputText: {
-    color: '#999',
-    fontSize: 16,
-    fontStyle: 'italic'
+    color: '#666',
+    fontSize: 15,
+    fontStyle: 'italic',
+    textAlign: 'center'
   }
 });
 
