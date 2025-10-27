@@ -8,15 +8,12 @@ const TypingIndicator = ({ isVisible, userName = 'Someone' }) => {
   return (
     <View style={styles.container}>
       <View style={styles.bubble}>
-        <View style={styles.typingContent}>
-          <Text style={styles.typingText}>{userName} กำลังพิม</Text>
-          <LottieView
-            source={require('../assets/Texting.json')}
-            autoPlay
-            loop
-            style={styles.animation}
-          />
-        </View>
+        <LottieView
+          source={require('../assets/Typing.json')}
+          autoPlay
+          loop
+          style={styles.animation}
+        />
       </View>
     </View>
   );
@@ -31,8 +28,8 @@ const styles = StyleSheet.create({
   bubble: {
     backgroundColor: '#f0f0f0',
     borderRadius: 18,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     maxWidth: '80%',
     borderBottomLeftRadius: 5,
     elevation: 1,
@@ -41,19 +38,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  typingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typingText: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-    marginRight: 8,
-  },
   animation: {
-    width: 30,
-    height: 20,
+    width: 45,
+    height: 30,
   },
 });
 

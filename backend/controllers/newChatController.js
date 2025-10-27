@@ -1543,10 +1543,10 @@ const setTypingStatus = asyncHandler(async (req, res) => {
             chatTyping.delete(userId);
         }
 
-        // ลบ typing status ที่เก่าเกิน 5 วินาที
+        // ลบ typing status ที่เก่าเกิน 4 วินาที (เร็วขึ้น)
         const now = Date.now();
         for (const [uid, data] of chatTyping.entries()) {
-            if (now - data.timestamp > 5000) {
+            if (now - data.timestamp > 4000) {
                 chatTyping.delete(uid);
             }
         }
@@ -1576,10 +1576,10 @@ const getTypingUsers = asyncHandler(async (req, res) => {
         const chatKey = `chat_${chatId}`;
         const chatTyping = typingStatus.get(chatKey) || new Map();
         
-        // ลบ typing status ที่เก่าเกิน 5 วินาที
+        // ลบ typing status ที่เก่าเกิน 4 วินาที (เร็วขึ้น)
         const now = Date.now();
         for (const [uid, data] of chatTyping.entries()) {
-            if (now - data.timestamp > 5000) {
+            if (now - data.timestamp > 4000) {
                 chatTyping.delete(uid);
             }
         }

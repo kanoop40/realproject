@@ -94,11 +94,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    // หยุด typing หลังจาก 3 วินาที
+    // หยุด typing หลังจาก 2 วินาที (เร็วขึ้น)
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       sendTypingStatus(false);
-    }, 3000);
+    }, 2000);
   }, [isTyping, chatroomId]);
 
   const sendTypingStatus = useCallback(async (typing) => {
@@ -187,7 +187,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
   // Adaptive Background Sync with Rate Limiting Protection
   useEffect(() => {
     let backgroundSync;
-    let currentInterval = 1500; // เริ่มต้น 1.5 วินาที (เร็วขึ้น!)
+    let currentInterval = 800; // เริ่มต้น 0.8 วินาที (เร็วมาก!)
     let consecutiveFailures = 0;
     let isActive = true;
     
@@ -230,7 +230,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         if (hasNewMessages) {
           console.log('📨 New messages detected:', newMessages.length, 'messages, increasing sync frequency...');
-          currentInterval = Math.max(1000, currentInterval * 0.7); // เร็วขึ้นเมื่อมีกิจกรรม (1 วินาทีขั้นต่ำ)
+          currentInterval = Math.max(500, currentInterval * 0.7); // เร็วขึ้นเมื่อมีกิจกรรม (0.5 วินาทีขั้นต่ำ)
           
           // Add comprehensive safety checks to new messages too
           const safeNewMessages = newMessages
@@ -265,8 +265,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
           
           // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช (Normal FlatList)
           setMessages(prev => {
-            const updated = [...prev, ...safeNewMessages];
-            console.log('✅ Added new messages to chat. Total messages:', updated.length);
+            // ตรวจสอบซ้ำอีกครั้งก่อนเพิ่ม
+            const trulyNewMessages = safeNewMessages.filter(newMsg => 
+              !prev.some(existingMsg => existingMsg._id === newMsg._id)
+            );
+            
+            if (trulyNewMessages.length === 0) {
+              console.log('⚠️ No truly new messages after duplicate check');
+              return prev;
+            }
+            
+            const updated = [...prev, ...trulyNewMessages];
+            console.log('✅ Added new messages to chat. New:', trulyNewMessages.length, 'Total:', updated.length);
             return updated;
           });
           
@@ -279,7 +289,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         } else {
           // ไม่มีข้อความใหม่ - ช้าลงแต่ไม่มาก
           console.log('😴 No new messages found, slowing down sync...');
-          currentInterval = Math.min(4000, currentInterval * 1.15); // ช้าลงน้อยกว่าเดิม (4 วินาทีสูงสุด)
+          currentInterval = Math.min(2000, currentInterval * 1.1); // ช้าลงน้อยกว่าเดิม (2 วินาทีสูงสุด)
         }
         
         console.log(`⏱️ Next sync in ${currentInterval/1000}s`);
@@ -1421,6 +1431,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     return (
       <ChatMessage
+        key={`chat-msg-${item._id || item.id || index}-${index}`}
         item={item}
         index={index}
         currentUser={currentUser}
@@ -1503,7 +1514,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         grouped.push({
           type: 'date_separator',
           date: message.timestamp,
-          _id: 'date_' + messageDate.replace(/\s/g, '_') + '_' + index
+          _id: `date_${messageDate.replace(/\s/g, '_')}_${Date.now()}_${index}`
         });
         currentDate = messageDate;
       }
@@ -2004,7 +2015,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
           <FlatList
             ref={flatListRef}
             data={groupMessagesByDate(messages)}
-            keyExtractor={(item, index) => item._id || `fallback_${index}`}
+            keyExtractor={(item, index) => {
+              if (item.type === 'date_separator') {
+                return `date_${item.date}_${index}`;
+              }
+              return `msg_${item._id || item.id || index}_${index}`;
+            }}
             renderItem={renderMessage}
             style={styles.messagesList}
             inverted={false}

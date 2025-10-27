@@ -26,8 +26,8 @@ const ChatInputBar = ({
   
   const handleTextChange = (text) => {
     setNewMessage(text);
-    // เรียก typing indicator เมื่อมีการพิม
-    if (onTypingStart && text.length > 0) {
+    // เรียก typing indicator ทุกครั้งที่พิม (ไม่ใช่เฉพาะตัวอักษรแรก)
+    if (onTypingStart) {
       onTypingStart();
     }
   };
