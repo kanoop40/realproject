@@ -31,6 +31,24 @@ export const AuthProvider = ({ children }) => {
         // อัปเดต NotificationService ด้วยข้อมูลผู้ใช้ที่โหลดมา
         NotificationService.setCurrentUser(userData);
         
+        // ลงทะเบียน push notifications สำหรับ existing user
+        try {
+          console.log('🔔 AuthContext loadUser: Registering push notifications...');
+          const pushToken = await NotificationService.registerForPushNotificationsAsync();
+          
+          if (pushToken) {
+            console.log('🔔 AuthContext loadUser: Sending push token to backend');
+            const api = require('../service/api').default;
+            await api.post('/users/push-token', { 
+              pushToken: pushToken 
+            });
+            console.log('✅ AuthContext loadUser: Push token updated successfully');
+          }
+        } catch (pushError) {
+          console.error('🔔 AuthContext loadUser: Error with push notifications:', pushError);
+          // ไม่ให้ push notification error ทำให้การโหลดข้อมูลล้มเหลว
+        }
+        
         // ตรวจสอบว่ามี currentUser หรือไม่ ถ้าไม่มีให้เพิ่ม
         const currentUserStr = await AsyncStorage.getItem('currentUser');
         if (!currentUserStr) {
@@ -57,6 +75,26 @@ export const AuthProvider = ({ children }) => {
       
       // อัปเดต NotificationService ด้วยข้อมูลผู้ใช้ใหม่
       NotificationService.setCurrentUser(userData);
+      
+      // ลงทะเบียน push notifications และส่ง token ไปยัง backend
+      try {
+        console.log('🔔 AuthContext: Registering for push notifications...');
+        const pushToken = await NotificationService.registerForPushNotificationsAsync();
+        
+        if (pushToken) {
+          console.log('🔔 AuthContext: Sending push token to backend:', pushToken);
+          // ส่ง push token ไปยัง backend
+          const api = require('../service/api').default;
+          await api.post('/users/push-token', { 
+            pushToken: pushToken 
+          });
+          console.log('✅ AuthContext: Push token sent to backend successfully');
+        }
+      } catch (pushError) {
+        console.error('🔔 AuthContext: Error with push notifications:', pushError);
+        // ไม่ให้ push notification error ทำให้ login ล้มเหลว
+      }
+      
     } catch (error) {
       console.error('Error saving user data:', error);
     }

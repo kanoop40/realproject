@@ -2,9 +2,11 @@ import 'react-native-gesture-handler';
 import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { ChatProvider } from './context/ChatContext';
+import NotificationService from './service/notificationService';
 import WelcomeScreen from './screens/WelcomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import AdminScreen from './screens/admin/AdminScreen';
@@ -23,13 +25,62 @@ import ChangePasswordScreen from './screens/user/ChangePasswordScreen';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const navigationRef = useRef();
+  const notificationListener = useRef();
+  const responseListener = useRef();
+
+  useEffect(() => {
+    console.log('🔔 Setting up notification listeners...');
+
+    // Initialize notification service
+    NotificationService.registerForPushNotificationsAsync();
+
+    // Listen for notifications received while app is foregrounded
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('🔔 Notification received:', notification);
+      // แสดงการแจ้งเตือนแม้ว่าแอปจะเปิดอยู่
+    });
+
+    // Listen for user interactions with notifications
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('🔔 Notification response:', response);
+      
+      // Handle navigation based on notification data
+      const data = response.notification.request.content.data;
+      if (data.chatroomId && navigationRef.current) {
+        // Navigate to specific chat
+        if (data.type === 'group_chat') {
+          navigationRef.current.navigate('GroupChat', { 
+            chatroomId: data.chatroomId,
+            chatroomName: data.chatroomName || 'แชทกลุ่ม'
+          });
+        } else if (data.type === 'private_chat') {
+          navigationRef.current.navigate('PrivateChat', { 
+            chatroomId: data.chatroomId,
+            recipientName: data.senderName || 'แชทส่วนตัว'
+          });
+        }
+      }
+    });
+
+    return () => {
+      console.log('🔔 Removing notification listeners...');
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, []);
+
   console.log('ChatAppNew is starting...');
 
   return (
     <AuthProvider>
       <SocketProvider>
         <ChatProvider>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <Stack.Navigator screenOptions={{ 
               headerShown: false,
               animation: 'fade',

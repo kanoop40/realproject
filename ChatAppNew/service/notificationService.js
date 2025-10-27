@@ -1,10 +1,25 @@
-// Simple notification service without expo-notifications for compatibility
+// Enhanced notification service with expo-notifications for proper push notification support
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+
+// Set notification handling behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 class NotificationService {
   currentUserId = null;
   currentUserName = null;
+  expoPushToken = null;
+  notificationListener = null;
+  responseListener = null;
 
   // อัปเดตข้อมูลผู้ใช้ปัจจุบัน
   setCurrentUser(user) {
@@ -18,12 +33,80 @@ class NotificationService {
     console.log('🔔 NotificationService: Clearing current user data');
     this.currentUserId = null;
     this.currentUserName = null;
+    this.expoPushToken = null;
   }
 
-  // Mock function สำหรับการลงทะเบียน push notifications
+  // ลงทะเบียนสำหรับ push notifications
   async registerForPushNotificationsAsync() {
-    console.log('🔔 Push notifications disabled in development mode');
-    return null;
+    let token;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        console.log('🔔 Failed to get push token for push notification!');
+        Alert.alert(
+          'การแจ้งเตือน', 
+          'ไม่สามารถเปิดการแจ้งเตือนได้ กรุณาเปิดการแจ้งเตือนในการตั้งค่า'
+        );
+        return null;
+      }
+      
+      try {
+        const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+        if (!projectId) {
+          console.log('🔔 No Expo project ID found');
+        }
+        
+        token = (await Notifications.getExpoPushTokenAsync({ 
+          projectId: projectId 
+        })).data;
+        
+        console.log('🔔 Expo push token:', token);
+        this.expoPushToken = token;
+        
+        // บันทึก token ใน AsyncStorage
+        await AsyncStorage.setItem('expo_push_token', token);
+        
+      } catch (error) {
+        console.error('🔔 Error getting expo push token:', error);
+        // Fallback: ยังคงใช้งานแอปได้แม้ไม่มี push token
+        return null;
+      }
+    } else {
+      console.log('🔔 Must use physical device for Push Notifications');
+    }
+
+    return token;
+  }
+
+  // ดึง push token ที่บันทึกไว้
+  async getStoredPushToken() {
+    try {
+      const token = await AsyncStorage.getItem('expo_push_token');
+      if (token) {
+        this.expoPushToken = token;
+      }
+      return token;
+    } catch (error) {
+      console.error('🔔 Error getting stored push token:', error);
+      return null;
+    }
   }
 
   // แสดงการแจ้งเตือนในแอป
@@ -73,6 +156,27 @@ class NotificationService {
         console.error('🔔 Error showing alert:', error);
       }
     }, 100); // เพิ่ม delay เล็กน้อย
+  }
+
+  // ส่งการแจ้งเตือนผ่าน Expo Push Notification
+  async schedulePushNotification(title, body, data = {}, trigger = null) {
+    try {
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data,
+          sound: 'default',
+        },
+        trigger: trigger || { seconds: 1 }, // ส่งทันที
+      });
+      
+      console.log('🔔 Local notification scheduled:', notificationId);
+      return notificationId;
+    } catch (error) {
+      console.error('🔔 Error scheduling notification:', error);
+      return null;
+    }
   }
 
   // ส่งการแจ้งเตือนเมื่อมีข้อความใหม่
@@ -173,35 +277,92 @@ class NotificationService {
     }
   }
 
-  // ตรวจสอบสิทธิ์การแจ้งเตือน (Mock function)
+  // ตรวจสอบสิทธิ์การแจ้งเตือน
   async checkPermissions() {
-    return {
-      status: 'granted',
-      canAskAgain: true,
-      granted: true
-    };
+    try {
+      const settings = await Notifications.getPermissionsAsync();
+      return {
+        status: settings.status,
+        canAskAgain: settings.canAskAgain,
+        granted: settings.granted
+      };
+    } catch (error) {
+      console.error('🔔 Error checking permissions:', error);
+      return {
+        status: 'undetermined',
+        canAskAgain: true,
+        granted: false
+      };
+    }
   }
 
-  // ขอสิทธิ์การแจ้งเตือน (Mock function)
+  // ขอสิทธิ์การแจ้งเตือน
   async requestPermissions() {
-    return {
-      status: 'granted',
-      canAskAgain: true,
-      granted: true
-    };
+    try {
+      const settings = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowAnnouncements: false,
+        },
+      });
+      return {
+        status: settings.status,
+        canAskAgain: settings.canAskAgain,
+        granted: settings.granted
+      };
+    } catch (error) {
+      console.error('🔔 Error requesting permissions:', error);
+      return {
+        status: 'denied',
+        canAskAgain: false,
+        granted: false
+      };
+    }
   }
 
-  // Mock functions สำหรับความเข้ากันได้
+  // เพิ่ม listeners สำหรับ notifications
   addNotificationReceivedListener(listener) {
-    return { remove: () => {} };
+    this.notificationListener = Notifications.addNotificationReceivedListener(listener);
+    return this.notificationListener;
   }
 
   addNotificationResponseReceivedListener(listener) {
-    return { remove: () => {} };
+    this.responseListener = Notifications.addNotificationResponseReceivedListener(listener);
+    return this.responseListener;
   }
 
+  // ล้าง badge count
   async clearBadgeCount() {
-    console.log('� Badge count cleared (mock)');
+    try {
+      await Notifications.setBadgeCountAsync(0);
+      console.log('🔔 Badge count cleared');
+    } catch (error) {
+      console.error('🔔 Error clearing badge count:', error);
+    }
+  }
+
+  // ตั้งค่า badge count
+  async setBadgeCount(count) {
+    try {
+      await Notifications.setBadgeCountAsync(count);
+      console.log('🔔 Badge count set to:', count);
+    } catch (error) {
+      console.error('🔔 Error setting badge count:', error);
+    }
+  }
+
+  // ลบ listeners เมื่อไม่ใช้งาน
+  removeListeners() {
+    if (this.notificationListener) {
+      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener = null;
+    }
+    if (this.responseListener) {
+      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener = null;
+    }
   }
 }
 

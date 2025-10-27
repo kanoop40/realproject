@@ -4,6 +4,7 @@ const User = require('../models/UserModel');
 const Messages = require('../models/MessagesModel');
 const Chatrooms = require('../models/ChatroomsModel');
 const Notification = require('../models/NotificationModel');
+const NotificationService = require('../utils/notificationService');
 const { deleteOldAvatar, cloudinary } = require('../config/cloudinary');
 
 // @desc    สร้างกลุ่มใหม่
@@ -804,6 +805,59 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
             message: socketMessage
         });
         console.log('📤 Group message emitted to room:', groupId);
+    }
+
+    // ส่ง push notifications ไปยังสมาชิกในกลุ่ม (ยกเว้นผู้ส่ง)
+    try {
+        const senderName = `${message.user_id.firstName} ${message.user_id.lastName}`.trim();
+        const messageContent = message.content || (message.messageType === 'image' ? '📷 รูปภาพ' : '📎 ไฟล์');
+        
+        // หาสมาชิกในกลุ่มที่มี push token (ยกเว้นผู้ส่ง)
+        const recipientIds = group.members
+            .filter(member => member.user.toString() !== userId.toString())
+            .map(member => member.user);
+        
+        if (recipientIds.length > 0) {
+            const recipients = await User.find({
+                _id: { $in: recipientIds },
+                pushToken: { $exists: true, $ne: null }
+            });
+            
+            console.log(`🔔 Sending group push notifications to ${recipients.length} members`);
+            
+            // ส่ง push notification ไปยังแต่ละสมาชิก
+            for (const recipient of recipients) {
+                try {
+                    await NotificationService.sendNewMessageNotification(
+                        recipient.pushToken,
+                        `${group.groupName}: ${senderName}`,
+                        messageContent,
+                        groupId
+                    );
+                    
+                    // ส่ง socket notification ด้วย
+                    if (io) {
+                        io.to(recipient._id.toString()).emit('receiveNotification', {
+                            type: 'group_message',
+                            title: `ข้อความใหม่ในกลุ่ม ${group.groupName}`,
+                            message: `${senderName}: ${messageContent}`,
+                            chatroomId: groupId,
+                            chatroomName: group.groupName,
+                            senderId: userId,
+                            senderName: senderName,
+                            timestamp: new Date()
+                        });
+                    }
+                } catch (individualError) {
+                    console.error(`Error sending notification to ${recipient._id}:`, individualError);
+                }
+            }
+            
+            console.log(`📲 Sent group notifications to ${recipients.length} recipients`);
+        }
+    } catch (notificationError) {
+        console.error('Error sending group notifications:', notificationError);
+        // ไม่ให้ notification error ทำให้การส่งข้อความล้มเหลว
     }
 
     // แปลง response เพื่อให้ตรงกับที่ frontend คาดหวัง
