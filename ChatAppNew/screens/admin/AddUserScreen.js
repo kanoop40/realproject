@@ -211,7 +211,12 @@ const AddUserScreen = ({ navigation }) => {
       if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
       if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
     }
-    // อีเมลไม่จำเป็นต้องกรอก
+    
+    // อีเมลไม่จำเป็นสำหรับทุก role แต่ถ้ากรอกมาต้องถูกรูปแบบ
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (formData.email && formData.email.trim() !== '' && !emailRegex.test(formData.email)) {
+      newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
+    }
     
     // ตรวจสอบเงื่อนไขตาม role
     if (formData.role === 'student') {
@@ -241,18 +246,13 @@ const AddUserScreen = ({ navigation }) => {
     }
     // admin: ไม่ต้องกรอกอะไรเพิ่ม
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && !emailRegex.test(formData.email)) {
-      newErrors.email = 'รูปแบบอีเมลไม่ถูกต้อง';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+      Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน\n(อีเมลไม่จำเป็น แต่ถ้ากรอกต้องถูกรูปแบบ)');
       return;
     }
 
@@ -282,16 +282,17 @@ const AddUserScreen = ({ navigation }) => {
         const selectedDepartment = departments.find(d => d.value === formData.faculty);
         dataToSend.firstName = selectedDepartment ? selectedDepartment.label : '';
         dataToSend.lastName = ''; // ส่งค่าว่าง เพราะ model แก้ไขแล้ว
-        // ไม่ส่งอีเมลสำหรับเจ้าหน้าที่
+        // เจ้าหน้าที่ไม่มีอีเมล - ไม่ส่งฟิลด์ email เลย
       } else {
         // สำหรับ role อื่นๆ ใช้ข้อมูลจาก form
         dataToSend.firstName = formData.firstName;
         dataToSend.lastName = formData.lastName;
         
-        // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมาจริงๆ (ไม่เป็นค่าว่าง)
-        if (formData.email && formData.email.trim() !== '') {
+        // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมาจริงๆ และไม่เป็นค่าว่าง
+        if (formData.email && formData.email.trim() !== '' && formData.email.trim() !== '-') {
           dataToSend.email = formData.email.trim();
         }
+        // ถ้าไม่กรอกอีเมล หรือเป็นค่าว่าง จะไม่ส่งฟิลด์ email ไปใน request
       }
 
       if (formData.role === 'admin') {
@@ -468,9 +469,11 @@ const AddUserScreen = ({ navigation }) => {
             </View>
           )}
 
-          {formData.role !== 'staff' && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>อีเมล (ไม่จำเป็น)</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              อีเมล {formData.role === 'staff' ? '(เจ้าหน้าที่ไม่จำเป็น)' : '(ไม่จำเป็น)'}
+            </Text>
+            {formData.role !== 'staff' && (
               <TextInput
                 style={[styles.input, errors.email && styles.inputError]}
                 value={formData.email}
@@ -482,11 +485,18 @@ const AddUserScreen = ({ navigation }) => {
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              {errors.email && (
-                <Text style={styles.errorText}>{errors.email}</Text>
-              )}
-            </View>
-          )}
+            )}
+            {formData.role === 'staff' && (
+              <View style={styles.disabledInput}>
+                <Text style={styles.disabledInputText}>
+                  เจ้าหน้าที่ไม่ต้องระบุอีเมล
+                </Text>
+              </View>
+            )}
+            {errors.email && (
+              <Text style={styles.errorText}>{errors.email}</Text>
+            )}
+          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>สถานะ</Text>
@@ -889,6 +899,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 5,
     fontWeight: '500'
+  },
+  disabledInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    minHeight: 50
+  },
+  disabledInputText: {
+    color: '#999',
+    fontSize: 16,
+    fontStyle: 'italic'
   }
 });
 
