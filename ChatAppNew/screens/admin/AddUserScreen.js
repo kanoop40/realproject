@@ -94,12 +94,21 @@ const AddUserScreen = ({ navigation }) => {
   const [showSuccess, setShowSuccess] = useState(false);
 
   const selectFaculty = (faculty) => {
-    setFormData({
+    const newFormData = {
       ...formData,
       faculty: faculty.value,
       major: '1',
       groupCode: '1'
-    });
+    };
+
+    // ถ้าเป็นเจ้าหน้าที่ ให้กำหนดชื่อตามหน่วยงาน
+    if (formData.role === 'staff') {
+      newFormData.firstName = faculty.label; // ใช้ชื่อหน่วยงานเป็นชื่อ
+      newFormData.lastName = ''; // นามสกุลเป็นค่าว่าง
+      newFormData.email = ''; // อีเมลเป็นค่าว่าง
+    }
+
+    setFormData(newFormData);
     if (errors.faculty) setErrors({...errors, faculty: ''});
     setShowFacultyModal(false);
   };
@@ -146,13 +155,22 @@ const AddUserScreen = ({ navigation }) => {
   };
 
   const handleRoleChange = (role) => {
-    setFormData({
+    const newFormData = {
       ...formData,
       role,
       faculty: '1',
       major: '1',
       groupCode: '1'
-    });
+    };
+
+    // ถ้าเปลี่ยนจากเจ้าหน้าที่เป็น role อื่น ให้รีเซ็ตชื่อและนามสกุล
+    if (formData.role === 'staff' && role !== 'staff') {
+      newFormData.firstName = '';
+      newFormData.lastName = '';
+      newFormData.email = '';
+    }
+
+    setFormData(newFormData);
   };
 
   const handleSuccessComplete = () => {
@@ -187,8 +205,12 @@ const AddUserScreen = ({ navigation }) => {
     const newErrors = {};
     if (!formData.username) newErrors.username = 'กรุณากรอกชื่อผู้ใช้';
     if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
-    if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
-    if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
+    
+    // เจ้าหน้าที่ไม่ต้องกรอกชื่อและนามสกุล
+    if (formData.role !== 'staff') {
+      if (!formData.firstName) newErrors.firstName = 'กรุณากรอกชื่อ';
+      if (!formData.lastName) newErrors.lastName = 'กรุณากรอกนามสกุล';
+    }
     // อีเมลไม่จำเป็นต้องกรอก
     
     // ตรวจสอบเงื่อนไขตาม role
@@ -252,16 +274,25 @@ const AddUserScreen = ({ navigation }) => {
       let dataToSend = {
         username: formData.username,
         password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
         role: formData.role
       };
 
-      // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมาจริงๆ (ไม่เป็นค่าว่าง)
-      if (formData.email && formData.email.trim() !== '') {
-        dataToSend.email = formData.email.trim();
+      // สำหรับเจ้าหน้าที่ ใช้ชื่อหน่วยงานเป็นชื่อ และนามสกุลเป็นค่าว่าง
+      if (formData.role === 'staff') {
+        const selectedDepartment = departments.find(d => d.value === formData.faculty);
+        dataToSend.firstName = selectedDepartment ? selectedDepartment.label : '';
+        dataToSend.lastName = ''; // ส่งค่าว่าง เพราะ model แก้ไขแล้ว
+        // ไม่ส่งอีเมลสำหรับเจ้าหน้าที่
+      } else {
+        // สำหรับ role อื่นๆ ใช้ข้อมูลจาก form
+        dataToSend.firstName = formData.firstName;
+        dataToSend.lastName = formData.lastName;
+        
+        // เพิ่มอีเมลเฉพาะเมื่อมีการกรอกมาจริงๆ (ไม่เป็นค่าว่าง)
+        if (formData.email && formData.email.trim() !== '') {
+          dataToSend.email = formData.email.trim();
+        }
       }
-      // หากไม่มี email หรือเป็นค่าว่าง ก็ไม่ส่ง email field ไปเลย
 
       if (formData.role === 'admin') {
         // ผู้ดูแลระบบ: ไม่ต้องกรอกข้อมูลเพิ่ม
@@ -401,55 +432,61 @@ const AddUserScreen = ({ navigation }) => {
             )}
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>ชื่อ</Text>
-            <TextInput
-              style={[styles.input, errors.firstName && styles.inputError]}
-              value={formData.firstName}
-              onChangeText={(text) => {
-                setFormData({...formData, firstName: text});
-                if (errors.firstName) setErrors({...errors, firstName: ''});
-              }}
-              placeholder="กรอกชื่อ"
-            />
-            {errors.firstName && (
-              <Text style={styles.errorText}>{errors.firstName}</Text>
-            )}
-          </View>
+          {formData.role !== 'staff' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>ชื่อ</Text>
+              <TextInput
+                style={[styles.input, errors.firstName && styles.inputError]}
+                value={formData.firstName}
+                onChangeText={(text) => {
+                  setFormData({...formData, firstName: text});
+                  if (errors.firstName) setErrors({...errors, firstName: ''});
+                }}
+                placeholder="กรอกชื่อ"
+              />
+              {errors.firstName && (
+                <Text style={styles.errorText}>{errors.firstName}</Text>
+              )}
+            </View>
+          )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>นามสกุล</Text>
-            <TextInput
-              style={[styles.input, errors.lastName && styles.inputError]}
-              value={formData.lastName}
-              onChangeText={(text) => {
-                setFormData({...formData, lastName: text});
-                if (errors.lastName) setErrors({...errors, lastName: ''});
-              }}
-              placeholder="กรอกนามสกุล"
-            />
-            {errors.lastName && (
-              <Text style={styles.errorText}>{errors.lastName}</Text>
-            )}
-          </View>
+          {formData.role !== 'staff' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>นามสกุล</Text>
+              <TextInput
+                style={[styles.input, errors.lastName && styles.inputError]}
+                value={formData.lastName}
+                onChangeText={(text) => {
+                  setFormData({...formData, lastName: text});
+                  if (errors.lastName) setErrors({...errors, lastName: ''});
+                }}
+                placeholder="กรอกนามสกุล"
+              />
+              {errors.lastName && (
+                <Text style={styles.errorText}>{errors.lastName}</Text>
+              )}
+            </View>
+          )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>อีเมล (ไม่จำเป็น)</Text>
-            <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              value={formData.email}
-              onChangeText={(text) => {
-                setFormData({...formData, email: text});
-                if (errors.email) setErrors({...errors, email: ''});
-              }}
-              placeholder="กรอกอีเมล (ไม่จำเป็น)"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            {errors.email && (
-              <Text style={styles.errorText}>{errors.email}</Text>
-            )}
-          </View>
+          {formData.role !== 'staff' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>อีเมล (ไม่จำเป็น)</Text>
+              <TextInput
+                style={[styles.input, errors.email && styles.inputError]}
+                value={formData.email}
+                onChangeText={(text) => {
+                  setFormData({...formData, email: text});
+                  if (errors.email) setErrors({...errors, email: ''});
+                }}
+                placeholder="กรอกอีเมล (ไม่จำเป็น)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              {errors.email && (
+                <Text style={styles.errorText}>{errors.email}</Text>
+              )}
+            </View>
+          )}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>สถานะ</Text>
@@ -481,6 +518,11 @@ const AddUserScreen = ({ navigation }) => {
               <Text style={styles.label}>
                 {formData.role === 'staff' ? 'หน่วยงาน' : 'คณะ'}
               </Text>
+              {formData.role === 'staff' && (
+                <Text style={styles.helperText}>
+                  * ชื่อผู้ใช้จะถูกกำหนดตามหน่วยงานที่เลือก
+                </Text>
+              )}
               <TouchableOpacity
                 style={[styles.dropdown, errors.faculty && styles.inputError]}
                 onPress={() => setShowFacultyModal(true)}
@@ -491,6 +533,11 @@ const AddUserScreen = ({ navigation }) => {
                 <Text style={styles.dropdownArrow}>▼</Text>
               </TouchableOpacity>
               {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
+              {formData.role === 'staff' && formData.faculty !== '1' && (
+                <Text style={styles.previewText}>
+                  ชื่อผู้ใช้จะเป็น: {getFacultyLabel()} (ไม่มีนามสกุล)
+                </Text>
+              )}
             </View>
           )}
 
@@ -830,6 +877,18 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
     fontSize: 12,
     marginTop: 5
+  },
+  helperText: {
+    color: '#666',
+    fontSize: 12,
+    marginBottom: 5,
+    fontStyle: 'italic'
+  },
+  previewText: {
+    color: '#007AFF',
+    fontSize: 12,
+    marginTop: 5,
+    fontWeight: '500'
   }
 });
 

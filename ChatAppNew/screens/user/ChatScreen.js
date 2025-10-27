@@ -197,15 +197,20 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading, currentUser]);
 
-  // Real-time polling เพื่อตรวจจับข้อความใหม่ในแชทต่างๆ (ไม่ reload หน้า) - DISABLED DUE TO RATE LIMITING
+  // Real-time polling เพื่อตรวจจับข้อความใหม่ในแชทต่างๆ (ไม่ reload หน้า)
   useEffect(() => {
-    // DISABLED: Real-time polling causes too many API requests and rate limiting
-    // The app will rely on manual refresh and focus refresh instead
-    console.log('⚠️ Real-time polling disabled to prevent rate limiting');
+    // เฉพาะเมื่อมี currentUser และแสดงเนื้อหาแชทแล้ว
+    if (!currentUser || !hasShownInitialAnimation || chats.length === 0) {
+      return;
+    }
+
+    console.log('🔄 Starting ChatScreen real-time polling...');
     
-    return () => {
-      console.log('🔄 No polling cleanup needed - feature disabled');
-    };
+    // Polling ทุก 5 วินาที (ลดลงจากเดิมเพื่อลด rate limiting)
+    const pollingInterval = setInterval(() => {
+      console.log('🔄 ChatScreen: Polling for chat updates...');
+      loadChatsQuietly();
+    }, 5000); // 5 วินาที
 
     return () => {
       if (pollingInterval) {
@@ -288,10 +293,10 @@ const ChatScreen = ({ route, navigation }) => {
     checkForNewMessages(chats);
   }, [chats, checkForNewMessages]);
 
-    // ลบ complex logic ทั้งหมด - ใช้ Force Refresh แทน
+    // Force Refresh เมื่อ focus กลับมา
   useFocusEffect(
     React.useCallback(() => {
-      if (!authLoading && currentUser && !loadChatsRef.current) {
+      if (!authLoading && currentUser) {
         console.log('🔄 ChatScreen focused - Force refresh chat list');
         // เมื่อกลับมาหน้านี้ ให้โหลดข้อมูลแบบเงียบๆ ไม่ต้องแสดง animation
         // Add delay to prevent rapid requests when navigating
@@ -304,7 +309,7 @@ const ChatScreen = ({ route, navigation }) => {
     }, [authLoading, currentUser])
   );
 
-  // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount
+  // Cleanup effect สำหรับ iOS - reset joined chatrooms เมื่อ component unmount  
   useEffect(() => {
     return () => {
       console.log('🧹 ChatScreen unmounting, clearing tracking and request flags');
@@ -314,13 +319,6 @@ const ChatScreen = ({ route, navigation }) => {
       loadChatsRef.current = false;
     };
   }, []);
-
-  // Load current user when auth is ready
-  useEffect(() => {
-    if (!authLoading && !currentUser) {
-      loadCurrentUser();
-    }
-  }, [authLoading]);
 
   const handleDirectChat = async () => {
     try {
@@ -699,6 +697,8 @@ const ChatScreen = ({ route, navigation }) => {
       return;
     }
     
+    loadChatsRef.current = true; // Set flag
+    
     try {
       console.log('🔇 Quietly loading chats for user:', currentUser._id);
       const [chatsResponse, groupsResponse] = await Promise.all([
@@ -776,6 +776,12 @@ const ChatScreen = ({ route, navigation }) => {
       
     } catch (error) {
       console.error('🔇 Quiet chat loading error:', error);
+      // ถ้า rate limit ให้หยุดชั่วคราว
+      if (error.response?.status === 429) {
+        console.log('⚠️ Rate limited in quiet loading, will retry later');
+      }
+    } finally {
+      loadChatsRef.current = false; // Reset flag
     }
   };
 

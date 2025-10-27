@@ -27,7 +27,10 @@ const userSchema = new mongoose.Schema({
     },
     lastName: {
         type: String,
-        required: true
+        required: function() {
+            return this.role !== 'staff'; // เจ้าหน้าที่ไม่ต้องมีนามสกุล
+        },
+        default: ''
     },
     faculty: {
         type: String,
