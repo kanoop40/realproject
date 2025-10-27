@@ -8,7 +8,7 @@ const StartupScreen = ({ onAnimationFinish }) => {
   const [showChatAnimation, setShowChatAnimation] = useState(false);
   const [frame1Finished, setFrame1Finished] = useState(false);
   const [chatAnimationFinished, setChatAnimationFinished] = useState(false);
-  const [canSkip, setCanSkip] = useState(false);
+  const [canSkip, setCanSkip] = useState(true); // เปลี่ยนเป็น true เพื่อให้กดข้ามได้ตลอด
 
   useEffect(() => {
     // เริ่มเล่น Frame 1 animation ทันทีเมื่อ component โหลด
@@ -31,9 +31,9 @@ const StartupScreen = ({ onAnimationFinish }) => {
   const handleChatAnimationFinish = () => {
     console.log('🎬 Chat animation finished - keeping it displayed');
     setChatAnimationFinished(true);
-    setCanSkip(true); // อนุญาตให้กดข้ามได้
+    // ลบ setCanSkip(true) ออก เพราะตั้งค่าเป็น true ไว้แล้วตั้งแต่เริ่มต้น
     
-    // Auto-skip หลังจาก 3 วินาที (หรือกดข้ามได้)
+    // Auto-skip หลังจาก 3 วินาที (หรือกดข้ามได้ตลอด)
     setTimeout(() => {
       if (onAnimationFinish) {
         console.log('🎬 Auto-skip to Welcome screen');
@@ -43,11 +43,10 @@ const StartupScreen = ({ onAnimationFinish }) => {
   };
 
   const handleScreenPress = () => {
-    if (canSkip) {
-      console.log('🎬 Manual skip to Welcome screen');
-      if (onAnimationFinish) {
-        onAnimationFinish();
-      }
+    // ลบเงื่อนไข canSkip ออก เพื่อให้กดข้ามได้ตลอด
+    console.log('🎬 Manual skip to Welcome screen');
+    if (onAnimationFinish) {
+      onAnimationFinish();
     }
   };
 
@@ -84,12 +83,10 @@ const StartupScreen = ({ onAnimationFinish }) => {
           />
         </View>
 
-        {/* Skip indicator - แสดงเมื่อสามารถกดข้ามได้ */}
-        {canSkip && (
-          <View style={styles.skipIndicator}>
-            <Text style={styles.skipText}>แตะที่หน้าจอเพื่อข้าม</Text>
-          </View>
-        )}
+        {/* Skip indicator - แสดงตลอด เพื่อให้รู้ว่ากดข้ามได้ */}
+        <View style={styles.skipIndicator}>
+          <Text style={styles.skipText}>แตะที่หน้าจอเพื่อข้าม</Text>
+        </View>
       </View>
     </TouchableWithoutFeedback>
   );
