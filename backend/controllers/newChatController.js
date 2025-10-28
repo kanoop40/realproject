@@ -649,16 +649,15 @@ const sendMessage = asyncHandler(async (req, res) => {
             }
         }
 
-        // Populate message for response
-        await message.populate('user_id', 'firstName lastName username avatar');
-        if (fileDoc) {
-            await message.populate('file_id');
-        }
+        // Populate message for response - refetch to get updated data
+        const messageForResponse = await Messages.findById(message._id)
+            .populate('user_id', 'firstName lastName username avatar role')
+            .populate('file_id');
 
         // ส่ง notification ไปยังผู้เข้าร่วมแชทคนอื่น ๆ
         try {
             let recipients = [];
-            const sender = message.user_id;
+            const sender = messageForResponse.user_id;
             const senderName = `${sender.firstName} ${sender.lastName}`;
             
             // หาผู้เข้าร่วมแชทคนอื่น ๆ รองรับทั้ง user_id และ participants
@@ -687,7 +686,7 @@ const sendMessage = asyncHandler(async (req, res) => {
                 await NotificationService.sendNewMessageNotification(
                     recipient.pushToken,
                     senderName,
-                    content.trim(),
+                    messageForResponse.content.trim(),
                     id
                 );
                 
@@ -697,7 +696,7 @@ const sendMessage = asyncHandler(async (req, res) => {
                     io.to(recipient._id.toString()).emit('receiveNotification', {
                         type: 'new_message',
                         title: `ข้อความใหม่จาก ${senderName}`,
-                        message: content.trim(),
+                        message: messageForResponse.content.trim(),
                         chatroomId: id,
                         senderId: userId,
                         timestamp: new Date()
@@ -758,16 +757,16 @@ const sendMessage = asyncHandler(async (req, res) => {
         }
 
         const responseData = {
-            _id: message._id,
-            content: message.content,
-            sender: message.user_id,
-            timestamp: message.time,
-            messageType: message.messageType,
-            fileUrl: message.fileUrl,
-            fileName: message.fileName,
-            fileSize: message.fileSize,
-            mimeType: message.mimeType,
-            file: message.file_id || null
+            _id: messageForResponse._id,
+            content: messageForResponse.content,
+            sender: messageForResponse.user_id,
+            timestamp: messageForResponse.time,
+            messageType: messageForResponse.messageType,
+            fileUrl: messageForResponse.fileUrl,
+            fileName: messageForResponse.fileName,
+            fileSize: messageForResponse.fileSize,
+            mimeType: messageForResponse.mimeType,
+            file: messageForResponse.file_id || null
         };
         
         console.log('🎉 Sending response:', {

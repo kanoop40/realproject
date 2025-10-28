@@ -34,15 +34,50 @@ const FileMessage = ({
     return match ? match[1].trim() : null;
   };
   
-  // Get display filename from various sources
+  // Get display filename from various sources - improved priority order
   const getDisplayFileName = () => {
-    if (item.fileName) return item.fileName;
-    if (item.file?.file_name) return item.file.file_name;
+    // Priority 1: Direct fileName field
+    if (item.fileName) {
+      console.log('📁 Using fileName field:', item.fileName);
+      return item.fileName;
+    }
+    
+    // Priority 2: file.file_name (from File document)
+    if (item.file?.file_name) {
+      console.log('📁 Using file.file_name:', item.file.file_name);
+      return item.file.file_name;
+    }
+    
+    // Priority 3: Extract from content pattern
     const extractedName = extractFileNameFromContent(item.content);
     if (extractedName) {
-      console.log('🔍 Extracted filename from content:', extractedName);
+      console.log('� Extracted filename from content:', extractedName);
       return extractedName;
     }
+    
+    // Priority 4: Try to get from temp file data (for optimistic messages)
+    if (item.isTemporary && item.originalFileName) {
+      console.log('📁 Using temporary originalFileName:', item.originalFileName);
+      return item.originalFileName;
+    }
+    
+    // Priority 5: Check if we have fileUrl and try to extract filename
+    if (item.fileUrl) {
+      try {
+        const url = new URL(item.fileUrl);
+        const pathname = url.pathname;
+        const filename = pathname.split('/').pop();
+        if (filename && filename.includes('.')) {
+          console.log('📁 Extracted filename from URL:', filename);
+          return filename;
+        }
+      } catch (error) {
+        console.log('❌ Error extracting filename from URL:', error);
+      }
+    }
+    
+    // Fallback: Default name
+    console.log('📁 Using fallback: ไฟล์แนบ');
     return 'ไฟล์แนบ';
   };
   
@@ -121,8 +156,26 @@ const FileMessage = ({
             ]} numberOfLines={2} ellipsizeMode="middle">
               {(() => {
                 const fileName = getDisplayFileName();
-                if (fileName === 'ไฟล์แนบ') return fileName;
-                return fileName?.includes('%') ? decodeURIComponent(fileName) : decodeFileName(fileName);
+                
+                // If we have a proper filename, decode and display it
+                if (fileName && fileName !== 'ไฟล์แนบ') {
+                  try {
+                    // Handle URL-encoded filenames
+                    if (fileName.includes('%')) {
+                      const decoded = decodeURIComponent(fileName);
+                      console.log('🔧 Decoded filename:', fileName, '→', decoded);
+                      return decoded;
+                    }
+                    // Handle regular filenames
+                    return decodeFileName ? decodeFileName(fileName) : fileName;
+                  } catch (error) {
+                    console.log('❌ Error decoding filename:', error);
+                    return fileName;
+                  }
+                }
+                
+                // Fallback to content-based display
+                return fileName;
               })()}
             </Text>
             <Text style={[

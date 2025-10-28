@@ -298,7 +298,28 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         // กรองเฉพาะข้อความใหม่ที่ยังไม่มีในระบบท้องถิ่น
         const newMessages = latestMessages.filter(serverMsg => {
-          const exists = messages.some(localMsg => localMsg._id === serverMsg._id);
+          const exists = messages.some(localMsg => {
+            // ตรวจสอบ ID เหมือนเดิม
+            if (localMsg._id === serverMsg._id) return true;
+            
+            // ✨ ตรวจสอบข้อความที่อาจซ้ำกัน (เช่น optimistic message)
+            if (localMsg.isOptimistic || localMsg.isTemporary) {
+              // ตรวจสอบเวลาใกล้เคียงกัน (ภายใน 5 วินาที)
+              if (localMsg.timestamp && serverMsg.timestamp) {
+                const timeDiff = Math.abs(new Date(localMsg.timestamp) - new Date(serverMsg.timestamp));
+                if (timeDiff < 5000) return true;
+              }
+              
+              // ตรวจสอบ messageType และ sender เหมือนกัน
+              if (localMsg.messageType === serverMsg.messageType && 
+                  localMsg.sender?._id === serverMsg.sender?._id) {
+                return true;
+              }
+            }
+            
+            return false;
+          });
+          
           if (!exists) {
             console.log('🆕 Found new message:', serverMsg._id, serverMsg.content?.substring(0, 50));
           }
@@ -1222,8 +1243,6 @@ const PrivateChatScreen = ({ route, navigation }) => {
           );
         }
         
-        const filteredMessages = prev.filter(msg => msg._id !== tempId);
-        
         // ใช้ข้อมูลจาก response.data หรือ response.data.message
         const serverMessage = response.data.message || response.data;
         console.log('� Server message data:', serverMessage);
@@ -1237,6 +1256,20 @@ const PrivateChatScreen = ({ route, navigation }) => {
           );
         }
         
+        // ✨ ตรวจสอบว่า message นี้มีอยู่แล้วหรือไม่ (เพื่อป้องกันการแสดงซ้ำ)
+        const messageExists = prev.some(msg => 
+          msg._id === serverMessage._id || 
+          (msg._id !== tempId && msg.timestamp && serverMessage.timestamp && 
+           Math.abs(new Date(msg.timestamp) - new Date(serverMessage.timestamp)) < 1000)
+        );
+        
+        if (messageExists) {
+          console.log('⚠️ Image message already exists, just removing optimistic message');
+          return prev.filter(msg => msg._id !== tempId);
+        }
+        
+        const filteredMessages = prev.filter(msg => msg._id !== tempId);
+        
         // เพิ่มข้อความใหม่จาก server (ใช้ messageType เดิมจากเซิร์ฟเวอร์)
         console.log('🔄 PrivateChat using server messageType:', {
           fileName: serverMessage.fileName,
@@ -1247,7 +1280,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
         const updatedMessages = [...filteredMessages, {
           ...serverMessage,
           messageType: serverMessage.messageType, // ใช้ messageType เดิมจากเซิร์ฟเวอร์
-          isTemporary: false
+          isTemporary: false,
+          image: serverMessage.fileUrl || serverMessage.image // ✨ เพิ่ม image field สำหรับรูปภาพ
         }];
         
         console.log('📋 Updated messages count:', updatedMessages.length);
