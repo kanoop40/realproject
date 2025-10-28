@@ -789,9 +789,12 @@ const uploadAvatar = asyncHandler(async (req, res) => {
 const updatePushToken = asyncHandler(async (req, res) => {
     try {
         const userId = req.user._id;
-        const { pushToken } = req.body;
+        const { pushToken, deviceInfo } = req.body;
 
         console.log('🔔 Updating push token for user:', userId, 'Token:', pushToken ? 'SET' : 'REMOVE');
+        if (deviceInfo) {
+            console.log('📱 Device info:', deviceInfo);
+        }
 
         // ถ้าเป็นการลบ token (logout)
         if (!pushToken) {
