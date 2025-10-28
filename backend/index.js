@@ -281,6 +281,20 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Test proxy endpoint (direct in index.js to bypass middleware)
+app.get('/api/test-proxy', async (req, res) => {
+    console.log('🧪🧪🧪 TEST PROXY ENDPOINT CALLED 🧪🧪🧪');
+    console.log('📨 Query:', req.query);
+    
+    res.header('Access-Control-Allow-Origin', '*');
+    res.json({
+        success: true,
+        message: 'Test proxy endpoint working!',
+        query: req.query,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Debug environment endpoint
 app.get('/api/env-check', (req, res) => {
     res.json({
