@@ -115,13 +115,12 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   }, [groupId]);
 
-  // กำหนด initial loading state สำหรับ iOS เมื่อสร้างกลุ่มใหม่
+  // ปิด initial loading - แสดงห้องแชททันทีเพื่อความเร็ว
   useEffect(() => {
-    if (showInitialLoading || fromCreate) {
-      console.log('🔄 Starting initial loading for iOS from group creation');
-      // Loading functionality removed
-    }
-  }, [showInitialLoading, fromCreate]);
+    // ไม่ต้อง loading - เข้าห้องแชททันที
+    setShowChatContent(true);
+    setIsLoading(false);
+  }, []);
 
   // เช็ครับ refresh parameter จาก EditGroupScreen
   useEffect(() => {
@@ -453,14 +452,19 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   }, [socket, groupId, authUser]);
 
-  // Force refresh messages เมื่อกลับมาหน้าแชทกลุ่ม (เฉพาะครั้งแรก)
+  // โหลดข้อมูลทันทีเมื่อเข้าหน้า - ไม่รอ focus
+  useEffect(() => {
+    if (authUser && groupId) {
+      console.log('⚡ GroupChat instant load - no wait');
+      loadGroupData(1, false);
+    }
+  }, [authUser, groupId]);
+  
+  // Force refresh messages เมื่อกลับมาหน้าแชทกลุ่ม (เฉพาะครั้งแรก) - ปิดใช้งาน
   useFocusEffect(
     React.useCallback(() => {
-      if (authUser && groupId && messages.length === 0) {
-        console.log('� GroupChat first time load');
-        loadGroupData(1, false);
-      }
-    }, [authUser, groupId])
+      // ไม่ต้องโหลดซ้ำ - ใช้ useEffect ด้านบนแล้ว
+    }, [])
   );
 
   // Smart Real-time Sync - ไม่ refresh หน้าจอ
@@ -526,7 +530,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         } catch (error) {
           console.log('� Group background sync failed:', error.message);
         }
-      }, 3000); // เช็คทุก 3 วินาทีสำหรับ typing และ messages
+      }, 10000); // เช็คทุก 10 วินาทีเพื่อลด rate limiting
     }
 
     return () => {

@@ -44,7 +44,7 @@ const ChatHeader = ({
           <Text style={styles.nameText}>
             {(typeof recipientName === 'string' && recipientName.trim()) ? recipientName : 'แชทส่วนตัว'}
           </Text>
-          <Text style={styles.statusText}>ออนไลน์</Text>
+          
         </View>
       </View>
       

@@ -157,23 +157,12 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading]);
 
-  // ตรวจสอบ animation flag จาก AsyncStorage เมื่อ component โหลด
+  // ปิด animation เพื่อความเร็วในการใช้งาน
   useEffect(() => {
-    const checkAnimationFlag = async () => {
-      try {
-        const animationShown = await AsyncStorage.getItem('chatListAnimationShown');
-        if (animationShown === 'true') {
-          console.log('🎬 Animation already shown in this session, skipping');
-          setHasShownInitialAnimation(true);
-          setShowChatListAnimation(false);
-          setShowChatListContent(true);
-        }
-      } catch (error) {
-        console.log('❌ Error checking animation flag:', error);
-      }
-    };
-    
-    checkAnimationFlag();
+    console.log('⚡ Fast mode: Skipping animations for speed');
+    setHasShownInitialAnimation(true);
+    setShowChatListAnimation(false);
+    setShowChatListContent(true);
   }, []);
 
   // Load chats when user is ready และจัดการ animation ครั้งแรก
@@ -188,10 +177,10 @@ const ChatScreen = ({ route, navigation }) => {
         AsyncStorage.setItem('chatListAnimationShown', 'true');
       }
       
-      // Add a small delay to prevent rapid fire requests
+      // เร่งการโหลดข้อมูลสำหรับความเร็ว
       const timeoutId = setTimeout(() => {
         loadChats();
-      }, 200);
+      }, 50);
       
       return () => clearTimeout(timeoutId);
     }
@@ -680,13 +669,11 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // จัดการเมื่อ chat list animation เสร็จ
+  // จัดการเมื่อ chat list animation เสร็จ - เร่งให้ทันที
   const handleChatListAnimationFinish = () => {
-    console.log('🎬 Chat list animation finished, showing content');
+    console.log('⚡ Fast mode: Immediate content display');
     setShowChatListAnimation(false);
     setShowChatListContent(true);
-    // อัปเดต AsyncStorage เพื่อบันทึกว่าแสดง animation แล้ว
-    AsyncStorage.setItem('chatListAnimationShown', 'true');
   };
 
   // ฟังก์ชันโหลดแชทแบบเงียบๆ (ไม่แสดง loading)
