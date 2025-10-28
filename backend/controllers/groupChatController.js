@@ -813,9 +813,21 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
         const messageContent = message.content || (message.messageType === 'image' ? '📷 รูปภาพ' : '📎 ไฟล์');
         
         // หาสมาชิกในกลุ่มที่มี push token (ยกเว้นผู้ส่ง)
+        console.log(`🔍 GROUP NOTIFICATION DEBUG: Group ${groupId} has ${group.members.length} members`);
+        console.log(`🔍 GROUP NOTIFICATION DEBUG: Sender: ${userId} (${senderName})`);
+        
         const recipientIds = group.members
-            .filter(member => member.user.toString() !== userId.toString())
+            .filter(member => {
+                const memberId = member.user.toString();
+                const senderId = userId.toString();
+                const isNotSender = memberId !== senderId;
+                
+                console.log(`🔍 Member: ${memberId}, Sender: ${senderId}, Include: ${isNotSender}`);
+                return isNotSender;
+            })
             .map(member => member.user);
+        
+        console.log(`🔍 GROUP NOTIFICATION DEBUG: Filtered to ${recipientIds.length} recipients:`, recipientIds.map(id => id.toString()));
         
         if (recipientIds.length > 0) {
             const recipients = await User.find({

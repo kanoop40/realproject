@@ -737,34 +737,71 @@ const sendMessage = asyncHandler(async (req, res) => {
             const sender = messageForResponse.user_id;
             const senderName = `${sender.firstName} ${sender.lastName}`;
             
+            console.log(`🔍 CHATROOM DEBUG: Chatroom structure for ${id}:`);
+            console.log(`   - participants: ${chatroom.participants?.length || 0} items`, chatroom.participants?.map(p => p.toString()));
+            console.log(`   - user_id: ${chatroom.user_id?.length || 0} items`, chatroom.user_id?.map(p => p.toString()));
+            console.log(`   - members: ${chatroom.members?.length || 0} items`, chatroom.members?.map(m => m.userId?.toString()));
+            console.log(`   - sender: ${userId} (${senderName})`);
+            
             // หาผู้เข้าร่วมแชทคนอื่น ๆ รองรับทั้ง user_id และ participants
             if (chatroom.participants && chatroom.participants.length > 0) {
                 // Use participants array (new schema)
                 const participantIds = chatroom.participants
                     .filter(id => id.toString() !== userId.toString());
                 
+                console.log(`🎯 Using participants array, filtered IDs:`, participantIds.map(p => p.toString()));
                 recipients = await User.find({
                     _id: { $in: participantIds },
                     pushToken: { $exists: true, $ne: null }
                 });
+                console.log(`🎯 Found ${recipients.length} recipients from participants`);
             } else if (chatroom.user_id && chatroom.user_id.length > 0) {
                 // Use user_id array (old schema)
                 const userIds = chatroom.user_id
                     .filter(id => id.toString() !== userId.toString());
                 
+                console.log(`🎯 Using user_id array, filtered IDs:`, userIds.map(p => p.toString()));
                 recipients = await User.find({
                     _id: { $in: userIds },
                     pushToken: { $exists: true, $ne: null }
                 });
+                console.log(`🎯 Found ${recipients.length} recipients from user_id`);
+            } else if (chatroom.members && chatroom.members.length > 0) {
+                // Use members array (group chat schema)
+                const memberIds = chatroom.members
+                    .map(member => member.userId || member.user)
+                    .filter(id => id && id.toString() !== userId.toString());
+                
+                console.log(`🎯 Using members array, filtered IDs:`, memberIds.map(p => p.toString()));
+                recipients = await User.find({
+                    _id: { $in: memberIds },
+                    pushToken: { $exists: true, $ne: null }
+                });
+                console.log(`🎯 Found ${recipients.length} recipients from members`);
+            } else {
+                console.log(`⚠️ WARNING: No valid participants found in chatroom ${id}!`);
             }
 
+            // FINAL SAFEGUARD: ตรวจสอบอีกครั้งว่า recipients ไม่ใช่ sender
+            const validRecipients = recipients.filter(recipient => {
+                const recipientId = recipient._id.toString();
+                const senderId = userId.toString();
+                const isValid = recipientId !== senderId;
+                
+                if (!isValid) {
+                    console.log(`⚠️ SAFEGUARD: Filtering out sender from recipients: ${recipient.firstName} ${recipient.lastName} (${recipientId})`);
+                }
+                
+                return isValid;
+            });
+
             // ส่ง notification ไปยังแต่ละคน
-            console.log(`🔔 NOTIFICATION DEBUG: Sending to ${recipients.length} recipients:`, recipients.map(r => ({ id: r._id, name: r.firstName + ' ' + r.lastName, hasToken: !!r.pushToken })));
+            console.log(`🔔 NOTIFICATION DEBUG: Sending to ${validRecipients.length} recipients:`, validRecipients.map(r => ({ id: r._id, name: r.firstName + ' ' + r.lastName, hasToken: !!r.pushToken })));
             console.log(`🔔 NOTIFICATION DEBUG: Sender: ${senderName} (${userId})`);
             console.log(`🔔 NOTIFICATION DEBUG: Chatroom: ${id}`);
-            console.log(`🔔 NOTIFICATION DEBUG: Participants:`, chatroom.participants || chatroom.user_id);
+            console.log(`🔔 NOTIFICATION DEBUG: Participants:`, chatroom.participants || chatroom.user_id || chatroom.members?.map(m => m.userId));
             
-            for (const recipient of recipients) {
+            for (const recipient of validRecipients) {
                 console.log(`🔔 Sending push notification to ${recipient.firstName} ${recipient.lastName} (${recipient._id})`);
                 await NotificationService.sendNewMessageNotification(
                     recipient.pushToken,
@@ -787,7 +824,7 @@ const sendMessage = asyncHandler(async (req, res) => {
                 }
             }
             
-            console.log(`📲 Sent notifications to ${recipients.length} recipients`);
+            console.log(`📲 Sent notifications to ${validRecipients.length} recipients`);
         } catch (notificationError) {
             console.error('Error sending notifications:', notificationError);
             // ไม่ให้ error ของ notification มากระทบการส่งข้อความ
