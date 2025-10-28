@@ -30,7 +30,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme
 import LoadingOverlay from '../../components/LoadingOverlay';
 
 const ChatScreen = ({ route, navigation }) => {
-  const { user: authUser, loading: authLoading, login } = useAuth();
+  const { user: authUser, loading: authLoading, login, logout } = useAuth();
   const { socket, joinChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
   const [chats, setChats] = useState([]);
@@ -587,11 +587,15 @@ const ChatScreen = ({ route, navigation }) => {
   // ระบบซ่อนแชทถูกลบออกแล้ว - เปลี่ยนเป็นระบบจัดเรียงแชท
 
   const handleLogout = async () => {
+    console.log('🚪 ChatScreen: handleLogout called');
     try {
-      await AsyncStorage.removeItem('userToken');
+      // เรียกใช้ logout จาก AuthContext ที่มีการลบ push token
+      console.log('🔄 ChatScreen: Calling AuthContext logout...');
+      await logout();
+      console.log('✅ ChatScreen: AuthContext logout completed');
       navigation.replace('Login');
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('❌ ChatScreen: Error during logout:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถออกจากระบบได้');
     }
   };
