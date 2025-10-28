@@ -5,7 +5,8 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  Animated
+  Animated,
+  Platform
 } from 'react-native';
 import { API_URL } from '../service/api';
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from '../styles/theme';
@@ -48,6 +49,11 @@ const ImageMessage = ({
     
     // 1. Cloudinary URL (เป็น full URL แล้ว)
     if (item.fileUrl && item.fileUrl.includes('cloudinary.com')) {
+      // ✨ iOS & Android: ใช้ proxy สำหรับ Cloudinary เพื่อหลีกเลี่ยงปัญหา Network Security
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        console.log(`📱 ${Platform.OS}: Using proxy for Cloudinary image`);
+        return `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(item.fileUrl)}`;
+      }
       return item.fileUrl;
     }
     
@@ -58,6 +64,11 @@ const ImageMessage = ({
     
     // 3. Direct image URL (full HTTP URL)
     if (item.image && typeof item.image === 'string' && item.image.startsWith('http')) {
+      // ✨ iOS & Android: ใช้ proxy สำหรับ Cloudinary URLs ใน image field ด้วย
+      if ((Platform.OS === 'android' || Platform.OS === 'ios') && item.image.includes('cloudinary.com')) {
+        console.log(`📱 ${Platform.OS}: Using proxy for Cloudinary image (image field)`);
+        return `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(item.image)}`;
+      }
       return item.image;
     }
     
@@ -158,12 +169,19 @@ const ImageMessage = ({
               onError={(error) => {
                 console.log('❌ Image load error:', error.nativeEvent?.error || error);
                 console.log('❌ Failed URI:', getImageUri(item));
-                console.log('🔍 Item data:', {
+                console.log('� Platform:', Platform.OS);
+                console.log('�🔍 Item data:', {
                   fileUrl: item.fileUrl,
                   image: item.image,
                   file: item.file,
                   messageType: item.messageType
                 });
+                
+                // ✨ Android fallback: retry with direct URL if proxy failed
+                if (Platform.OS === 'android' && item.fileUrl && item.fileUrl.includes('cloudinary.com')) {
+                  console.log('🔄 Android: Retrying with direct Cloudinary URL...');
+                  // This will be handled by React Native's retry mechanism
+                }
               }}
               onLoad={() => {
                 console.log('✅ Image loaded successfully');

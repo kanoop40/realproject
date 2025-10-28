@@ -1930,9 +1930,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
 
       let fullUrl = fileUrl;
       
-      // ตรวจสอบว่าเป็น Cloudinary URL หรือไม่
-      if (fileUrl.includes('cloudinary.com')) {
-        // สำหรับ Cloudinary URL - ประมวลผล URL อย่างระมัดระวัง
+      // ✨ iOS & Android-specific URL processing
+      if ((Platform.OS === 'android' || Platform.OS === 'ios') && fileUrl.includes('cloudinary.com')) {
+        console.log(`📱 ${Platform.OS}: Using proxy server for Cloudinary files`);
+        // ใช้ proxy server สำหรับ iOS & Android เพื่อหลีกเลี่ยง CORS และ Network Security issues
+        fullUrl = `${API_URL}/api/files/proxy?fileUrl=${encodeURIComponent(fileUrl)}`;
+      } else if (fileUrl.includes('cloudinary.com')) {
+        // สำหรับ iOS และ Cloudinary URL - ประมวลผล URL อย่างระมัดระวัง
         let processedUrl = fileUrl;
         
         try {
@@ -1947,12 +1951,14 @@ const PrivateChatScreen = ({ route, navigation }) => {
           // Fallback ใช้ URL เดิม
           fullUrl = fileUrl;
         }
-        
-        console.log('🌤️ Using processed Cloudinary URL:', fullUrl);
       } else if (!fileUrl.startsWith('http')) {
         fullUrl = `${API_URL}/${fileUrl.replace(/^\/+/, '')}`;
         console.log('🔗 Converted to full URL:', fullUrl);
+      } else {
+        fullUrl = fileUrl;
       }
+      
+      console.log('✅ Final download URL:', fullUrl);
 
       const finalFileName = fileName || ('file_' + new Date().getTime());
       const fileExtension = finalFileName.split('.').pop()?.toLowerCase() || '';

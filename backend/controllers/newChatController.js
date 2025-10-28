@@ -475,14 +475,29 @@ const sendMessage = asyncHandler(async (req, res) => {
                     throw new Error('File upload to Cloudinary failed - no path received');
                 }
                 
-                // Determine message type based on file
-                const isImage = file.mimetype && file.mimetype.startsWith('image/');
-                console.log('🔍 File MIME type check:', {
-                    fileName: file.originalname,
+                // Determine message type based on file name AND mimetype
+                const fileName = file.originalname || '';
+                const fileExtension = fileName.toLowerCase().split('.').pop();
+                
+                // Check both mimetype and file extension for accurate detection
+                const isImageByMime = file.mimetype && file.mimetype.startsWith('image/');
+                const isImageByExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension);
+                const isPdfByExt = fileExtension === 'pdf';
+                
+                // PDF files should always be treated as 'file' type, not 'image'
+                const isImage = isImageByMime && isImageByExt && !isPdfByExt;
+                
+                console.log('🔍 File type analysis:', {
+                    fileName: fileName,
+                    fileExtension: fileExtension,
                     mimetype: file.mimetype,
-                    isImage: isImage,
+                    isImageByMime: isImageByMime,
+                    isImageByExt: isImageByExt,
+                    isPdfByExt: isPdfByExt,
+                    finalIsImage: isImage,
                     incomingMessageType: incomingMessageType
                 });
+                
                 messageType = isImage ? 'image' : 'file';
                 console.log('✅ Final messageType set to:', messageType);
                 
