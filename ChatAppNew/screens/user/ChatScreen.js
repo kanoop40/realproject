@@ -206,11 +206,11 @@ const ChatScreen = ({ route, navigation }) => {
 
     console.log('🔄 Starting ChatScreen real-time polling...');
     
-    // Polling ทุก 5 วินาที (ลดลงจากเดิมเพื่อลด rate limiting)
+    // Polling ทุก 15 วินาที (ลด rate limiting สำหรับ multi-user testing)
     const pollingInterval = setInterval(() => {
       console.log('🔄 ChatScreen: Polling for chat updates...');
       loadChatsQuietly();
-    }, 5000); // 5 วินาที
+    }, 15000); // 15 วินาที
 
     return () => {
       if (pollingInterval) {
