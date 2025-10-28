@@ -142,22 +142,44 @@ const proxyFileDownload = asyncHandler(async (req, res) => {
 
         console.log('🔄 Proxying file download for:', fileUrl);
 
-        // Simple approach: just try multiple URL variations directly
-        console.log('🔗 Cloudinary file detected - will try multiple URL formats');        // Fallback: try regular URLs if Cloudinary API didn't work
-        const urlsToTry = [fileUrl];
+        // Enhanced approach: try multiple URL variations with better PDF handling
+        console.log('🔗 Cloudinary file detected - will try multiple URL formats');
+        const urlsToTry = [];
         
         if (fileUrl.includes('cloudinary.com')) {
-            // Try converting image/upload to raw/upload
-            const rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
-            if (rawUrl !== fileUrl) {
+            // For PDF files that were incorrectly uploaded as images, prioritize raw URLs
+            if (fileUrl.includes('.pdf') && fileUrl.includes('/image/upload/')) {
+                console.log('📄 PDF with image/upload detected - trying raw variations first');
+                
+                // 1. Try raw/upload first for PDFs
+                const rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
                 urlsToTry.push(rawUrl);
+                
+                // 2. Try raw with fl_attachment
+                const rawAttachmentUrl = rawUrl.replace('/upload/', '/upload/fl_attachment/');
+                urlsToTry.push(rawAttachmentUrl);
+                
+                // 3. Original URL as fallback
+                urlsToTry.push(fileUrl);
+                
+            } else {
+                // Original URL first
+                urlsToTry.push(fileUrl);
+                
+                // Try converting image/upload to raw/upload
+                const rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
+                if (rawUrl !== fileUrl) {
+                    urlsToTry.push(rawUrl);
+                }
+                
+                // Try with fl_attachment flag
+                const attachmentUrl = fileUrl.replace('/upload/', '/upload/fl_attachment/');
+                if (attachmentUrl !== fileUrl) {
+                    urlsToTry.push(attachmentUrl);
+                }
             }
-            
-            // Try with fl_attachment flag
-            const attachmentUrl = fileUrl.replace('/upload/', '/upload/fl_attachment/');
-            if (attachmentUrl !== fileUrl) {
-                urlsToTry.push(attachmentUrl);
-            }
+        } else {
+            urlsToTry.push(fileUrl);
         }
 
         console.log('🔗 Proxy URLs to try:', urlsToTry);
@@ -204,11 +226,36 @@ const proxyFileDownload = asyncHandler(async (req, res) => {
         response.data.pipe(res);
 
     } catch (error) {
-        console.error('❌ Error proxying file download:', error.message);
-        res.status(500).json({
+        console.error('❌ Error proxying file download:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            fileUrl: req.query.fileUrl,
+            stack: error.stack
+        });
+        
+        let errorMessage = 'การดาวน์โหลดไม่สำเร็จ';
+        let statusCode = 500;
+        
+        if (error.response) {
+            // Server responded with error status
+            statusCode = error.response.status;
+            if (error.response.status === 404) {
+                errorMessage = 'ไม่พบไฟล์ที่ต้องการดาวน์โหลด';
+            } else if (error.response.status === 403) {
+                errorMessage = 'ไม่มีสิทธิ์เข้าถึงไฟล์นี้';
+            }
+        } else if (error.code === 'ENOTFOUND') {
+            errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้';
+        } else if (error.code === 'TIMEOUT') {
+            errorMessage = 'การดาวน์โหลดใช้เวลานานเกินไป';
+        }
+        
+        res.status(statusCode).json({
             success: false,
-            message: 'Failed to download file',
-            error: error.message
+            message: errorMessage,
+            error: error.message,
+            code: error.code
         });
     }
 });
