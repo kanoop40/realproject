@@ -29,11 +29,25 @@ class NotificationService {
   }
 
   // ล้างข้อมูลผู้ใช้เมื่อ logout
-  clearCurrentUser() {
+  async clearCurrentUser() {
     console.log('🔔 NotificationService: Clearing current user data');
+    
+    // ลบ push token จาก backend ก่อน logout
+    if (this.currentUserId && this.expoPushToken) {
+      try {
+        console.log('🗑️ Removing push token from backend...');
+        await this.updatePushToken(null); // ส่ง null เพื่อลบ token
+        console.log('✅ Push token removed from backend');
+      } catch (error) {
+        console.error('❌ Failed to remove push token from backend:', error);
+      }
+    }
+    
+    // ล้างข้อมูลใน service
     this.currentUserId = null;
     this.currentUserName = null;
     this.expoPushToken = null;
+    console.log('✅ NotificationService: All user data cleared');
   }
 
   // ลงทะเบียนสำหรับ push notifications
@@ -331,6 +345,30 @@ class NotificationService {
   addNotificationResponseReceivedListener(listener) {
     this.responseListener = Notifications.addNotificationResponseReceivedListener(listener);
     return this.responseListener;
+  }
+
+  // อัปเดต push token ใน backend
+  async updatePushToken(token) {
+    try {
+      if (!this.currentUserId) {
+        console.log('🔔 No current user - skipping token update');
+        return;
+      }
+
+      console.log('🔔 Updating push token in backend:', token ? 'SET' : 'REMOVE');
+      
+      // Import api here to avoid circular dependency
+      const { default: api } = await import('./api');
+      
+      const response = await api.post('/users/push-token', {
+        pushToken: token
+      });
+      
+      console.log('✅ Push token updated successfully:', response.data);
+    } catch (error) {
+      console.error('❌ Error updating push token:', error);
+      throw error; // Re-throw เพื่อให้ caller จัดการ
+    }
   }
 
   // ล้าง badge count

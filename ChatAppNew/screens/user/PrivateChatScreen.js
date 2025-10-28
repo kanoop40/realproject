@@ -144,6 +144,22 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [currentUser, chatroomId]);
 
+  // Scroll หลังจากส่งข้อความเสร็จ (เฉพาะเมื่อ keyboard หด)
+  useEffect(() => {
+    if (!isSending && messages.length > 0) {
+      // รอสักครู่แล้ว scroll ไปข้อความล่าสุด
+      const timer = setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        } catch (error) {
+          console.error('Error scrolling after send completed:', error);
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isSending, messages.length]);
+
   // Auto-scroll ไปข้อความล่าสุดเมื่อมีข้อความใหม่ (ทำงานในพื้นหลังระหว่างโหลด) - GroupChat Style
   useEffect(() => {
     if (messages.length > 0 && !hasScrolledToEnd) {
@@ -380,28 +396,38 @@ const PrivateChatScreen = ({ route, navigation }) => {
             return updated;
           });
           
-          // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด (ไม่รบกวนเมื่อกำลังดูข้อความเก่า) - GroupChat Style
-          if (!showScrollToBottom && trulyNewMessages.length > 0) {
+          // Auto scroll เฉพาะถ้าผู้ใช้อยู่ใกล้ล่างสุด หรือเป็นข้อความจากผู้ใช้เอง
+          const hasMyNewMessage = trulyNewMessages.some(msg => 
+            msg.user_id?._id === currentUser?._id || 
+            msg.sender?._id === currentUser?._id ||
+            msg.sender_id === currentUser?._id
+          );
+          
+          if ((!showScrollToBottom || hasMyNewMessage) && trulyNewMessages.length > 0) {
             setTimeout(() => {
               try {
-                setMessages(currentMessages => {
-                  if (currentMessages.length > 0) {
-                    flatListRef.current?.scrollToIndex({ 
-                      index: currentMessages.length - 1, 
-                      animated: false,
-                      viewPosition: 1
-                    });
-                  }
-                  return currentMessages;
-                });
+                flatListRef.current?.scrollToEnd({ animated: true });
               } catch (error) {
                 console.error('Error scrolling to synced message:', error);
-                // Fallback to scrollToEnd if scrollToIndex fails
+                // Retry with different method
                 setTimeout(() => {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }, 100);
+                  try {
+                    setMessages(currentMessages => {
+                      if (currentMessages.length > 0) {
+                        flatListRef.current?.scrollToIndex({ 
+                          index: currentMessages.length - 1, 
+                          animated: true,
+                          viewPosition: 1
+                        });
+                      }
+                      return currentMessages;
+                    });
+                  } catch (retryError) {
+                    console.error('Retry scroll failed:', retryError);
+                  }
+                }, 200);
               }
-            }, 100);
+            }, 200);
           }
         } else {
           // ไม่มีข้อความใหม่ - ช้าลงแต่ไม่มาก
@@ -832,24 +858,28 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     setMessages(prev => {
       const newMessages = [...prev, optimisticMessage];
-      // เลื่อนไปข้อความล่าสุดทันทีหลังส่งข้อความ (GroupChat Style)
+      // เลื่อนไปข้อความล่าสุดทันทีหลังส่งข้อความ
       setTimeout(() => {
         try {
-          if (newMessages.length > 0) {
-            flatListRef.current?.scrollToIndex({ 
-              index: newMessages.length - 1, 
-              animated: false,
-              viewPosition: 1
-            });
-          }
+          flatListRef.current?.scrollToEnd({ animated: true });
         } catch (error) {
           console.error('Error scrolling to sent message:', error);
-          // Fallback to scrollToEnd if scrollToIndex fails
+          // Fallback method
           setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }, 100);
+            try {
+              if (newMessages.length > 0) {
+                flatListRef.current?.scrollToIndex({ 
+                  index: newMessages.length - 1, 
+                  animated: true,
+                  viewPosition: 1
+                });
+              }
+            } catch (retryError) {
+              console.error('Retry scroll failed:', retryError);
+            }
+          }, 200);
         }
-      }, 100);
+      }, 150);
       return newMessages;
     });
     
@@ -1040,6 +1070,15 @@ const PrivateChatScreen = ({ route, navigation }) => {
       });
       
       console.log('✅ Message sent successfully:', response.data._id);
+      
+      // เลื่อนไปข้อความล่าสุดหลังจากส่งสำเร็จ
+      setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        } catch (error) {
+          console.error('Error scrolling after send:', error);
+        }
+      }, 300);
       
       // HTTP-only approach: Skip immediate check to avoid rate limiting
       console.log('📡 HTTP-only mode: Message sent via API, adaptive sync will handle delivery confirmation');

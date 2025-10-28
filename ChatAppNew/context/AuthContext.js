@@ -102,20 +102,25 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('🚪 Starting logout process...');
+      
       // หยุด keep-alive service เมื่อ logout
       keepAliveService.stop();
+      
+      // ล้างข้อมูลจาก NotificationService (รวมลบ token จาก backend)
+      await NotificationService.clearCurrentUser();
       
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
       await AsyncStorage.removeItem('currentUser');
       console.log('🗑️ AuthContext: Removed all user data');
       
-      // ล้างข้อมูลจาก NotificationService
-      NotificationService.clearCurrentUser();
-      
       setUser(null);
+      console.log('✅ Logout completed');
     } catch (error) {
-      console.error('Error removing user data:', error);
+      console.error('❌ Error during logout:', error);
+      // ยังคง logout แม้จะมี error (เผื่อปัญหา network)
+      setUser(นnull);
     }
   };
 

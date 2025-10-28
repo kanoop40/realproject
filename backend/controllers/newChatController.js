@@ -759,7 +759,13 @@ const sendMessage = asyncHandler(async (req, res) => {
             }
 
             // ส่ง notification ไปยังแต่ละคน
+            console.log(`🔔 NOTIFICATION DEBUG: Sending to ${recipients.length} recipients:`, recipients.map(r => ({ id: r._id, name: r.firstName + ' ' + r.lastName, hasToken: !!r.pushToken })));
+            console.log(`🔔 NOTIFICATION DEBUG: Sender: ${senderName} (${userId})`);
+            console.log(`🔔 NOTIFICATION DEBUG: Chatroom: ${id}`);
+            console.log(`🔔 NOTIFICATION DEBUG: Participants:`, chatroom.participants || chatroom.user_id);
+            
             for (const recipient of recipients) {
+                console.log(`🔔 Sending push notification to ${recipient.firstName} ${recipient.lastName} (${recipient._id})`);
                 await NotificationService.sendNewMessageNotification(
                     recipient.pushToken,
                     senderName,

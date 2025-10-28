@@ -320,25 +320,37 @@ const SearchUserScreen = ({ navigation }) => {
               </View>
 
               <View style={styles.infoSection}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>อีเมล</Text>
-                  <Text style={styles.infoValue}>{selectedUser.email || 'ไม่ระบุ'}</Text>
-                </View>
+                {/* ซ่อนอีเมลสำหรับเจ้าหน้าที่ */}
+                {selectedUser.role !== 'staff' && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>อีเมล</Text>
+                    <Text style={styles.infoValue}>{selectedUser.email || 'ไม่ระบุ'}</Text>
+                  </View>
+                )}
                 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>คณะ</Text>
-                  <Text style={styles.infoValue}>{selectedUser.faculty || 'ไม่ระบุ'}</Text>
-                </View>
+                {/* ซ่อนคณะสำหรับเจ้าหน้าที่ */}
+                {selectedUser.role !== 'staff' && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>คณะ</Text>
+                    <Text style={styles.infoValue}>{selectedUser.faculty || 'ไม่ระบุ'}</Text>
+                  </View>
+                )}
                 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>สาขา</Text>
-                  <Text style={styles.infoValue}>{selectedUser.major || 'ไม่ระบุ'}</Text>
-                </View>
+                {/* ซ่อนสาขาสำหรับเจ้าหน้าที่ */}
+                {selectedUser.role !== 'staff' && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>สาขา</Text>
+                    <Text style={styles.infoValue}>{selectedUser.major || 'ไม่ระบุ'}</Text>
+                  </View>
+                )}
                 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>รหัสกลุ่ม</Text>
-                  <Text style={styles.infoValue}>{selectedUser.groupCode || 'ไม่ระบุ'}</Text>
-                </View>
+                {/* ซ่อนรหัสกลุ่มสำหรับเจ้าหน้าที่และอาจารย์ */}
+                {selectedUser.role !== 'staff' && selectedUser.role !== 'teacher' && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>รหัสกลุ่ม</Text>
+                    <Text style={styles.infoValue}>{selectedUser.groupCode || 'ไม่ระบุ'}</Text>
+                  </View>
+                )}
 
                 {selectedUser.studentId && (
                   <View style={styles.infoRow}>
