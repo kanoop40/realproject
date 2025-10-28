@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import Lottie from 'lottie-react-native';
 import api, { API_URL } from '../../service/api';
+import { useAuth } from '../../context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import { AvatarImage } from '../../service/avatarUtils';
 import LoadingOverlay from '../../components/LoadingOverlay';
@@ -28,6 +29,7 @@ import ImagePickerModal from '../../components_user/ImagePickerModal';
 import PasswordChangeModal from '../../components_user/PasswordChangeModal';
 
 const ProfileScreen = ({ navigation }) => {
+  const { logout } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // เพิ่ม loading state
@@ -116,11 +118,15 @@ const ProfileScreen = ({ navigation }) => {
           text: 'ออกจากระบบ',
           style: 'destructive',
           onPress: async () => {
+            console.log('🚪 ProfileScreen: handleLogout called');
             try {
-              await AsyncStorage.removeItem('userToken');
+              // เรียกใช้ logout จาก AuthContext ที่มีการลบ push token
+              console.log('🔄 ProfileScreen: Calling AuthContext logout...');
+              await logout();
+              console.log('✅ ProfileScreen: AuthContext logout completed');
               navigation.replace('Login');
             } catch (error) {
-              console.error('Error logging out:', error);
+              console.error('❌ ProfileScreen: Error during logout:', error);
               Alert.alert('ข้อผิดพลาด', 'ไม่สามารถออกจากระบบได้');
             }
           },
