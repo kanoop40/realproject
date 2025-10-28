@@ -4,7 +4,7 @@ const User = require('../models/UserModel');
 
 const protect = asyncHandler(async (req, res, next) => {
     try {
-        console.log('Request Headers:', req.headers);
+        console.log('Request Headers  :', req.headers);
         
         let token;
         
