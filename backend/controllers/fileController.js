@@ -147,35 +147,50 @@ const proxyFileDownload = asyncHandler(async (req, res) => {
         const urlsToTry = [];
         
         if (fileUrl.includes('cloudinary.com')) {
-            // For PDF files that were incorrectly uploaded as images, prioritize raw URLs
-            if (fileUrl.includes('.pdf') && fileUrl.includes('/image/upload/')) {
-                console.log('📄 PDF with image/upload detected - trying raw variations first');
+            // For PDF files, always prioritize raw URLs and public access
+            if (fileUrl.includes('.pdf')) {
+                console.log('📄 PDF detected - trying raw and public variations');
                 
-                // 1. Try raw/upload first for PDFs
-                const rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
+                // 1. Convert to raw/upload (most important for PDFs)
+                let rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
+                rawUrl = rawUrl.replace('/auto/upload/', '/raw/upload/');
+                rawUrl = rawUrl.replace('/video/upload/', '/raw/upload/');
                 urlsToTry.push(rawUrl);
                 
-                // 2. Try raw with fl_attachment
+                // 2. Raw URL with fl_attachment for proper download
                 const rawAttachmentUrl = rawUrl.replace('/upload/', '/upload/fl_attachment/');
                 urlsToTry.push(rawAttachmentUrl);
                 
-                // 3. Original URL as fallback
+                // 3. Force public access (no auth required)
+                const publicRawUrl = rawUrl.replace('/upload/', '/upload/c_limit,q_auto/');
+                urlsToTry.push(publicRawUrl);
+                
+                // 4. Try simple public raw access
+                const simpleRawUrl = fileUrl
+                    .replace('/image/upload/', '/raw/upload/')
+                    .replace('/auto/upload/', '/raw/upload/')
+                    .replace('/video/upload/', '/raw/upload/');
+                if (simpleRawUrl !== rawUrl) {
+                    urlsToTry.push(simpleRawUrl);
+                }
+                
+                // 5. Original URL as last resort
                 urlsToTry.push(fileUrl);
                 
             } else {
-                // Original URL first
+                // For non-PDF files
                 urlsToTry.push(fileUrl);
-                
-                // Try converting image/upload to raw/upload
-                const rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
-                if (rawUrl !== fileUrl) {
-                    urlsToTry.push(rawUrl);
-                }
                 
                 // Try with fl_attachment flag
                 const attachmentUrl = fileUrl.replace('/upload/', '/upload/fl_attachment/');
                 if (attachmentUrl !== fileUrl) {
                     urlsToTry.push(attachmentUrl);
+                }
+                
+                // Try converting to raw if not already
+                const rawUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
+                if (rawUrl !== fileUrl) {
+                    urlsToTry.push(rawUrl);
                 }
             }
         } else {
@@ -199,8 +214,13 @@ const proxyFileDownload = asyncHandler(async (req, res) => {
                     responseType: 'stream',
                     timeout: 30000,
                     headers: {
-                        'User-Agent': 'ChatApp-Proxy/1.0'
-                    }
+                        'User-Agent': 'ChatApp-Proxy/1.0',
+                        'Accept': '*/*',
+                        'Cache-Control': 'no-cache'
+                    },
+                    // Add auth bypass for Cloudinary public files
+                    withCredentials: false,
+                    maxRedirects: 5
                 });
                 
                 console.log(`✅ Proxy success with URL ${i + 1}`);
