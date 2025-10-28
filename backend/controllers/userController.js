@@ -791,8 +791,33 @@ const updatePushToken = asyncHandler(async (req, res) => {
         const userId = req.user._id;
         const { pushToken } = req.body;
 
-        console.log('Updating push token for user:', userId, 'Token:', pushToken);
+        console.log('🔔 Updating push token for user:', userId, 'Token:', pushToken ? 'SET' : 'REMOVE');
 
+        // ถ้าเป็นการลบ token (logout)
+        if (!pushToken) {
+            const updatedUser = await User.findByIdAndUpdate(
+                userId,
+                { pushToken: null },
+                { new: true, select: '-password' }
+            );
+            
+            console.log('🗑️ Push token removed for user:', userId);
+            return res.json({
+                message: 'ลบ Push Token สำเร็จ',
+                pushToken: null
+            });
+        }
+
+        // ถ้าเป็นการเซ็ต token ใหม่
+        // ก่อนอื่น ลบ token นี้ออกจากผู้ใช้คนอื่น (ถ้ามี)
+        const existingTokenUser = await User.findOne({ pushToken });
+        if (existingTokenUser && existingTokenUser._id.toString() !== userId.toString()) {
+            console.log(`⚠️ DUPLICATE TOKEN DETECTED! Removing token from previous user: ${existingTokenUser._id} (${existingTokenUser.firstName} ${existingTokenUser.lastName})`);
+            await User.findByIdAndUpdate(existingTokenUser._id, { pushToken: null });
+            console.log(`✅ Token removed from previous user: ${existingTokenUser._id}`);
+        }
+
+        // ตอนนี้เซ็ต token ให้ผู้ใช้ปัจจุบัน
         const updatedUser = await User.findByIdAndUpdate(
             userId,
             { pushToken },
@@ -804,12 +829,13 @@ const updatePushToken = asyncHandler(async (req, res) => {
             throw new Error('ไม่พบข้อมูลผู้ใช้');
         }
 
+        console.log(`✅ Push token set for user: ${userId} (${updatedUser.firstName} ${updatedUser.lastName})`);
         res.json({
             message: 'อัปเดต Push Token สำเร็จ',
             pushToken
         });
     } catch (error) {
-        console.error('Error updating push token:', error);
+        console.error('❌ Error updating push token:', error);
         throw error;
     }
 });

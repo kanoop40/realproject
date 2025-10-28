@@ -782,17 +782,27 @@ const sendMessage = asyncHandler(async (req, res) => {
                 console.log(`⚠️ WARNING: No valid participants found in chatroom ${id}!`);
             }
 
-            // FINAL SAFEGUARD: ตรวจสอบอีกครั้งว่า recipients ไม่ใช่ sender
+            // FINAL SAFEGUARD: ตรวจสอบอีกครั้งว่า recipients ไม่ใช่ sender และไม่มี token ซ้ำ
+            const seenTokens = new Set();
             const validRecipients = recipients.filter(recipient => {
                 const recipientId = recipient._id.toString();
                 const senderId = userId.toString();
-                const isValid = recipientId !== senderId;
+                const token = recipient.pushToken;
                 
-                if (!isValid) {
+                // กรอง sender ออก
+                if (recipientId === senderId) {
                     console.log(`⚠️ SAFEGUARD: Filtering out sender from recipients: ${recipient.firstName} ${recipient.lastName} (${recipientId})`);
+                    return false;
                 }
                 
-                return isValid;
+                // กรอง token ซ้ำออก
+                if (seenTokens.has(token)) {
+                    console.log(`⚠️ DUPLICATE TOKEN: Skipping duplicate push token for ${recipient.firstName} ${recipient.lastName} (${recipientId})`);
+                    return false;
+                }
+                
+                seenTokens.add(token);
+                return true;
             });
 
             // ส่ง notification ไปยังแต่ละคน

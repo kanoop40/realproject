@@ -76,7 +76,9 @@ const userSchema = new mongoose.Schema({
     },
     pushToken: {
         type: String,
-        default: null
+        default: null,
+        unique: true,
+        sparse: true // อนุญาตให้ null ได้หลายคน แต่ token ที่มีค่าต้องไม่ซ้ำ
     }
 }, {
     timestamps: true
