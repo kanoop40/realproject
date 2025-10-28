@@ -83,7 +83,8 @@ export const AuthProvider = ({ children }) => {
         
         if (pushToken) {
           console.log('🔔 AuthContext: Sending push token to backend:', pushToken);
-          // ส่ง push token ไปยัง backend
+          console.log('🧹 AuthContext: This will cleanup any duplicate tokens from other users');
+          // ส่ง push token ไปยัง backend (backend จะลบ token นี้จากคนอื่นอัตโนมัติ)
           const api = require('../service/api').default;
           await api.post('/users/push-token', { 
             pushToken: pushToken 

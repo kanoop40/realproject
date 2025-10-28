@@ -91,11 +91,27 @@ class NotificationService {
           projectId: projectId 
         })).data;
         
+        // เพิ่มข้อมูลระบุตัวตนเครื่อง เพื่อป้องกัน token collision
+        const deviceInfo = {
+          token: token,
+          platform: Platform.OS,
+          deviceId: Device.osInternalBuildId || Device.osBuildId || 'unknown',
+          deviceName: Device.deviceName || 'unknown',
+          timestamp: Date.now()
+        };
+        
         console.log('🔔 Expo push token:', token);
+        console.log('📱 Device info:', {
+          platform: deviceInfo.platform,
+          deviceId: deviceInfo.deviceId,
+          deviceName: deviceInfo.deviceName
+        });
+        
         this.expoPushToken = token;
         
-        // บันทึก token ใน AsyncStorage
+        // บันทึก token และข้อมูลเครื่องใน AsyncStorage
         await AsyncStorage.setItem('expo_push_token', token);
+        await AsyncStorage.setItem('device_info', JSON.stringify(deviceInfo));
         
       } catch (error) {
         console.error('🔔 Error getting expo push token:', error);
@@ -360,8 +376,24 @@ class NotificationService {
       // Import api here to avoid circular dependency
       const { default: api } = await import('./api');
       
+      // ดึงข้อมูลเครื่องมาส่งด้วย
+      let deviceInfo = {};
+      try {
+        const deviceInfoStr = await AsyncStorage.getItem('device_info');
+        if (deviceInfoStr) {
+          deviceInfo = JSON.parse(deviceInfoStr);
+        }
+      } catch (err) {
+        console.log('⚠️ Could not load device info:', err);
+      }
+
       const response = await api.post('/users/push-token', {
-        pushToken: token
+        pushToken: token,
+        deviceInfo: {
+          platform: deviceInfo.platform || Platform.OS,
+          deviceId: deviceInfo.deviceId || 'unknown',
+          deviceName: deviceInfo.deviceName || 'unknown'
+        }
       });
       
       console.log('✅ Push token updated successfully:', response.data);
