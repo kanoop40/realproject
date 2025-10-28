@@ -118,6 +118,11 @@ const getFileDownloadUrl = asyncHandler(async (req, res) => {
 // @route   GET /api/files/proxy
 // @access  Public
 const proxyFileDownload = asyncHandler(async (req, res) => {
+    console.log('🚀🚀🚀 PROXY FILE DOWNLOAD CALLED 🚀🚀🚀');
+    console.log('📨 Request method:', req.method);
+    console.log('📨 Request URL:', req.url);
+    console.log('📨 Request query:', req.query);
+    
     try {
         const { fileUrl } = req.query;
         
