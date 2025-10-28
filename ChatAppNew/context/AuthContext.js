@@ -103,25 +103,31 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      console.log('🚪 Starting logout process...');
+      console.log('🚪 AuthContext: Starting logout process...');
       
       // หยุด keep-alive service เมื่อ logout
+      console.log('⏹️ AuthContext: Stopping keep-alive service...');
       keepAliveService.stop();
       
       // ล้างข้อมูลจาก NotificationService (รวมลบ token จาก backend)
+      console.log('🔔 AuthContext: Calling NotificationService.clearCurrentUser()...');
       await NotificationService.clearCurrentUser();
+      console.log('✅ AuthContext: NotificationService cleared');
       
+      console.log('🗑️ AuthContext: Removing AsyncStorage data...');
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
       await AsyncStorage.removeItem('currentUser');
-      console.log('🗑️ AuthContext: Removed all user data');
+      console.log('✅ AuthContext: AsyncStorage data removed');
       
       setUser(null);
-      console.log('✅ Logout completed');
+      console.log('✅ AuthContext: Logout completed successfully');
     } catch (error) {
-      console.error('❌ Error during logout:', error);
+      console.error('❌ AuthContext: Error during logout:', error);
+      console.error('❌ AuthContext: Error stack:', error.stack);
       // ยังคง logout แม้จะมี error (เผื่อปัญหา network)
-      setUser(นnull);
+      setUser(null);
+      console.log('⚠️ AuthContext: Logout completed with errors');
     }
   };
 
