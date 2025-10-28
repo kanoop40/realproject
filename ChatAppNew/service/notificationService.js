@@ -188,6 +188,30 @@ class NotificationService {
     }, 100); // เพิ่ม delay เล็กน้อย
   }
 
+  // แสดง Local Notification ทันที (สำหรับ sync กับ Mark indicator)
+  async showLocalNotification({ title, body, data = {} }) {
+    try {
+      console.log('🔔 Showing immediate local notification:', title, body);
+      
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: title,
+          body: body,
+          data: data,
+          sound: 'default',
+          priority: 'high',
+        },
+        trigger: null, // ทันที
+      });
+      
+      console.log('✅ Local notification scheduled:', notificationId);
+      return notificationId;
+    } catch (error) {
+      console.error('❌ Error showing local notification:', error);
+      return null;
+    }
+  }
+
   // ส่งการแจ้งเตือนผ่าน Expo Push Notification
   async schedulePushNotification(title, body, data = {}, trigger = null) {
     try {

@@ -262,9 +262,24 @@ const ChatScreen = ({ route, navigation }) => {
         console.log(`🔍 Recently viewed check for ${chatName}: ${isRecentlyViewed}`);
         console.log(`🔍 Currently recently viewed chats:`, Array.from(recentlyViewedChatsRef.current));
         
-        // ข้อความใหม่จะแสดงผ่าน mark (newMessageIndicator) เท่านั้น
-        // ไม่แสดง notification banner popup
-        console.log(`📬 ข้อความใหม่: ${chatName} (${newMessageCount} ข้อความ) - แสดงเป็น mark`);
+        // แสดงทั้ง mark indicator และส่ง local notification พร้อมกัน
+        console.log(`📬 ข้อความใหม่: ${chatName} (${newMessageCount} ข้อความ) - แสดง mark + notification`);
+        
+        // ส่ง Local Notification ทันทีพร้อมกับ Mark
+        if (!isRecentlyViewed) {
+          console.log('� Sending immediate local notification for new message');
+          NotificationService.showLocalNotification({
+            title: chatName,
+            body: `${newMessageCount} ข้อความใหม่`,
+            data: {
+              chatId: chatId,
+              isGroup: chat.isGroup,
+              type: 'new_message'
+            }
+          });
+        } else {
+          console.log('🔇 Skipping notification - recently viewed chat');
+        }
       }
 
       // อัพเดท previous unread count
