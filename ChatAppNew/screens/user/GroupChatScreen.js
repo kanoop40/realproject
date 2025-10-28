@@ -2687,21 +2687,7 @@ const GroupChatScreen = ({ route, navigation }) => {
         />
       </TouchableOpacity>
 
-      {/* Debug Banner - Group Chat */}
-      <View style={{
-        backgroundColor: selectionMode ? '#FF3B30' : '#6B7280',
-        paddingVertical: 4,
-        paddingHorizontal: 16,
-        alignItems: 'center'
-      }}>
-        <Text style={{
-          color: 'white',
-          fontSize: 10,
-          fontWeight: 'bold'
-        }}>
-          GROUP CHAT - Selection: {selectionMode ? 'ON' : 'OFF'} | Selected: {selectedMessages.length}
-        </Text>
-      </View>
+      
 
       {/* Scroll to Bottom Button */}
       {showScrollToBottom && (

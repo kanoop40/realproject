@@ -2218,14 +2218,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
             }}
           />
 
-          {/* Selection Mode Banner */}
-          {selectionMode && (
-            <View style={styles.selectionBanner}>
-              <Text style={styles.selectionText}>
-                {'โหมดเลือกข้อความ - กดที่ข้อความเพื่อเลือก (' + selectedMessages.length + ' เลือกแล้ว)'}
-              </Text>
-            </View>
-          )}
+         
 
           <FlatList
             ref={flatListRef}
