@@ -647,11 +647,26 @@ const sendMessage = asyncHandler(async (req, res) => {
                         console.log('✅ Updated message messageType to:', messageType);
                     }
                     
-                    // Upload to Cloudinary
+                    // Upload to Cloudinary with correct resource type
+                    console.log('☁️ Uploading to Cloudinary with resource_type based on file type...');
+                    
+                    // Determine correct resource_type for Cloudinary
+                    let resourceType = 'auto';
+                    if (isPdfByExt || mimeType_actual === 'application/pdf') {
+                        resourceType = 'raw'; // PDFs must use raw type for proper access
+                        console.log('📄 Using raw resource_type for PDF file');
+                    } else if (isImageByMime && isImageByExt) {
+                        resourceType = 'image'; // Images use image type
+                        console.log('🖼️ Using image resource_type for image file');
+                    } else {
+                        resourceType = 'raw'; // All other files use raw type
+                        console.log('📁 Using raw resource_type for non-image file');
+                    }
+                    
                     const result = await new Promise((resolve, reject) => {
                         cloudinary.uploader.upload_stream(
                             {
-                                resource_type: 'auto',
+                                resource_type: resourceType,
                                 folder: 'chat-app-files',
                                 access_mode: 'public', // ✅ ทำให้ไฟล์เข้าถึงได้โดยไม่ต้อง auth
                                 type: 'upload'
@@ -661,6 +676,12 @@ const sendMessage = asyncHandler(async (req, res) => {
                                 else resolve(result);
                             }
                         ).end(buffer);
+                    });
+                    
+                    console.log('☁️ Cloudinary upload successful:', {
+                        resourceType: resourceType,
+                        url: result.secure_url,
+                        publicId: result.public_id
                     });
                     
                     fileDoc = new File({
