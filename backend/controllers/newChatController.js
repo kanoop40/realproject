@@ -310,7 +310,7 @@ const getMessages = asyncHandler(async (req, res) => {
                     );
                     
                     // Debug log สำหรับข้อความของเราเอง
-                    console.log(`📖 Message ${msg._id.toString().slice(-4)}: isMyMessage=${isMyMessage}, isRead=${isRead}, readBy count=${msg.readBy?.length || 0}`);
+                    console.log(`📖 Message ${msg._id.toString().slice(-4)}: isMyMessage=${isMyMessage}, isRead=${isRead}, readBy count=${msg.readBy?.length || 0}, messageType=${msg.messageType}`);
                     if (msg.readBy && msg.readBy.length > 0) {
                         console.log(`📖 ReadBy details:`, msg.readBy.map(r => ({ 
                             userId: r.user.toString(), 
