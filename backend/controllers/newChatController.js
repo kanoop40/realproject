@@ -604,6 +604,49 @@ const sendMessage = asyncHandler(async (req, res) => {
                     
                     const buffer = Buffer.from(base64String, 'base64');
                     
+                    console.log('📤 Base64 file upload - analyzing file type:', {
+                        fileName: fileName_actual,
+                        mimeType: mimeType_actual,
+                        size: buffer.length
+                    });
+                    
+                    // Determine message type based on file name AND mimetype
+                    const fileExtension = fileName_actual.toLowerCase().split('.').pop();
+                    
+                    // Check both mimetype and file extension for accurate detection
+                    const isImageByMime = mimeType_actual && mimeType_actual.startsWith('image/');
+                    const isImageByExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension);
+                    const isPdfByExt = fileExtension === 'pdf';
+                    
+                    // PDF files should always be treated as 'file' type, not 'image'
+                    const isImage = isImageByMime && isImageByExt && !isPdfByExt;
+                    
+                    console.log('🔍 Base64 File type analysis:', {
+                        fileName: fileName_actual,
+                        fileExtension: fileExtension,
+                        mimeType: mimeType_actual,
+                        isImageByMime: isImageByMime,
+                        isImageByExt: isImageByExt,
+                        isPdfByExt: isPdfByExt,
+                        finalIsImage: isImage
+                    });
+                    
+                    // Update messageType based on analysis
+                    const analyzedMessageType = isImage ? 'image' : 'file';
+                    console.log('✅ Base64 messageType analysis result:', {
+                        original: messageType,
+                        analyzed: analyzedMessageType,
+                        willUpdate: messageType !== analyzedMessageType
+                    });
+                    
+                    // Update message messageType if needed
+                    if (messageType !== analyzedMessageType) {
+                        messageType = analyzedMessageType;
+                        message.messageType = messageType;
+                        await message.save();
+                        console.log('✅ Updated message messageType to:', messageType);
+                    }
+                    
                     // Upload to Cloudinary
                     const result = await new Promise((resolve, reject) => {
                         cloudinary.uploader.upload_stream(
@@ -619,8 +662,6 @@ const sendMessage = asyncHandler(async (req, res) => {
                             }
                         ).end(buffer);
                     });
-                    
-                    const isImage = mimeType_actual && mimeType_actual.startsWith('image/');
                     
                     fileDoc = new File({
                         file_name: fileName_actual,
