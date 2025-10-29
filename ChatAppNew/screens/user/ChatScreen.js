@@ -199,7 +199,7 @@ const ChatScreen = ({ route, navigation }) => {
     const pollingInterval = setInterval(() => {
       console.log('🔄 ChatScreen: Polling for chat updates...');
       loadChatsQuietly();
-    }, 15000); // 15 วินาที
+    }, 5999); // 15 วินาที
 
     return () => {
       if (pollingInterval) {
