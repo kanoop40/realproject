@@ -121,7 +121,7 @@ const getUserGroups = asyncHandler(async (req, res) => {
     .populate('members.user', 'firstName lastName username role avatar')
     .sort({ lastActivity: -1 });
 
-    // เพิ่มการนับ unread count สำหรับแต่ละกลุ่ม
+    // เพิ่มการนับ unread count และดึง lastMessage สำหรับแต่ละกลุ่ม
     const groupsWithUnreadCount = await Promise.all(
         groups.map(async (group) => {
             try {
@@ -132,17 +132,44 @@ const getUserGroups = asyncHandler(async (req, res) => {
                     readBy: { $not: { $elemMatch: { user: userId } } } // ยังไม่อ่าน
                 });
 
-                console.log(`📊 Group ${group.groupName} (${group._id}): unread count = ${unreadCount}`);
+                // ดึงข้อความล่าสุดในกลุ่ม
+                const lastMessage = await Messages.findOne({
+                    group_id: group._id
+                })
+                .populate('user_id', 'firstName lastName username')
+                .sort({ time: -1 })
+                .limit(1);
+
+                console.log(`📊 Group ${group.groupName} (${group._id}): unread count = ${unreadCount}, lastMessage = ${lastMessage ? 'found' : 'not found'}`);
+
+                // จัดรูปแบบ lastMessage
+                let formattedLastMessage = null;
+                if (lastMessage) {
+                    formattedLastMessage = {
+                        _id: lastMessage._id,
+                        content: lastMessage.content,
+                        messageType: lastMessage.messageType || 'text',
+                        timestamp: lastMessage.time,
+                        sender: lastMessage.user_id ? {
+                            _id: lastMessage.user_id._id,
+                            firstName: lastMessage.user_id.firstName,
+                            lastName: lastMessage.user_id.lastName,
+                            username: lastMessage.user_id.username
+                        } : null
+                    };
+                }
 
                 return {
                     ...group.toObject(),
-                    unreadCount: unreadCount || 0
+                    unreadCount: unreadCount || 0,
+                    lastMessage: formattedLastMessage
                 };
             } catch (error) {
                 console.error('Error counting unread messages for group:', group._id, error);
                 return {
                     ...group.toObject(),
-                    unreadCount: 0
+                    unreadCount: 0,
+                    lastMessage: null
                 };
             }
         })

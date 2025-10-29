@@ -63,7 +63,7 @@ const GroupChatItem = ({
         
         {/* บรรทัดที่สง: ข้อความล่าสุดพร้อมเวลา */}
         <View style={styles.lastMessageRow}>
-          {groupData.lastMessage ? (
+          {groupData.lastMessage && groupData.lastMessage.content ? (
             <>
               <Text style={[
                 styles.lastMessage,
