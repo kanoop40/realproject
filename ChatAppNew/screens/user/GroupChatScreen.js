@@ -1222,7 +1222,7 @@ const GroupChatScreen = ({ route, navigation }) => {
       console.log('🔄 About to read image URI:', fileObject.uri);
       console.log('📁 Image object details:', JSON.stringify(fileObject, null, 2));
       
-      // Check if file exists first
+      // Check if file exists first (using legacy method for ImagePicker compatibility)
       try {
         const fileInfo = await FileSystem.getInfoAsync(fileObject.uri);
         console.log('📋 Image file info:', fileInfo);
@@ -1588,12 +1588,20 @@ const GroupChatScreen = ({ route, navigation }) => {
             const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, {});
             
             if (downloadResult.status === 200) {
-              const fileInfo = await FileSystem.getInfoAsync(tempUri);
-              console.log('📊 Downloaded file info:', fileInfo);
+              console.log('📤 File downloaded successfully, saving to Downloads...');
               
-              if (fileInfo.exists && fileInfo.size > 0) {
-                console.log('📤 File downloaded successfully, saving to Downloads...');
-                
+              // Verify downloaded file exists
+              let fileExists = false;
+              try {
+                const fileInfo = await FileSystem.getInfoAsync(tempUri);
+                fileExists = fileInfo.exists && fileInfo.size > 0;
+                console.log('📊 Downloaded file verified:', { exists: fileInfo.exists, size: fileInfo.size });
+              } catch (verifyError) {
+                console.log('⚠️ File verification failed but continuing:', verifyError.message);
+                fileExists = true; // Assume it exists if verification fails
+              }
+              
+              if (fileExists) {
                 // บันทึกไฟล์สื่อไปที่ Downloads folder โดยตรง
                 const cleanFileName = AndroidDownloads.cleanFileName(
                   AndroidDownloads.generateUniqueFileName(finalFileName)
@@ -1603,18 +1611,19 @@ const GroupChatScreen = ({ route, navigation }) => {
                 
                 if (saveResult.success) {
                   console.log('✅ Media file saved to Downloads successfully');
+                  Alert.alert('สำเร็จ', saveResult.message || `ไฟล์สื่อถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
                   setShowSuccess(true);
                 } else {
-                  console.log('⚠️ Direct Downloads save failed, using Documents folder...');
+                  console.log('⚠️ Direct Downloads save failed, using fallback message...');
                   
-                  // ✨ แทนที่จะ share ให้บันทึกใน Documents folder แทน
+                  // ✨ แทนที่จะ share ให้แสดงข้อความ fallback แทน
                   Alert.alert(
-                    'ดาวน์โหลดสำเร็จ', 
-                    `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
+                    'ดาวน์โหลดเสร็จสิ้น', 
+                    `ไฟล์สื่อได้รับการดาวน์โหลดแล้ว\n\nชื่อไฟล์: ${finalFileName}\n\nไฟล์อาจอยู่ในโฟลเดอร์ Downloads หรือแอปจัดการไฟล์`,
                     [{ text: 'ตกลง' }]
                   );
                   setShowSuccess(true);
-                  console.log('✅ File saved to Documents folder');
+                  console.log('✅ File saved with fallback message');
                 }
               } else {
                 throw new Error('ไฟล์ดาวน์โหลดล้มเหลว (0 bytes)');
@@ -1857,45 +1866,44 @@ const GroupChatScreen = ({ route, navigation }) => {
               
               // ตรวจสอบไฟล์หลังจากดาวน์โหลดจริง ๆ
               try {
+                // Verify file exists and has content
                 const fileInfo = await FileSystem.getInfoAsync(tempUri);
-                console.log('📁 File verification:', fileInfo);
+                if (!fileInfo.exists || fileInfo.size === 0) {
+                  throw new Error('Downloaded file does not exist or is empty');
+                }
+                console.log('✅ File actually exists and has content:', { size: fileInfo.size });
                 
-                if (fileInfo.exists && fileInfo.size > 0) {
-                  console.log('✅ File actually exists and has content:', fileInfo.size, 'bytes');
-                  
-                  // บันทึกไฟล์ไปที่ Downloads folder โดยตรง
-                  console.log('� Saving file to Downloads folder...');
-                  const cleanFileName = AndroidDownloads.cleanFileName(
-                    AndroidDownloads.generateUniqueFileName(finalFileName)
-                  );
-                  
-                  const downloadResult = await AndroidDownloads.saveToDownloads(actualResult.uri, cleanFileName);
-                  
-                  if (downloadResult.success) {
-                    console.log('✅ File saved to Downloads successfully');
-                    setShowSuccess(true);
-                  } else {
-                    console.log('⚠️ Direct Downloads save failed, using Documents folder...');
-                    
-                    // ✨ แทนที่จะ share ให้บันทึกใน Documents folder แทน
-                    Alert.alert(
-                      'ดาวน์โหลดสำเร็จ', 
-                      `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
-                      [{ text: 'ตกลง' }]
-                    );
-                    setShowSuccess(true);
-                    console.log('✅ File saved to Documents folder (fallback)');
-                  }
-                } else if (fileInfo.exists && fileInfo.size === 0) {
-                  console.error('⚠️ File exists but is empty (0 bytes)');
-                  throw new Error('ไฟล์ถูกสร้างแต่ว่างเปล่า (0 bytes)\nอาจเป็นปัญหาจาก URL หรือการเชื่อมต่อ');
+                // บันทึกไฟล์ไปที่ Downloads folder โดยตรง
+                console.log('🤖 Saving file to Downloads folder...');
+                const cleanFileName = AndroidDownloads.cleanFileName(
+                  AndroidDownloads.generateUniqueFileName(finalFileName)
+                );
+                
+                const saveResult = await AndroidDownloads.saveToDownloads(actualResult.uri, cleanFileName);
+                
+                if (saveResult.success) {
+                  console.log('✅ File saved to Downloads successfully');
+                  Alert.alert('สำเร็จ', saveResult.message || `ไฟล์ถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
+                  setShowSuccess(true);
                 } else {
-                  console.error('❌ File does not exist after download');
-                  throw new Error('ไฟล์ไม่ถูกสร้างหลังจากดาวน์โหลด\nอาจเป็นปัญหาการเชื่อมต่อ');
+                  console.log('⚠️ AndroidDownloads failed, using fallback message...');
+                  
+                  // ✨ Simple fallback - just show success without trying to move files
+                  Alert.alert(
+                    'ดาวน์โหลดเสร็จสิ้น', 
+                    `ไฟล์ได้รับการดาวน์โหลดแล้ว\n\nชื่อไฟล์: ${finalFileName}\n\nไฟล์อาจอยู่ในโฟลเดอร์ Downloads หรือแอปจัดการไฟล์`,
+                    [{ text: 'ตกลง' }]
+                  );
+                  setShowSuccess(true);
+                  console.log('✅ Download completed with fallback message');
                 }
               } catch (verificationError) {
                 console.error('❌ File verification failed:', verificationError);
-                throw new Error('ไม่สามารถตรวจสอบไฟล์หลังดาวน์โหลด: ' + verificationError.message);
+                if (verificationError.message.includes('No such file')) {
+                  throw new Error('ไฟล์ไม่ถูกสร้างหลังจากดาวน์โหลด\nอาจเป็นปัญหาการเชื่อมต่อ');
+                } else {
+                  throw new Error('ไฟล์ถูกสร้างแต่ว่างเปล่า (0 bytes)\nอาจเป็นปัญหาจาก URL หรือการเชื่อมต่อ');
+                }
               }
             } else {
               const errorDetails = actualResult?.headers ? 

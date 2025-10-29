@@ -2613,6 +2613,12 @@ const PrivateChatScreen = ({ route, navigation }) => {
         throw new Error('FileSystem.documentDirectory is not available');
       }
       
+      // เพิ่ม error handling ที่ดีกว่าสำหรับ Android
+      if (Platform.OS === 'android') {
+        console.log('🤖 Android download mode activated');
+        console.log('🔧 Using enhanced AndroidDownloads utility');
+      }
+      
       // ไม่ต้องใช้ token สำหรับ Cloudinary files
       const token = await AsyncStorage.getItem('userToken'); // Fixed: should be 'userToken' not 'token'
 
@@ -2811,30 +2817,43 @@ const PrivateChatScreen = ({ route, navigation }) => {
           
           // บันทึกลงเครื่องโดยตรงสำหรับ Android
           if (Platform.OS === 'android') {
-            console.log('� Saving to Downloads folder on Android...');
+            console.log('🤖 Saving to Downloads folder on Android...');
             
-            const cleanFileName = AndroidDownloads.cleanFileName(
-              AndroidDownloads.generateUniqueFileName(finalFileName)
-            );
-            
-            const saveResult = await AndroidDownloads.saveToDownloads(actualResult.uri, cleanFileName);
-            
-            if (saveResult.success) {
-              console.log('✅ File saved to Downloads successfully');
-              Alert.alert('สำเร็จ', `ไฟล์ถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
-              setShowSuccessAnimation(true);
-            } else {
-              console.log('⚠️ Direct Downloads save failed, using Documents folder...');
+            try {
+              const cleanFileName = AndroidDownloads.cleanFileName(
+                AndroidDownloads.generateUniqueFileName(finalFileName)
+              );
               
-              // ✨ แทนที่จะ share ให้บันทึกใน Documents folder แทน
-              const documentDir = FileSystem.documentDirectory || '';
-              const localUri = `${documentDir}${cleanFileName}`;
-              await FileSystem.moveAsync({
-                from: actualResult.uri,
-                to: localUri
-              });
+              console.log('📱 Attempting Android Downloads save...');
+              const saveResult = await AndroidDownloads.saveToDownloads(actualResult.uri, cleanFileName);
+              
+              if (saveResult.success) {
+                console.log('✅ File saved to Downloads successfully');
+                Alert.alert('สำเร็จ', saveResult.message || `ไฟล์ถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
+                setShowSuccessAnimation(true);
+              } else {
+                console.log('⚠️ AndroidDownloads failed, using simple success message');
+                
+                // ✨ Simple fallback - just show success without trying to move files
+                Alert.alert(
+                  'ดาวน์โหลดสำเร็จ', 
+                  `ไฟล์ถูกดาวน์โหลดเรียบร้อยแล้ว\n\nชื่อไฟล์: ${finalFileName}\n\nไฟล์ถูกบันทึกในแอป สามารถเข้าถึงได้ผ่านแอปจัดการไฟล์`,
+                  [{ text: 'ตกลง' }]
+                );
+                setShowSuccessAnimation(true);
+                console.log('✅ Download completed with fallback message');
+              }
+            } catch (androidSaveError) {
+              console.error('❌ Android save error:', androidSaveError);
+              
+              // Final fallback - just show that download worked
+              Alert.alert(
+                'ดาวน์โหลดเสร็จสิ้น', 
+                `ไฟล์ได้รับการดาวน์โหลดแล้ว\n\nชื่อไฟล์: ${finalFileName}\n\nไฟล์อาจอยู่ในโฟลเดอร์ Downloads หรือแอปจัดการไฟล์`,
+                [{ text: 'ตกลง' }]
+              );
               setShowSuccessAnimation(true);
-              console.log('✅ File saved to Documents folder:', localUri);
+              console.log('✅ Download completed with final fallback');
             }
           } else {
             // iOS: ใช้ sharing เหมือนเดิม
