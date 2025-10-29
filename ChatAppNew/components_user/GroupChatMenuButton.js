@@ -81,7 +81,7 @@ const GroupChatMenuButton = ({
               style={styles.menuItem}
               onPress={() => handleMenuOption(onManageMessages)}
             >
-              <Text style={styles.menuItemIcon}></Text>
+         
               <Text style={styles.menuItemText}>จัดการข้อความ</Text>
             </TouchableOpacity>
 
@@ -90,7 +90,7 @@ const GroupChatMenuButton = ({
                 style={styles.menuItem}
                 onPress={() => handleMenuOption(onManageGroup)}
               >
-                <Text style={styles.menuItemIcon}></Text>
+                
                 <Text style={styles.menuItemText}>จัดการกลุ่ม</Text>
               </TouchableOpacity>
             )}
@@ -99,7 +99,7 @@ const GroupChatMenuButton = ({
               style={[styles.menuItem, styles.dangerMenuItem]}
               onPress={() => handleMenuOption(onLeaveGroup)}
             >
-              <Text style={styles.menuItemIcon}></Text>
+              
               <Text style={[styles.menuItemText, styles.dangerMenuText]}>ออกจากกลุ่ม</Text>
             </TouchableOpacity>
           </Animated.View>

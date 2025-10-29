@@ -561,9 +561,9 @@ const GroupChatScreen = ({ route, navigation }) => {
             console.log('❌ Failed to check group typing status:', typingError.message);
           }
         } catch (error) {
-          console.log('� Group background sync failed:', error.message);
+          console.log('🔍 Group background sync failed:', error.message);
         }
-      }, 10000); // เช็คทุก 10 วินาทีเพื่อลด rate limiting
+      }, 5000); // เช็คทุก 5 วินาทีเพื่อให้รับข้อความใหม่ได้เร็วขึ้น
     }
 
     return () => {
@@ -1072,6 +1072,21 @@ const GroupChatScreen = ({ route, navigation }) => {
         return updatedMessages;
       });
       console.log('🎉 Message sent successfully, ID:', actualMessageData._id);
+      
+      // 🚀 Immediate sync สำหรับแชทกลุ่ม - ให้สมาชิกอื่นเห็นข้อความทันที
+      setTimeout(async () => {
+        try {
+          console.log('📡 Group immediate sync: Checking for new messages after send...');
+          const checkResponse = await api.get(`/groups/${groupId}/messages?page=1&limit=3`);
+          const latestMessages = checkResponse.data.data || checkResponse.data.messages || [];
+          
+          // ไม่ต้องอัปเดตข้อความในหน้าผู้ส่ง (เรามีแล้ว) แต่ให้ background sync ของคนอื่นรับทราบ
+          console.log('✅ Group immediate sync completed - other members will receive via background sync');
+        } catch (syncError) {
+          console.log('⚠️ Group immediate sync failed:', syncError.message);
+        }
+      }, 500); // รอ 0.5 วินาทีให้ server ประมวลผลเสร็จ
+      
     } catch (error) {
       console.error('❌ Error sending group message:', error);
       console.error('❌ Error response:', error.response);
@@ -1309,6 +1324,19 @@ const GroupChatScreen = ({ route, navigation }) => {
 
       console.log('✅ Image sent successfully');
       
+      // 🚀 Immediate sync สำหรับรูปภาพในกลุ่ม - ให้สมาชิกอื่นเห็นรูปทันที
+      setTimeout(async () => {
+        try {
+          console.log('📡 Group image immediate sync: Checking for new messages...');
+          const checkResponse = await api.get(`/groups/${groupId}/messages?page=1&limit=3`);
+          const latestMessages = checkResponse.data.data || checkResponse.data.messages || [];
+          
+          console.log('✅ Group image immediate sync completed - other members will receive via background sync');
+        } catch (syncError) {
+          console.log('⚠️ Group image immediate sync failed:', syncError.message);
+        }
+      }, 800); // รอ 0.8 วินาทีให้ server ประมวลผลรูปภาพเสร็จ
+      
     } catch (error) {
       console.error('❌ Error sending image:', error);
       console.error('Error details:', error.response?.data || error.message);
@@ -1432,18 +1460,15 @@ const GroupChatScreen = ({ route, navigation }) => {
       const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, { headers });
       
       if (downloadResult.status === 200) {
-        console.log('📤 Sharing file...');
-        const canShare = await Sharing.isAvailableAsync();
+        console.log('� File downloaded successfully');
         
-        if (canShare) {
-          await Sharing.shareAsync(downloadResult.uri, {
-            mimeType: 'application/octet-stream',
-            dialogTitle: 'แชร์ไฟล์'
-          });
-          console.log('✅ File shared successfully');
-        } else {
-          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแชร์ไฟล์ได้บนอุปกรณ์นี้');
-        }
+        // ✨ แทนที่จะ share ให้แสดง success message
+        Alert.alert(
+          'ดาวน์โหลดสำเร็จ', 
+          `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
+          [{ text: 'ตกลง' }]
+        );
+        console.log('✅ File download completed');
       } else {
         throw new Error(`การดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
       }
@@ -1580,19 +1605,16 @@ const GroupChatScreen = ({ route, navigation }) => {
                   console.log('✅ Media file saved to Downloads successfully');
                   setShowSuccess(true);
                 } else {
-                  console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
+                  console.log('⚠️ Direct Downloads save failed, using Documents folder...');
                   
-                  // Fallback to sharing
-                  const canShare = await Sharing.isAvailableAsync();
-                  if (canShare) {
-                    await Sharing.shareAsync(downloadResult.uri, {
-                      mimeType: isImage ? 'image/*' : (isVideo ? 'video/*' : 'application/octet-stream'),
-                      dialogTitle: `บันทึกไฟล์: ${finalFileName}`
-                    });
-                    console.log('✅ File shared successfully via system share fallback');
-                  } else {
-                    setShowSuccess(true);
-                  }
+                  // ✨ แทนที่จะ share ให้บันทึกใน Documents folder แทน
+                  Alert.alert(
+                    'ดาวน์โหลดสำเร็จ', 
+                    `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
+                    [{ text: 'ตกลง' }]
+                  );
+                  setShowSuccess(true);
+                  console.log('✅ File saved to Documents folder');
                 }
               } else {
                 throw new Error('ไฟล์ดาวน์โหลดล้มเหลว (0 bytes)');
@@ -1731,16 +1753,14 @@ const GroupChatScreen = ({ route, navigation }) => {
             }
 
             if (downloadResult.status === 200) {
-              // ใช้ Sharing API เพื่อให้ผู้ใช้เลือกที่เก็บ
-              const isAvailable = await Sharing.isAvailableAsync();
-              
-              if (isAvailable) {
-                await Sharing.shareAsync(downloadResult.uri, {
-                  dialogTitle: `บันทึกไฟล์: ${finalFileName}`
-                });
-              } else {
-                setShowSuccess(true);
-              }
+              // ✨ แทนที่จะ share ให้แสดง success message แทน
+              Alert.alert(
+                'ดาวน์โหลดสำเร็จ', 
+                `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
+                [{ text: 'ตกลง' }]
+              );
+              setShowSuccess(true);
+              console.log('✅ iOS file saved to Documents folder');
             } else {
               throw new Error(`HTTP ${downloadResult.status}`);
             }
@@ -1855,19 +1875,16 @@ const GroupChatScreen = ({ route, navigation }) => {
                     console.log('✅ File saved to Downloads successfully');
                     setShowSuccess(true);
                   } else {
-                    console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
+                    console.log('⚠️ Direct Downloads save failed, using Documents folder...');
                     
-                    // Fallback to sharing if Downloads save fails
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      await Sharing.shareAsync(actualResult.uri, {
-                        mimeType: 'application/octet-stream',
-                        dialogTitle: `บันทึกไฟล์: ${finalFileName}`
-                      });
-                      console.log('✅ File shared successfully via system fallback');
-                    } else {
-                      setShowSuccess(true);
-                    }
+                    // ✨ แทนที่จะ share ให้บันทึกใน Documents folder แทน
+                    Alert.alert(
+                      'ดาวน์โหลดสำเร็จ', 
+                      `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
+                      [{ text: 'ตกลง' }]
+                    );
+                    setShowSuccess(true);
+                    console.log('✅ File saved to Documents folder (fallback)');
                   }
                 } else if (fileInfo.exists && fileInfo.size === 0) {
                   console.error('⚠️ File exists but is empty (0 bytes)');

@@ -92,9 +92,9 @@ const GroupChatItem = ({
                   // จัดรูปแบบข้อความตามประเภท
                   let messageContent = '';
                   if (message.messageType === 'image') {
-                    messageContent = '📷 รูปภาพ';
+                    messageContent = ' รูปภาพ';
                   } else if (message.messageType === 'file') {
-                    messageContent = '📎 ไฟล์แนบ';
+                    messageContent = ' ไฟล์แนบ';
                   } else {
                     messageContent = message.content || 'ข้อความ';
                   }

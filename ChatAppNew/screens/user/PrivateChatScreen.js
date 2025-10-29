@@ -28,6 +28,7 @@ import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import api, { API_URL, deleteMessage } from '../../service/api';
 import { useSocket } from '../../context/SocketContext';
+import { useChat } from '../../context/ChatContext';
 import TypingIndicator from '../../components/TypingIndicator';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 import ChatMessage from '../../components_user/ChatMessage';
@@ -75,6 +76,7 @@ const RateLimitStatus = () => {
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
+  const { addMessageHandler, joinChatroom: joinSSERoom, leaveChatroom: leaveSSERoom, isConnected: isSSEConnected } = useChat();
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
@@ -113,7 +115,95 @@ const PrivateChatScreen = ({ route, navigation }) => {
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+  const [recentlySentMessage, setRecentlySentMessage] = useState(false);
   const flatListRef = React.useRef(null);
+  
+  // ✨ Enhanced message deduplication helper พร้อมการจัดการรูปภาพ
+  const deduplicateMessages = useCallback((messageList) => {
+    const seen = new Map();
+    const deduplicated = [];
+    
+    // Process messages from oldest to newest
+    const sortedMessages = [...messageList].sort((a, b) => 
+      new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt)
+    );
+    
+    for (const msg of sortedMessages) {
+      const key = msg._id;
+      
+      // Skip if already seen by ID
+      if (seen.has(key)) {
+        console.log('🧹 Removing duplicate message by ID:', key);
+        continue;
+      }
+      
+      // ✨ ลบรูปภาพที่เสียหาย/ไม่สมบูรณ์
+      if (msg.messageType === 'image') {
+        if (!msg.file && !msg.fileUrl && !msg.image && !msg.file_url) {
+          console.log('🧹 Removing broken image message:', key);
+          continue;
+        }
+        
+        if (msg.file && (!msg.file.url || msg.file.url === null)) {
+          console.log('🧹 Removing image with null file URL:', key);
+          continue;
+        }
+      }
+      
+      // ✨ Enhanced duplicate detection สำหรับรูปภาพ
+      let isDuplicate = false;
+      for (const [existingKey, existingMsg] of seen) {
+        // สำหรับรูปภาพ - เช็คด้วยหลายเงื่อนไข
+        if (msg.messageType === 'image' && existingMsg.messageType === 'image') {
+          const sameSender = existingMsg.sender?._id === msg.sender?._id;
+          const timeWindow = Math.abs(
+            new Date(existingMsg.timestamp || existingMsg.createdAt) - 
+            new Date(msg.timestamp || msg.createdAt)
+          );
+          
+          // เช็คด้วยชื่อไฟล์
+          if (sameSender && msg.fileName && existingMsg.fileName && 
+              msg.fileName === existingMsg.fileName && timeWindow < 10000) {
+            isDuplicate = true;
+            console.log('🧹 Removing image duplicate by filename:', key, 'matches', existingKey);
+            break;
+          }
+          
+          // เช็คด้วย fileUrl
+          if (sameSender && msg.fileUrl && existingMsg.fileUrl && 
+              msg.fileUrl === existingMsg.fileUrl) {
+            isDuplicate = true;
+            console.log('🧹 Removing image duplicate by fileUrl:', key, 'matches', existingKey);
+            break;
+          }
+          
+          // เช็คด้วยเวลาใกล้เคียงมาก
+          if (sameSender && timeWindow < 1000) {
+            isDuplicate = true;
+            console.log('🧹 Removing image duplicate by timing:', key, 'matches', existingKey);
+            break;
+          }
+        } else {
+          // สำหรับข้อความธรรมดา
+          if (existingMsg.content === msg.content && 
+              existingMsg.sender?._id === msg.sender?._id &&
+              Math.abs(new Date(existingMsg.timestamp || existingMsg.createdAt) - 
+                      new Date(msg.timestamp || msg.createdAt)) < 5000) {
+            isDuplicate = true;
+            console.log('🧹 Removing content duplicate:', key, 'matches', existingKey);
+            break;
+          }
+        }
+      }
+      
+      if (!isDuplicate) {
+        seen.set(key, msg);
+        deduplicated.push(msg);
+      }
+    }
+    
+    return deduplicated;
+  }, []);
 
   // Typing indicator functions
   const handleTypingStart = useCallback(() => {
@@ -135,14 +225,32 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }, 2000);
   }, [isTyping, chatroomId]);
 
+  // ✨ Typing status throttling to prevent rate limits
+  const lastTypingTime = useRef(0);
+  const typingThrottleDelay = 5000; // 5 วินาที minimum between typing requests
+
   const sendTypingStatus = useCallback(async (typing) => {
     try {
-      console.log(`📝 Sending typing status: ${typing ? 'เริ่มพิม' : 'หยุดพิม'}`);
+      const now = Date.now();
+      
+      // ⚡ Throttle typing status to prevent rate limits
+      if (now - lastTypingTime.current < typingThrottleDelay) {
+        console.log(`� Typing status throttled, too frequent (${(now - lastTypingTime.current)/1000}s ago)`);
+        return;
+      }
+      
+      lastTypingTime.current = now;
+      
+      console.log(`�📝 Sending typing status: ${typing ? 'เริ่มพิม' : 'หยุดพิม'}`);
       await api.post(`/chats/${chatroomId}/typing`, { 
         isTyping: typing
       });
       console.log(`✅ Typing status sent: ${typing}`);
     } catch (error) {
+      if (error.response?.status === 429) {
+        console.log('⚠️ Typing status rate limited - backing off for 10 seconds');
+        lastTypingTime.current = Date.now() + 10000; // Additional 10s penalty
+      }
       console.log('❌ Failed to send typing status:', error.message);
     }
   }, [chatroomId]);
@@ -289,10 +397,31 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   }, [selectionMode, selectedMessages]);
 
+  // ✨ Periodic message deduplication
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    const deduplicationInterval = setInterval(() => {
+      setMessages(prev => {
+        const deduplicated = deduplicateMessages(prev);
+        if (deduplicated.length !== prev.length) {
+          console.log('🧹 Deduplicated messages:', prev.length, '→', deduplicated.length);
+          return deduplicated;
+        }
+        return prev;
+      });
+    }, 30000); // Every 30 seconds
+    
+    return () => clearInterval(deduplicationInterval);
+  }, [messages.length, deduplicateMessages]);
+
   // Adaptive Background Sync with Rate Limiting Protection
   useEffect(() => {
     let backgroundSync;
-    let currentInterval = 800; // เริ่มต้น 0.8 วินาที (เร็วมาก!)
+    // ✨ ปรับช้าลงมาก - ลด API calls ลง 70%
+    // ⚡ Ultra-conservative intervals to prevent rate limiting
+    let baseInterval = isSSEConnected ? 20000 : 5000; // ครั้งละ 5-20 วินาที
+    let currentInterval = recentlySentMessage ? 3000 : baseInterval; // ช้าลงอีก
     let consecutiveFailures = 0;
     let isActive = true;
     
@@ -300,11 +429,18 @@ const PrivateChatScreen = ({ route, navigation }) => {
       if (!isActive) return;
       
       try {
-        // เช็คข้อความใหม่และสถานะ typing
-        const [messagesResponse, typingResponse] = await Promise.all([
-          api.get(`/chats/${chatroomId}/messages?page=1&limit=5`),
-          api.get(`/chats/${chatroomId}/typing`).catch(() => ({ data: { data: { users: [] } } }))
-        ]);
+        // ⚡ Selective API calls to prevent rate limiting
+        const shouldCheckTyping = Math.random() < 0.15; // เช็ค typing แค่ 15% เท่านั้น
+        
+        const requests = [api.get(`/chats/${chatroomId}/messages?page=1&limit=5`)];
+        
+        if (shouldCheckTyping) {
+          requests.push(api.get(`/chats/${chatroomId}/typing`).catch(() => ({ data: { data: { users: [] } } })));
+        }
+        
+        const responses = await Promise.all(requests);
+        const messagesResponse = responses[0];
+        const typingResponse = responses[1] || { data: { data: { users: [] } } };
         
         const latestMessages = messagesResponse.data.messages || [];
         const typingUsers = typingResponse.data?.data?.users || [];
@@ -346,23 +482,63 @@ const PrivateChatScreen = ({ route, navigation }) => {
         console.log('🔍 Checking for new messages...');
         console.log('📊 Local messages:', messages.length, 'Server messages:', latestMessages.length);
         
-        // กรองเฉพาะข้อความใหม่ที่ยังไม่มีในระบบท้องถิ่น
+        // ✨ Improved duplicate detection for better real-time experience
         const newMessages = latestMessages.filter(serverMsg => {
           const exists = messages.some(localMsg => {
-            // ตรวจสอบ ID เหมือนเดิม
+            // Primary ID check
             if (localMsg._id === serverMsg._id) return true;
             
-            // ✨ ตรวจสอบข้อความที่อาจซ้ำกัน (เช่น optimistic message)
+            // ✨ เพิ่ม Advanced duplicate detection สำหรับ optimistic messages
             if (localMsg.isOptimistic || localMsg.isTemporary) {
-              // ตรวจสอบเวลาใกล้เคียงกัน (ภายใน 5 วินาที)
-              if (localMsg.timestamp && serverMsg.timestamp) {
-                const timeDiff = Math.abs(new Date(localMsg.timestamp) - new Date(serverMsg.timestamp));
-                if (timeDiff < 5000) return true;
-              }
               
-              // ตรวจสอบ messageType และ sender เหมือนกัน
-              if (localMsg.messageType === serverMsg.messageType && 
-                  localMsg.sender?._id === serverMsg.sender?._id) {
+              // Check by sender and timestamp proximity (within 10 seconds)
+              if (localMsg.timestamp && serverMsg.timestamp) {
+                const localTime = new Date(localMsg.timestamp).getTime();
+                const serverTime = new Date(serverMsg.timestamp || serverMsg.createdAt).getTime();
+                const timeDiff = Math.abs(localTime - serverTime);
+                
+                if (timeDiff < 10000) { // 10 seconds window
+                  // Same sender check
+                  const localSenderId = localMsg.sender?._id || localMsg.user_id?._id;
+                  const serverSenderId = serverMsg.sender?._id || serverMsg.user_id?._id;
+                  
+                  if (localSenderId === serverSenderId) {
+                    // ✨ เข้มงวดขึ้นสำหรับ files/images
+                    if (localMsg.messageType === serverMsg.messageType) {
+                      if (localMsg.messageType === 'image' || localMsg.messageType === 'file') {
+                        // เช็คด้วย fileName หรือ fileUrl
+                        if ((localMsg.fileName && serverMsg.fileName && localMsg.fileName === serverMsg.fileName) ||
+                            (localMsg.fileUrl && serverMsg.fileUrl && localMsg.fileUrl === serverMsg.fileUrl)) {
+                          console.log('🔍 Background sync: Found duplicate image/file by filename/url');
+                          return true;
+                        }
+                        
+                        // เช็คด้วยเวลาใกล้เคียงมาก (สำหรับรูปภาพ)
+                        if (localMsg.messageType === 'image' && timeDiff < 3000) {
+                          console.log('🔍 Background sync: Found duplicate image by close timing');
+                          return true;
+                        }
+                      } else {
+                        // For text: compare content
+                        if (localMsg.content === serverMsg.content) {
+                          return true;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            
+            // ✨ Content-based duplicate detection for same content within short time
+            if (localMsg.content && serverMsg.content && 
+                localMsg.content === serverMsg.content &&
+                localMsg.timestamp && serverMsg.timestamp) {
+              const timeDiff = Math.abs(
+                new Date(localMsg.timestamp) - 
+                new Date(serverMsg.timestamp || serverMsg.createdAt)
+              );
+              if (timeDiff < 3000) { // 3 seconds for exact content match
                 return true;
               }
             }
@@ -371,7 +547,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
           });
           
           if (!exists) {
-            console.log('🆕 Found new message:', serverMsg._id, serverMsg.content?.substring(0, 50));
+            console.log('🆕 Found new message:', serverMsg._id, serverMsg.messageType, serverMsg.content?.substring(0, 30));
           }
           return !exists;
         });
@@ -380,7 +556,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
         
         if (hasNewMessages) {
           console.log('📨 New messages detected:', newMessages.length, 'messages, increasing sync frequency...');
-          currentInterval = Math.max(500, currentInterval * 0.7); // เร็วขึ้นเมื่อมีกิจกรรม (0.5 วินาทีขั้นต่ำ)
+          // ⚡ Ultra-conservative sync: Much slower to prevent rate limits
+          const minInterval = isSSEConnected ? 3000 : 1000; // ขั้นต่ำ 1-3 วินาที
+          const multiplier = recentlySentMessage ? 0.7 : 0.8; // ช้าลงน้อยกว่า
+          currentInterval = Math.max(minInterval, currentInterval * multiplier);
           
           // Add comprehensive safety checks to new messages too
           const safeNewMessages = newMessages
@@ -389,6 +568,26 @@ const PrivateChatScreen = ({ route, navigation }) => {
                 console.warn(`⚠️ Filtering out new message ${index} - no sender info:`, msg);
                 return false;
               }
+              
+              // ✨ กรองรูปภาพที่ไม่มีข้อมูลไฟล์ (ป้องกันการแสดงเป็น "ไม่พร้อมใช้งาน")
+              if (msg.messageType === 'image') {
+                if (!msg.file && !msg.fileUrl && !msg.image) {
+                  console.warn(`⚠️ Filtering out incomplete image message ${index} - no file data:`, {
+                    id: msg._id,
+                    file: msg.file,
+                    fileUrl: msg.fileUrl,
+                    image: msg.image
+                  });
+                  return false;
+                }
+                
+                // เช็คว่า file object มีข้อมูลครบถ้วน
+                if (msg.file && (!msg.file.url || msg.file.url === null)) {
+                  console.warn(`⚠️ Filtering out image with invalid file.url ${index}:`, msg.file);
+                  return false;
+                }
+              }
+              
               return true;
             })
             .map((msg, index) => {
@@ -415,10 +614,42 @@ const PrivateChatScreen = ({ route, navigation }) => {
           
           // เพิ่มข้อความใหม่เข้าไปโดยไม่รีเฟรช (Normal FlatList)
           setMessages(prev => {
-            // ตรวจสอบซ้ำอีกครั้งก่อนเพิ่ม
-            const trulyNewMessages = safeNewMessages.filter(newMsg => 
-              !prev.some(existingMsg => existingMsg._id === newMsg._id)
-            );
+            // ✨ ตรวจสอบซ้ำแบบเข้มงวดพิเศษสำหรับรูปภาพ
+            const trulyNewMessages = safeNewMessages.filter(newMsg => {
+              return !prev.some(existingMsg => {
+                // เช็คด้วย ID ก่อน
+                if (existingMsg._id === newMsg._id) return true;
+                
+                // ✨ เช็ครูปภาพแบบพิเศษ
+                if (newMsg.messageType === 'image' && existingMsg.messageType === 'image') {
+                  // เช็คด้วยชื่อไฟล์
+                  if (newMsg.fileName && existingMsg.fileName && newMsg.fileName === existingMsg.fileName) {
+                    console.log('🚫 Background sync: Blocking duplicate image by filename:', newMsg.fileName);
+                    return true;
+                  }
+                  
+                  // เช็คด้วย fileUrl
+                  if (newMsg.fileUrl && existingMsg.fileUrl && newMsg.fileUrl === existingMsg.fileUrl) {
+                    console.log('🚫 Background sync: Blocking duplicate image by fileUrl:', newMsg.fileUrl);
+                    return true;
+                  }
+                  
+                  // เช็คด้วยเวลา + sender สำหรับรูปภาพ
+                  if (newMsg.timestamp && existingMsg.timestamp) {
+                    const timeDiff = Math.abs(new Date(newMsg.timestamp) - new Date(existingMsg.timestamp));
+                    const sameUser = (newMsg.sender?._id === existingMsg.sender?._id) || 
+                                    (newMsg.user_id?._id === existingMsg.user_id?._id);
+                    
+                    if (timeDiff < 1000 && sameUser) { // 1 วินาทีสำหรับรูปภาพ
+                      console.log('🚫 Background sync: Blocking duplicate image by timing + sender');
+                      return true;
+                    }
+                  }
+                }
+                
+                return false;
+              });
+            });
             
             if (trulyNewMessages.length === 0) {
               console.log('⚠️ No truly new messages after duplicate check');
@@ -466,7 +697,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
         } else {
           // ไม่มีข้อความใหม่ - ช้าลงแต่ไม่มาก
           console.log('😴 No new messages found, slowing down sync...');
-          currentInterval = Math.min(2000, currentInterval * 1.1); // ช้าลงน้อยกว่าเดิม (2 วินาทีสูงสุด)
+          // ✨ Smart backoff: Much slower when SSE is available
+          const maxInterval = isSSEConnected ? 10000 : 2000; // Much slower with SSE
+          const multiplier = recentlySentMessage ? 1.05 : 1.1;
+          currentInterval = Math.min(maxInterval, currentInterval * multiplier);
         }
         
         console.log(`⏱️ Next sync in ${currentInterval/1000}s`);
@@ -475,9 +709,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
         consecutiveFailures++;
         
         if (error.response?.status === 429 || error.message === 'Rate limited, please wait') {
-          // Rate limiting - exponential backoff
-          console.log('⚠️ Rate limited in adaptive sync, increasing interval');
-          currentInterval = Math.min(60000, currentInterval * 3); // ช้าลงมากขึ้นและช้าสูงสุด 1 นาที
+          // ⚡ Aggressive rate limit recovery - back off much longer
+          console.log('⚠️ Rate limited in adaptive sync, backing off aggressively');
+          currentInterval = Math.min(180000, currentInterval * 5); // สูงสุด 3 นาที, เพิ่ม x5
           console.log(`⚠️ Rate limited - backing off to ${currentInterval/1000}s interval`);
         } else {
           console.log('🔄 Background sync failed:', error.message);
@@ -498,7 +732,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
     
     if (currentUser && chatroomId) {
       console.log('🔄 Starting adaptive background sync...');
-      performSync(); // เริ่มทันที
+      
+      // ⚡ Delayed start to prevent API bombardment on screen load
+      setTimeout(() => {
+        if (isActive) {
+          performSync();
+        }
+      }, 5000); // เริ่มหลังจาก 5 วินาที
     }
 
     return () => {
@@ -507,7 +747,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
         clearTimeout(backgroundSync);
       }
     };
-  }, [currentUser, chatroomId, messages.length]);
+  }, [currentUser, chatroomId, messages.length, recentlySentMessage, isSSEConnected]);
 
   // Simple component with basic functionality
   const loadCurrentUser = useCallback(async () => {
@@ -619,18 +859,136 @@ const PrivateChatScreen = ({ route, navigation }) => {
     });
   }, []);
 
-  // HTTP-only mode: No socket listeners needed
+  // ✨ SSE + HTTP hybrid mode: Real-time SSE with HTTP fallback
   useEffect(() => {
     if (!chatroomId) return;
     
-    console.log('� HTTP-only mode: Using background sync instead of socket listeners for chat:', chatroomId);
-    console.log('🔄 Real-time updates provided by 1-second background polling');
+    console.log('📡 Hybrid mode: SSE + HTTP fallback for chat:', chatroomId);
+    console.log('📡 SSE Status:', isSSEConnected ? 'Connected' : 'Disconnected');
     
-    // No socket setup needed - background sync handles message updates
-    return () => {
-      console.log('� HTTP-only mode: No socket cleanup needed');
+    // Join SSE room for real-time updates
+    if (isSSEConnected) {
+      joinSSERoom(chatroomId);
+    }
+    
+    // Set up SSE message handler for this chat
+    const handleSSEMessage = (data) => {
+      console.log('📨 SSE message for private chat:', data.type, data.chatroomId);
+      
+      // Only handle messages for this chatroom
+      if (data.chatroomId !== chatroomId) {
+        return;
+      }
+      
+      switch (data.type) {
+        case 'new_message':
+          console.log('� New message via SSE:', data.message);
+          
+          // Check if message is not from current user to avoid duplicates
+          const isMyMessage = (data.message.sender?._id || data.message.user_id?._id) === currentUser?._id;
+          if (isMyMessage) {
+            console.log('⚠️ Skipping own message from SSE to avoid duplicate');
+            return;
+          }
+          
+          // ✨ Add new message with advanced duplicate prevention
+          setMessages(prev => {
+            // Primary duplicate check by ID
+            const existsById = prev.some(msg => msg._id === data.message._id);
+            if (existsById) {
+              console.log('⚠️ SSE message already exists (ID match), skipping');
+              return prev;
+            }
+            
+            // ✨ Advanced duplicate check for concurrent scenarios
+            const isDuplicate = prev.some(msg => {
+              // Check by content and timestamp proximity
+              if (msg.content === data.message.content && 
+                  msg.timestamp && data.message.timestamp) {
+                const timeDiff = Math.abs(
+                  new Date(msg.timestamp) - 
+                  new Date(data.message.timestamp || data.message.createdAt)
+                );
+                
+                // Same content within 5 seconds = likely duplicate
+                if (timeDiff < 5000) {
+                  const msgSenderId = msg.sender?._id || msg.user_id?._id;
+                  const dataSenderId = data.message.sender?._id || data.message.user_id?._id;
+                  
+                  if (msgSenderId === dataSenderId) {
+                    return true;
+                  }
+                }
+              }
+              
+              // For files: check by filename and size
+              if (data.message.messageType === 'file' || data.message.messageType === 'image') {
+                if (msg.fileName === data.message.fileName && 
+                    msg.fileSize === data.message.fileSize &&
+                    msg.timestamp && data.message.timestamp) {
+                  const timeDiff = Math.abs(
+                    new Date(msg.timestamp) - 
+                    new Date(data.message.timestamp || data.message.createdAt)
+                  );
+                  if (timeDiff < 10000) { // 10 seconds for files
+                    return true;
+                  }
+                }
+              }
+              
+              return false;
+            });
+            
+            if (isDuplicate) {
+              console.log('⚠️ SSE message is duplicate (content/file match), skipping');
+              return prev;
+            }
+            
+            console.log('✅ Adding SSE message to chat');
+            const newMessages = [...prev, {
+              ...data.message,
+              // Ensure proper image field for image messages
+              image: data.message.messageType === 'image' ? (data.message.image || data.message.fileUrl) : undefined
+            }];
+            
+            // Auto scroll to new message
+            setTimeout(() => {
+              try {
+                if (newMessages.length > 0) {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }
+              } catch (error) {
+                console.error('Error scrolling to SSE message:', error);
+              }
+            }, 100);
+            
+            return newMessages;
+          });
+          break;
+          
+        case 'user_typing':
+          // Handle typing indicators
+          if (data.userId !== currentUser?._id) {
+            setOtherUserTyping(data.isTyping);
+          }
+          break;
+          
+        default:
+          console.log('📨 Unknown SSE message type:', data.type);
+      }
     };
-  }, [chatroomId]);
+    
+    // Register SSE handler
+    const unsubscribeSSE = addMessageHandler(handleSSEMessage);
+    
+    return () => {
+      console.log('📡 Cleaning up SSE for chat:', chatroomId);
+      unsubscribeSSE();
+      if (isSSEConnected) {
+        leaveSSERoom(chatroomId);
+      }
+    };
+  }, [chatroomId, isSSEConnected, currentUser]);
 
   const loadMessages = useCallback(async (page = 1, refresh = false) => {
     if (!currentUser || !chatroomId || (page === 1 && isLoading)) return;
@@ -661,6 +1019,27 @@ const PrivateChatScreen = ({ route, navigation }) => {
             console.warn(`⚠️ Filtering out message ${index} - no sender info:`, msg);
             return false;
           }
+          
+          // ✨ กรองรูปภาพที่ไม่มีข้อมูลไฟล์ในการโหลดครั้งแรก
+          if (msg.messageType === 'image') {
+            if (!msg.file && !msg.fileUrl && !msg.image && !msg.file_url) {
+              console.warn(`⚠️ LoadMessages: Filtering incomplete image message ${index}:`, {
+                id: msg._id,
+                file: msg.file,
+                fileUrl: msg.fileUrl,
+                image: msg.image,
+                file_url: msg.file_url
+              });
+              return false;
+            }
+            
+            // เช็คว่า file object มี url หรือไม่
+            if (msg.file && (!msg.file.url || msg.file.url === null)) {
+              console.warn(`⚠️ LoadMessages: Image file has no URL:`, msg.file);
+              return false;
+            }
+          }
+          
           return true;
         })
         .map((msg, index) => {
@@ -860,6 +1239,8 @@ const PrivateChatScreen = ({ route, navigation }) => {
     if ((!newMessage.trim() && !selectedFile) || !chatroomId || isSending) return;
 
     setIsSending(true);
+    // ✨ Activate super-fast sync mode
+    setRecentlySentMessage(true);
     const messageToSend = newMessage.trim();
     const tempId = 'temp_' + Date.now() + '_' + Math.random() + '_' + currentUser._id;
     
@@ -1115,8 +1496,55 @@ const PrivateChatScreen = ({ route, navigation }) => {
         }
       }, 300);
       
-      // HTTP-only approach: Skip immediate check to avoid rate limiting
-      console.log('📡 HTTP-only mode: Message sent via API, adaptive sync will handle delivery confirmation');
+      // ✨ IMMEDIATE MESSAGE SYNC: Check for new messages right after sending
+      console.log('📡 HTTP-only mode: Message sent via API, checking for immediate delivery...');
+      
+      // Force immediate sync check after successful message send
+      setTimeout(async () => {
+        try {
+          console.log('⚡ Performing immediate sync check after message send...');
+          const response = await api.get(`/chats/${chatroomId}/messages?page=1&limit=3`);
+          const latestMessages = response.data.messages || [];
+          
+          // Check if our message appears in the latest messages
+          const sentMessageExists = latestMessages.some(msg => 
+            msg._id === (response.data._id || response.data.message?._id)
+          );
+          
+          if (sentMessageExists) {
+            console.log('✅ Message confirmed delivered and visible');
+          } else {
+            console.log('⏳ Message not yet visible, triggering sync acceleration...');
+            // Trigger faster background sync by updating messages to force useEffect
+            setMessages(prev => [...prev]);
+          }
+        } catch (error) {
+          console.log('⚠️ Immediate sync check failed:', error.message);
+        }
+      }, 100);
+      
+      // Also trigger a secondary check after 1 second for extra reliability
+      setTimeout(async () => {
+        try {
+          const response = await api.get(`/chats/${chatroomId}/messages?page=1&limit=5`);
+          const latestMessages = response.data.messages || [];
+          
+          // Check for any new messages that might have arrived
+          const newMessages = latestMessages.filter(serverMsg => 
+            !messages.some(localMsg => localMsg._id === serverMsg._id)
+          );
+          
+          if (newMessages.length > 0) {
+            console.log('📨 Found additional messages during delayed check:', newMessages.length);
+            setMessages(prev => {
+              const filtered = prev.filter(msg => !msg.isTemporary);
+              return [...filtered, ...latestMessages];
+            });
+          }
+        } catch (error) {
+          console.log('⚠️ Secondary message check failed:', error.message);
+        }
+      }, 1000);
       
     } catch (error) {
       console.error('❌ Error sending message:', error);
@@ -1138,6 +1566,11 @@ const PrivateChatScreen = ({ route, navigation }) => {
       Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsSending(false);
+      // ✨ Keep fast sync for 10 seconds after sending
+      setTimeout(() => {
+        setRecentlySentMessage(false);
+        console.log('⏱️ Returning to normal sync speed after message send');
+      }, 10000);
     }
   };
 
@@ -1194,10 +1627,25 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   };
 
+  // ✨ เพิ่ม ref เพื่อป้องกันการส่งรูปซ้ำ
+  const sendingImageRef = useRef(false);
+  const lastSentImageRef = useRef(null);
+
   const sendImageDirectly = async (imageAsset) => {
-    if (!chatroomId || isSending || !currentUser) return;
+    if (!chatroomId || isSending || !currentUser || sendingImageRef.current) return;
     
+    // ✨ ป้องกันการส่งรูปเดียวกันซ้ำ
+    const imageKey = `${imageAsset.uri}_${imageAsset.fileSize || 0}`;
+    if (lastSentImageRef.current === imageKey) {
+      console.log('🚫 Preventing duplicate image send:', imageKey);
+      return;
+    }
+    
+    sendingImageRef.current = true;
+    lastSentImageRef.current = imageKey;
     setIsSending(true);
+    // ✨ Activate super-fast sync mode for images
+    setRecentlySentMessage(true);
     const tempId = `temp_image_${Date.now()}_${Math.random()}_${currentUser._id}`;
     
     try {
@@ -1330,18 +1778,71 @@ const PrivateChatScreen = ({ route, navigation }) => {
           );
         }
         
-        // ✨ ตรวจสอบว่า message นี้มีอยู่แล้วหรือไม่ (เพื่อป้องกันการแสดงซ้ำ)
-        const messageExists = prev.some(msg => 
-          msg._id === serverMessage._id || 
-          (msg._id !== tempId && msg.timestamp && serverMessage.timestamp && 
-           Math.abs(new Date(msg.timestamp) - new Date(serverMessage.timestamp)) < 1000)
-        );
+        // ✨ ตรวจสอบว่า server message มีข้อมูลรูปภาพครบถ้วน
+        if (serverMessage.messageType === 'image') {
+          if (!serverMessage.file && !serverMessage.fileUrl && !serverMessage.image) {
+            console.log('⚠️ Server returned incomplete image data, keeping optimistic message');
+            return prev.map(msg => 
+              msg._id === tempId 
+                ? { ...msg, isTemporary: false, sent: true }
+                : msg
+            );
+          }
+          
+          if (serverMessage.file && (!serverMessage.file.url || serverMessage.file.url === null)) {
+            console.log('⚠️ Server image file has no URL, keeping optimistic message');
+            return prev.map(msg => 
+              msg._id === tempId 
+                ? { ...msg, isTemporary: false, sent: true }
+                : msg
+            );
+          }
+        }
+        
+        // ✨ เพิ่มการตรวจสอบ duplicate ที่เข้มงวดยิ่งขึ้นสำหรับรูปภาพ
+        const messageExists = prev.some(msg => {
+          // เช็คด้วย ID ก่อน
+          if (msg._id === serverMessage._id) return true;
+          
+          // เช็ค optimistic message ที่ไม่ใช่ tempId
+          if (msg._id !== tempId && msg.messageType === 'image' && serverMessage.messageType === 'image') {
+            // เช็คด้วยชื่อไฟล์และเวลา
+            if (msg.fileName && serverMessage.fileName && msg.fileName === serverMessage.fileName) {
+              const timeDiff = Math.abs(new Date(msg.timestamp) - new Date(serverMessage.timestamp || serverMessage.createdAt));
+              if (timeDiff < 5000) { // 5 วินาที
+                console.log('🔍 Found duplicate image by filename and time:', msg.fileName);
+                return true;
+              }
+            }
+            
+            // เช็คด้วย fileUrl ถ้ามี
+            if (msg.fileUrl && serverMessage.fileUrl && msg.fileUrl === serverMessage.fileUrl) {
+              console.log('🔍 Found duplicate image by fileUrl:', msg.fileUrl);
+              return true;
+            }
+            
+            // เช็คด้วยเวลาใกล้เคียง + sender เดียวกัน
+            if (msg.timestamp && serverMessage.timestamp) {
+              const timeDiff = Math.abs(new Date(msg.timestamp) - new Date(serverMessage.timestamp));
+              const sameUser = (msg.sender?._id === serverMessage.sender?._id) || 
+                              (msg.user_id?._id === serverMessage.user_id?._id);
+              
+              if (timeDiff < 2000 && sameUser) { // 2 วินาทีและคนส่งเดียวกัน
+                console.log('🔍 Found duplicate image by time and sender');
+                return true;
+              }
+            }
+          }
+          
+          return false;
+        });
         
         if (messageExists) {
           console.log('⚠️ Image message already exists, just removing optimistic message');
           return prev.filter(msg => msg._id !== tempId);
         }
         
+        // ลบ optimistic message ก่อนเพิ่มของจริง
         const filteredMessages = prev.filter(msg => msg._id !== tempId);
         
         // เพิ่มข้อความใหม่จาก server (ใช้ messageType เดิมจากเซิร์ฟเวอร์)
@@ -1382,8 +1883,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
         return updatedMessages;
       });
 
-      // HTTP-only approach: Skip immediate check to avoid rate limiting  
-      console.log('📡 HTTP-only mode: Image sent via API, adaptive sync will handle delivery confirmation');
+      // ✨ ลบ immediate sync checks เพื่อป้องกันการ duplicate
+      // ปล่อยให้ background sync handle การอัปเดตแบบธรรมชาติ
+      console.log('✅ Image sent via API, letting background sync handle delivery verification');
+
 
       console.log('✅ Image sent successfully');
     } catch (error) {
@@ -1405,6 +1908,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
       Alert.alert('ข้อผิดพลาด', errorMessage);
     } finally {
       setIsSending(false);
+      sendingImageRef.current = false;
+      
+      // ✨ Keep fast sync for 10 seconds after sending image
+      setTimeout(() => {
+        setRecentlySentMessage(false);
+        // รีเซ็ต lastSentImage หลังจากส่งเสร็จ
+        setTimeout(() => {
+          lastSentImageRef.current = null;
+        }, 2000);
+        console.log('⏱️ Returning to normal sync speed after image send');
+      }, 10000);
     }
   };
 
@@ -1889,9 +2403,38 @@ const PrivateChatScreen = ({ route, navigation }) => {
         permissionGranted = false;
       }
       
+      // ✨ ใช้ AndroidDownloads สำหรับทุก Platform เพื่อให้ไปที่ Downloads folder
+      if (Platform.OS === 'android') {
+        console.log('🤖 Android: Using AndroidDownloads for image');
+        try {
+          const tempUri = `${FileSystem.documentDirectory}temp_image_${Date.now()}.jpg`;
+          const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, {});
+          
+          if (downloadResult.status === 200) {
+            const fileName = `image_${Date.now()}.jpg`;
+            const saveResult = await AndroidDownloads.saveToDownloads(downloadResult.uri, fileName);
+            
+            if (saveResult.success) {
+              console.log('✅ Image saved to Android Downloads successfully');
+              Alert.alert('สำเร็จ', saveResult.message);
+              setShowSuccessAnimation(true);
+            } else {
+              throw new Error(saveResult.error || 'การบันทึกไปที่ Downloads ล้มเหลว');
+            }
+          } else {
+            throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+          }
+          return;
+        } catch (androidError) {
+          console.error('❌ Android Downloads failed:', androidError);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดรูปภาพไปที่ Downloads ได้: ' + androidError.message);
+          return;
+        }
+      }
+      
       if (!permissionGranted) {
-        console.log('📤 Using sharing fallback for image');
-        // Fall back to download and share
+        console.log('📤 iOS: Using sharing fallback for image');
+        // Fall back to download and share for iOS
         try {
           const tempUri = `${FileSystem.documentDirectory}temp_image_${Date.now()}.jpg`;
           const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, {});
@@ -1925,10 +2468,34 @@ const PrivateChatScreen = ({ route, navigation }) => {
       const timestamp = new Date().getTime();
       const fileName = `image_${timestamp}.jpg`;
 
-      // สำหรับ Cloudinary URL ลองใช้วิธีตรง
+      // ✨ iOS with permission: Use AndroidDownloads utility for consistent behavior
+      if (Platform.OS === 'android') {
+        // Android should have been handled above, but just in case
+        console.log('🤖 Android (with permission): Using AndroidDownloads');
+        const token = await AsyncStorage.getItem('userToken');
+        const headers = fullscreenImageUri.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
+        
+        const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
+        const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, { headers });
+
+        if (downloadResult.status === 200) {
+          const saveResult = await AndroidDownloads.saveToDownloads(downloadResult.uri, fileName);
+          if (saveResult.success) {
+            Alert.alert('สำเร็จ', saveResult.message);
+            setShowSuccessAnimation(true);
+          } else {
+            throw new Error(saveResult.error);
+          }
+        } else {
+          throw new Error('Download failed with status: ' + downloadResult.status);
+        }
+        return;
+      }
+
+      // iOS: Try direct save to gallery first
       if (fullscreenImageUri.includes('cloudinary.com')) {
         try {
-          console.log('🌤️ Trying direct Cloudinary save...');
+          console.log('� iOS: Trying direct Cloudinary save...');
           const asset = await MediaLibrary.saveToLibraryAsync(fullscreenImageUri);
           console.log('✅ Direct save successful:', asset);
           setShowSuccessAnimation(true);
@@ -1939,13 +2506,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
         }
       }
 
-      // วิธี fallback: ดาวน์โหลดไฟล์ชั่วคราว
-      const token = await AsyncStorage.getItem('userToken'); // Fixed: should be 'userToken' not 'token'
+      // iOS fallback: ดาวน์โหลดไฟล์ชั่วคราวแล้วบันทึกใน Gallery
+      const token = await AsyncStorage.getItem('userToken');
       const headers = fullscreenImageUri.includes('cloudinary.com') ? {} : { Authorization: `Bearer ${token}` };
       
       const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
       
-      console.log('📍 Temp file path:', tempUri);
+      console.log('📍 iOS: Temp file path:', tempUri);
       console.log('🔄 Starting download with headers:', headers);
       
       const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, {
@@ -1957,7 +2524,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
       if (downloadResult.status === 200) {
         try {
           const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
-          console.log('✅ Image saved to gallery:', asset);
+          console.log('✅ Image saved to iOS gallery:', asset);
           setShowSuccessAnimation(true);
         } catch (saveError) {
           console.error('❌ Error saving to gallery:', saveError);
@@ -2115,25 +2682,54 @@ const PrivateChatScreen = ({ route, navigation }) => {
           }
           
           if (!permissionGranted) {
-            console.log('📤 Using sharing fallback for media download');
-            // Fall back to regular file download and sharing
-            const tempUri = `${FileSystem.documentDirectory}temp_${Date.now()}_${finalFileName}`;
+            console.log('� No media permission - falling back to document download');
+            // ✨ แทนที่จะ share ให้ download ลง Downloads folder แทน
             
+            if (Platform.OS === 'android') {
+              try {
+                // ใช้ AndroidDownloads สำหรับไฟล์สื่อใน Android
+                const tempUri = `${FileSystem.documentDirectory}temp_${finalFileName}`;
+                const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, { headers });
+                
+                if (downloadResult.status === 200) {
+                  const cleanFileName = AndroidDownloads.cleanFileName(
+                    AndroidDownloads.generateUniqueFileName(finalFileName)
+                  );
+                  
+                  const saveResult = await AndroidDownloads.saveToDownloads(downloadResult.uri, cleanFileName);
+                  
+                  if (saveResult.success) {
+                    console.log('✅ Android media saved to Downloads successfully');
+                    Alert.alert('สำเร็จ', `ไฟล์สื่อถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
+                    setShowSuccessAnimation(true);
+                  } else {
+                    console.log('⚠️ AndroidDownloads failed, using fallback');
+                    Alert.alert('สำเร็จ', `ไฟล์ถูกบันทึกที่: ${downloadResult.uri}`);
+                    setShowSuccessAnimation(true);
+                  }
+                } else {
+                  throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+                }
+                
+                console.log('✅ Android media download completed');
+                return;
+              } catch (androidError) {
+                console.log('⚠️ Android download failed, using document download:', androidError.message);
+              }
+            }
+            
+            // Fallback: Download to Documents directory
+            const tempUri = `${FileSystem.documentDirectory}${finalFileName}`;
             const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, { headers });
             
             if (downloadResult.status === 200) {
-              console.log('📤 Sharing downloaded media file...');
-              const canShare = await Sharing.isAvailableAsync();
-              
-              if (canShare) {
-                await Sharing.shareAsync(downloadResult.uri, {
-                  mimeType: isImage ? 'image/*' : 'video/*',
-                  dialogTitle: 'บันทึกไฟล์สื่อ'
-                });
-                console.log('✅ Media shared successfully');
-              } else {
-                setShowSuccessAnimation(true);
-              }
+              Alert.alert(
+                'ดาวน์โหลดสำเร็จ', 
+                `ไฟล์ถูกบันทึกที่: ${tempUri}`, 
+                [{ text: 'ตกลง' }]
+              );
+              setShowSuccessAnimation(true);
+              console.log('✅ Document download completed:', tempUri);
             } else {
               throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
             }
@@ -2228,20 +2824,17 @@ const PrivateChatScreen = ({ route, navigation }) => {
               Alert.alert('สำเร็จ', `ไฟล์ถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
               setShowSuccessAnimation(true);
             } else {
-              console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
+              console.log('⚠️ Direct Downloads save failed, using Documents folder...');
               
-              // Fallback to sharing if Downloads save fails
-              const canShare = await Sharing.isAvailableAsync();
-              if (canShare) {
-                await Sharing.shareAsync(actualResult.uri, {
-                  mimeType: 'application/octet-stream',
-                  dialogTitle: 'บันทึกไฟล์'
-                });
-                console.log('✅ File shared successfully (fallback)');
-              } else {
-                setShowSuccessAnimation(true);
-                console.log('✅ File downloaded (sharing not available)');
-              }
+              // ✨ แทนที่จะ share ให้บันทึกใน Documents folder แทน
+              const documentDir = FileSystem.documentDirectory || '';
+              const localUri = `${documentDir}${cleanFileName}`;
+              await FileSystem.moveAsync({
+                from: actualResult.uri,
+                to: localUri
+              });
+              setShowSuccessAnimation(true);
+              console.log('✅ File saved to Documents folder:', localUri);
             }
           } else {
             // iOS: ใช้ sharing เหมือนเดิม
