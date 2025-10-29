@@ -26,6 +26,7 @@ import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import FullscreenImageViewer from '../../components/FullscreenImageViewer';
 import { downloadFileWithFallback } from '../../utils/fileDownload';
 import AndroidDownloads from '../../utils/androidDownloads';
+import FileShareHelper from '../../utils/fileShareHelper';
 import TypingIndicator from '../../components/TypingIndicator';
 
 // Rate Limit Status Component
@@ -1387,10 +1388,66 @@ const GroupChatScreen = ({ route, navigation }) => {
       // ปิด modal ก่อน
       setFullscreenImageVisible(false);
       
-      // รอให้ Modal ปิดแล้วค่อยดาวน์โหลด
-      setTimeout(() => {
-        downloadFile(fullscreenImageUri, `image_${Date.now()}.jpg`);
-      }, 300);
+      if (Platform.OS === 'ios') {
+        console.log('🍎 iOS: Direct save to Photos gallery');
+        
+        // iOS: บันทึกตรงไปที่แกลเลอรี่เลย ไม่ต้องเลือก
+        try {
+          // ขอสิทธิ์ MediaLibrary ก่อน
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('ข้อผิดพลาด', 'ต้องการสิทธิ์เข้าถึงแกลเลอรี่เพื่อบันทึกรูปภาพ');
+            return;
+          }
+
+          // ดาวน์โหลดไฟล์ก่อนแล้วค่อยบันทึก (ทำงานกับทุก URL)
+          const token = await AsyncStorage.getItem('userToken');
+          const headers = fullscreenImageUri.includes('cloudinary.com') ? {} : 
+                         token ? { Authorization: `Bearer ${token}` } : {};
+          
+          // กำหนดนามสกุลไฟล์ให้ถูกต้อง
+          let fileExtension = 'jpg';
+          if (fullscreenImageUri.includes('.png')) fileExtension = 'png';
+          else if (fullscreenImageUri.includes('.jpeg')) fileExtension = 'jpeg';
+          else if (fullscreenImageUri.includes('.gif')) fileExtension = 'gif';
+          else if (fullscreenImageUri.includes('.webp')) fileExtension = 'webp';
+          
+          const fileName = `image_${Date.now()}.${fileExtension}`;
+          const tempUri = `${FileSystem.documentDirectory}temp_${fileName}`;
+          
+          console.log('🍎 iOS: Downloading image to temp location...');
+          console.log('📂 Temp file path:', tempUri);
+          
+          const downloadResult = await FileSystem.downloadAsync(fullscreenImageUri, tempUri, { headers });
+          
+          if (downloadResult.status === 200) {
+            console.log('🍎 iOS: Saving downloaded image to gallery...');
+            const asset = await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+            console.log('✅ Image saved to iOS gallery:', asset);
+            setShowSuccess(true);
+            
+            // ลบไฟล์ชั่วคราว
+            try {
+              await FileSystem.deleteAsync(tempUri);
+              console.log('🗑️ Temp file cleaned up');
+            } catch (deleteError) {
+              console.log('⚠️ Could not delete temp file:', deleteError);
+            }
+          } else {
+            throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+          }
+          
+        } catch (iosError) {
+          console.error('❌ iOS gallery save failed:', iosError);
+          Alert.alert('ข้อผิดพลาด', `ไม่สามารถบันทึกรูปภาพได้: ${iosError.message}`);
+        }
+        
+      } else {
+        // Android: รอให้ Modal ปิดแล้วค่อยดาวน์โหลด
+        setTimeout(() => {
+          downloadFile(fullscreenImageUri, `image_${Date.now()}.jpg`);
+        }, 300);
+      }
 
     } catch (error) {
       console.error('❌ Error downloading image from modal:', error);
@@ -1417,22 +1474,73 @@ const GroupChatScreen = ({ route, navigation }) => {
       return;
     }
     
-    Alert.alert(
-      'ไฟล์แนบ',
-      `ชื่อไฟล์: ${fileName}`,
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        {
-          text: 'แชร์',
-          onPress: () => shareFile(fileUrl, fileName)
-        },
-        {
-          text: 'ดาวน์โหลด',
-          onPress: () => downloadFile(fileUrl, fileName),
-          style: 'default'
+    // ✨ iOS: แสดง sharing dialog โดยตรง, Android: แสดงตัวเลือก
+    if (Platform.OS === 'ios') {
+      console.log('🍎 iOS: Direct file sharing...');
+      
+      // iOS: ดาวน์โหลดและแชร์ไฟล์โดยตรง
+      const downloadAndShareFile = async () => {
+        try {
+          console.log('📥 Starting iOS file download for sharing...');
+          
+          const token = await AsyncStorage.getItem('userToken');
+          const headers = fileUrl.includes('cloudinary.com') ? {} : 
+                         token ? { Authorization: `Bearer ${token}` } : {};
+          
+          const timestamp = Date.now();
+          const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${fileName}`;
+          
+          const downloadResult = await FileSystem.downloadAsync(fileUrl, tempUri, { headers });
+          
+          if (downloadResult.status === 200) {
+            const canShare = await Sharing.isAvailableAsync();
+            if (canShare) {
+              await Sharing.shareAsync(downloadResult.uri, {
+                mimeType: 'application/octet-stream',
+                dialogTitle: 'บันทึกไฟล์'
+              });
+              console.log('✅ iOS file shared successfully');
+            } else {
+              Alert.alert('สำเร็จ', 'ไฟล์ถูกดาวน์โหลดแล้ว');
+            }
+          } else {
+            throw new Error(`ดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+          }
+        } catch (error) {
+          console.error('❌ iOS file sharing failed:', error);
+          Alert.alert('ข้อผิดพลาด', `ไม่สามารถดาวน์โหลดไฟล์ได้: ${error.message}`);
         }
-      ]
-    );
+      };
+      
+      downloadAndShareFile();
+      
+    } else {
+      // Android: แสดงตัวเลือก
+      Alert.alert(
+        'ไฟล์แนบ',
+        `ชื่อไฟล์: ${fileName}`,
+        [
+          { text: 'ยกเลิก', style: 'cancel' },
+          {
+            text: '📱 บันทึก & แชร์',
+            onPress: () => FileShareHelper.downloadAndShare(fileUrl, fileName, {
+              onStart: () => console.log('🔄 Starting smart download...'),
+              onComplete: () => console.log('✅ Smart download completed'),
+              onError: (error) => Alert.alert('ข้อผิดพลาด', error.message)
+            }),
+            style: 'default'
+          },
+          {
+            text: 'แชร์',
+            onPress: () => shareFile(fileUrl, fileName)
+          },
+          {
+            text: 'ดาวน์โหลด',
+            onPress: () => downloadFile(fileUrl, fileName)
+          }
+        ]
+      );
+    }
   };
 
   // ฟังก์ชันแชร์ไฟล์ (behavior เดิม)
@@ -1738,7 +1846,9 @@ const GroupChatScreen = ({ route, navigation }) => {
         // สำหรับไฟล์อื่นๆ - บันทึกไปที่ Downloads folder
         try {
           if (Platform.OS === 'ios') {
-            // iOS: ใช้ Sharing API เหมือนเดิม
+            // iOS: ใช้ Sharing API เหมือน PrivateChatScreen
+            console.log('📤 iOS: Sharing downloaded file...');
+            
             const timestamp = new Date().getTime();
             const tempUri = `${FileSystem.documentDirectory}temp_${timestamp}_${finalFileName}`;
             
@@ -1762,14 +1872,23 @@ const GroupChatScreen = ({ route, navigation }) => {
             }
 
             if (downloadResult.status === 200) {
-              // ✨ แทนที่จะ share ให้แสดง success message แทน
-              Alert.alert(
-                'ดาวน์โหลดสำเร็จ', 
-                `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
-                [{ text: 'ตกลง' }]
-              );
-              setShowSuccess(true);
-              console.log('✅ iOS file saved to Documents folder');
+              // ✨ ใช้ Sharing API เหมือน PrivateChatScreen
+              const canShare = await Sharing.isAvailableAsync();
+              if (canShare) {
+                await Sharing.shareAsync(downloadResult.uri, {
+                  mimeType: 'application/octet-stream',
+                  dialogTitle: 'บันทึกไฟล์'
+                });
+                console.log('✅ File shared successfully');
+              } else {
+                Alert.alert(
+                  'ดาวน์โหลดสำเร็จ', 
+                  `ไฟล์ถูกบันทึกใน Documents folder\n\nชื่อไฟล์: ${finalFileName}`,
+                  [{ text: 'ตกลง' }]
+                );
+                setShowSuccess(true);
+                console.log('✅ iOS file saved to Documents folder (sharing not available)');
+              }
             } else {
               throw new Error(`HTTP ${downloadResult.status}`);
             }

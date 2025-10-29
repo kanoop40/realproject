@@ -1,6 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { Platform, Alert } from 'react-native';
+import { PublicAndroidDownloads } from './publicAndroidDownloads';
 
 /**
  * Android Downloads folder utility
@@ -22,29 +24,37 @@ export class AndroidDownloads {
     console.log('📁 Attempting to save to Android Downloads:', fileName);
     
     try {
-      // Use simplified approach that actually works
-      console.log('🔄 Starting with app Downloads (most reliable for now)...');
+      // NEW: Try public downloads first (user-accessible)
+      console.log('🔄 Trying PUBLIC Downloads (user-accessible)...');
       
-      // Method 1: App Downloads folder (most reliable - always works)
+      // Method 1: Public Downloads (user can actually find these files)
+      const publicResult = await PublicAndroidDownloads.saveToPublicDownloads(sourceUri, fileName);
+      if (publicResult.success) {
+        console.log('✅ Public Downloads method succeeded');
+        return publicResult;
+      }
+      
+      console.log('⚠️ Public Downloads failed, trying app folder fallback...');
+      
+      // Method 2: App Downloads folder (reliable fallback)
       const appResult = await this.saveViaAppDownloads(sourceUri, fileName);
       if (appResult.success) {
         console.log('✅ App Downloads method succeeded');
+        // Enhance message with sharing option
+        appResult.message += '\n\n💡 เพื่อความสะดวก:\nแตะไฟล์ → Share → Files เพื่อบันทึกไปที่ Downloads ที่เข้าถึงได้ง่าย';
         return appResult;
       }
       
       console.log('⚠️ App Downloads failed, trying FileSystem approach...');
       
-      // Method 2: Try direct FileSystem copy to public Downloads
+      // Method 3: Try direct FileSystem copy to public Downloads
       const fsResult = await this.saveViaFileSystem(sourceUri, fileName);
       if (fsResult.success) {
         console.log('✅ FileSystem method succeeded');
         return fsResult;
       }
       
-      console.log('⚠️ FileSystem failed, skipping MediaLibrary (disabled)...');
-      
-      // Method 3: MediaLibrary - DISABLED due to permission issues
-      // Skip MediaLibrary completely to avoid AUDIO permission conflicts
+      console.log('⚠️ All methods failed, MediaLibrary disabled...');
       
       console.log('❌ All methods failed');
       return { 
