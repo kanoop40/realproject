@@ -9,6 +9,16 @@
       "ios",
       "android"
     ],
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to save downloaded images.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save downloaded images to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -38,9 +48,7 @@
         "READ_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
-        "READ_MEDIA_AUDIO",
         "CAMERA",
-        "RECORD_AUDIO",
         "ACCESS_MEDIA_LOCATION",
         "MANAGE_EXTERNAL_STORAGE"
       ],

@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Platform, Alert } from 'react-native';
 
@@ -22,17 +22,17 @@ export class AndroidDownloads {
     console.log('📁 Attempting to save to Android Downloads:', fileName);
     
     try {
-      // Try methods in order of preference for user accessibility
-      console.log('🔄 Starting with MediaLibrary (saves to public Downloads)...');
+      // Use simplified approach that actually works
+      console.log('🔄 Starting with app Downloads (most reliable for now)...');
       
-      // Method 1: MediaLibrary - saves to public Downloads that users can easily find
-      const mediaResult = await this.saveViaMediaLibrary(sourceUri, fileName);
-      if (mediaResult.success) {
-        console.log('✅ MediaLibrary method succeeded');
-        return mediaResult;
+      // Method 1: App Downloads folder (most reliable - always works)
+      const appResult = await this.saveViaAppDownloads(sourceUri, fileName);
+      if (appResult.success) {
+        console.log('✅ App Downloads method succeeded');
+        return appResult;
       }
       
-      console.log('⚠️ MediaLibrary failed, trying direct FileSystem approach...');
+      console.log('⚠️ App Downloads failed, trying FileSystem approach...');
       
       // Method 2: Try direct FileSystem copy to public Downloads
       const fsResult = await this.saveViaFileSystem(sourceUri, fileName);
@@ -41,14 +41,10 @@ export class AndroidDownloads {
         return fsResult;
       }
       
-      console.log('⚠️ FileSystem failed, using app Downloads fallback...');
+      console.log('⚠️ FileSystem failed, skipping MediaLibrary (disabled)...');
       
-      // Method 3: App Downloads folder (fallback)
-      const appResult = await this.saveViaAppDownloads(sourceUri, fileName);
-      if (appResult.success) {
-        console.log('✅ App Downloads folder method succeeded');
-        return appResult;
-      }
+      // Method 3: MediaLibrary - DISABLED due to permission issues
+      // Skip MediaLibrary completely to avoid AUDIO permission conflicts
       
       console.log('❌ All methods failed');
       return { 
@@ -68,31 +64,58 @@ export class AndroidDownloads {
   }
 
   /**
-   * Method 1: Use MediaLibrary to save to Downloads
+   * Method 1: Use MediaLibrary to save to Downloads (DISABLED due to permission issues)
    */
   static async saveViaMediaLibrary(sourceUri, fileName) {
     try {
       console.log('📱 Trying MediaLibrary approach...');
       
+      // TEMPORARY DISABLE: Skip MediaLibrary due to AUDIO permission issues
+      console.log('⚠️ MediaLibrary disabled due to AUDIO permission conflicts');
+      return { 
+        success: false, 
+        error: 'MediaLibrary disabled',
+        message: 'MediaLibrary ปิดใช้งานชั่วคราวเนื่องจากปัญหาสิทธิ์เสียง จะใช้วิธีอื่นแทน'
+      };
+      
+      // Original code commented out until permission issue is resolved
+      /*
       // Check if MediaLibrary is available
       if (!MediaLibrary.requestPermissionsAsync) {
         console.log('❌ MediaLibrary not available');
         return { success: false, error: 'MediaLibrary not available' };
       }
       
-      // Request permissions with better error handling
+      // Request permissions with specific writeOnly scope to avoid AUDIO permission issues
       let permissionResult;
       try {
-        permissionResult = await MediaLibrary.requestPermissionsAsync();
+        // Request only writeOnly permissions to avoid AUDIO permission requirement
+        permissionResult = await MediaLibrary.requestPermissionsAsync(false); // false = writeOnly
       } catch (permError) {
         console.log('❌ Permission request failed:', permError.message);
-        return { success: false, error: 'Permission request failed' };
+        // If writeOnly fails, try without any parameters as fallback
+        try {
+          console.log('🔄 Trying basic permission request...');
+          permissionResult = await MediaLibrary.getPermissionsAsync();
+          if (permissionResult.status !== 'granted') {
+            console.log('❌ Basic permission check failed, skipping MediaLibrary method');
+            return { success: false, error: 'MediaLibrary permissions not available' };
+          }
+        } catch (basicError) {
+          console.log('❌ All MediaLibrary permission methods failed:', basicError.message);
+          return { success: false, error: 'Permission request failed completely' };
+        }
       }
       
       if (permissionResult.status !== 'granted') {
         console.log('❌ MediaLibrary permission denied:', permissionResult.status);
-        return { success: false, error: 'Permission denied' };
+        return { 
+          success: false, 
+          error: 'Permission denied',
+          message: 'ไม่ได้รับสิทธิ์เข้าถึงสื่อ จะใช้วิธีสำรองในการบันทึกไฟล์'
+        };
       }
+      */
       
       // Verify source file exists
       try {
@@ -155,25 +178,47 @@ export class AndroidDownloads {
       const safeFileName = this.cleanFileName(fileName);
       console.log('📋 Using safe filename:', safeFileName);
       
-      // Try basic file system copy to public Downloads
-      // This is safer than using SAF which requires user interaction
-      const publicDownloadsPath = '/storage/emulated/0/Download/';
-      const targetUri = publicDownloadsPath + safeFileName;
+      // Try multiple public Downloads paths
+      const downloadsPaths = [
+        '/storage/emulated/0/Download/',
+        '/sdcard/Download/',
+        '/storage/sdcard0/Download/'
+      ];
       
-      console.log('📁 Attempting copy to:', targetUri);
+      let lastError = null;
       
-      await FileSystem.copyAsync({
-        from: sourceUri,
-        to: targetUri
-      });
+      for (const downloadsPath of downloadsPaths) {
+        try {
+          const targetUri = downloadsPath + safeFileName;
+          console.log('📁 Attempting copy to:', targetUri);
+          
+          await FileSystem.copyAsync({
+            from: sourceUri,
+            to: targetUri
+          });
+          
+          // Verify file was created
+          const fileInfo = await FileSystem.getInfoAsync(targetUri);
+          if (fileInfo.exists && fileInfo.size > 0) {
+            console.log('✅ FileSystem copy completed successfully');
+            return { 
+              success: true, 
+              uri: targetUri,
+              message: `ไฟล์ถูกบันทึกไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${safeFileName}\n\nเข้าถึงได้จากแอปจัดการไฟล์ → Downloads`
+            };
+          } else {
+            throw new Error('File was created but appears to be empty or invalid');
+          }
+          
+        } catch (pathError) {
+          console.log(`❌ Path ${downloadsPath} failed:`, pathError.message);
+          lastError = pathError;
+          continue;
+        }
+      }
       
-      console.log('✅ FileSystem copy completed');
+      throw new Error(`All Downloads paths failed. Last error: ${lastError?.message}`);
       
-      return { 
-        success: true, 
-        uri: targetUri,
-        message: `ไฟล์ถูกบันทึกไปที่ Downloads แล้ว\nชื่อไฟล์: ${safeFileName}`
-      };
       
     } catch (error) {
       console.log('❌ FileSystem approach failed:', error.message);
@@ -186,78 +231,58 @@ export class AndroidDownloads {
    */
   static async saveViaAppDownloads(sourceUri, fileName) {
     try {
-      console.log('📱 Attempting to save to public Downloads folder...');
+      console.log('📱 Using app Downloads folder (most reliable method)...');
       
-      // Try to save directly to Android public Downloads folder
-      const publicDownloadsUri = 'file:///storage/emulated/0/Download/';
       const safeFileName = this.cleanFileName(fileName);
-      const targetUri = publicDownloadsUri + safeFileName;
+      const appDownloadsDir = `${FileSystem.documentDirectory}Downloads/`;
+      const targetUri = `${appDownloadsDir}${safeFileName}`;
       
-      console.log('📁 Target path:', targetUri);
+      console.log('📁 App Downloads path:', targetUri);
       
-      // Try direct copy to public Downloads
+      // Create Downloads directory if needed
       try {
-        await FileSystem.copyAsync({
-          from: sourceUri,
-          to: targetUri
-        });
-        
-        console.log('✅ Successfully saved to public Downloads folder');
-        return {
-          success: true,
-          uri: targetUri,
-          message: `ไฟล์ถูกบันทึกไปที่ Downloads แล้ว\nชื่อไฟล์: ${safeFileName}\nเข้าถึงได้จากแอปจัดการไฟล์`
-        };
-      } catch (copyError) {
-        console.log('❌ Direct copy to public Downloads failed:', copyError.message);
-        
-        // Fallback to app Documents folder with clear message
-        const appDownloadsDir = `${FileSystem.documentDirectory}Downloads/`;
-        
-        // Create Downloads directory if needed
-        try {
-          await FileSystem.makeDirectoryAsync(appDownloadsDir, { intermediates: true });
-          console.log('📁 App Downloads directory ensured');
-        } catch (dirError) {
-          // Directory might already exist, which is fine
-          if (!dirError.message.includes('already exists')) {
-            console.warn('⚠️ Directory creation issue:', dirError.message);
-          }
+        await FileSystem.makeDirectoryAsync(appDownloadsDir, { intermediates: true });
+        console.log('📁 App Downloads directory ensured');
+      } catch (dirError) {
+        // Directory might already exist, which is fine
+        if (!dirError.message.includes('already exists')) {
+          console.warn('⚠️ Directory creation issue:', dirError.message);
         }
-        
-        // Generate safe target URI for app folder fallback
-        const targetUri = `${appDownloadsDir}${safeFileName}`;
-        
-        console.log('📋 File copy details (app fallback):', {
-          from: sourceUri,
-          to: targetUri,
-          fileName: safeFileName
-        });
-        
-        // Use copyAsync instead of moveAsync to avoid permission issues
-        await FileSystem.copyAsync({
-          from: sourceUri,
-          to: targetUri
-        });
-        
-        // Verify file was created
-        try {
-          const fileInfo = await FileSystem.getInfoAsync(targetUri);
-          if (!fileInfo.exists) {
-            throw new Error('File was not created at target location');
-          }
-          console.log('✅ App folder file creation verified');
-        } catch (verifyError) {
-          console.warn('⚠️ Could not verify file info:', verifyError.message);
-          // Don't fail the operation - file might still be valid
-        }
-        
-        return { 
-          success: true, 
-          uri: targetUri,
-          message: `ไฟล์ถูกดาวน์โหลดเรียบร้อยแล้ว\n\nชื่อไฟล์: ${safeFileName}\n\nไฟล์ถูกบันทึกในแอป สามารถเข้าถึงผ่านแอปจัดการไฟล์`
-        };
       }
+      
+      console.log('📋 File copy details:', {
+        from: sourceUri,
+        to: targetUri,
+        fileName: safeFileName,
+        directory: appDownloadsDir
+      });
+      
+      // Copy file to app Downloads folder
+      await FileSystem.copyAsync({
+        from: sourceUri,
+        to: targetUri
+      });
+      
+      // Verify file was created
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(targetUri);
+        if (!fileInfo.exists) {
+          throw new Error('File was not created at target location');
+        }
+        console.log('✅ App Downloads file creation verified:', { 
+          exists: fileInfo.exists, 
+          size: fileInfo.size 
+        });
+      } catch (verifyError) {
+        console.warn('⚠️ Could not verify file info:', verifyError.message);
+        // Don't fail the operation - file might still be valid
+      }
+      
+      return { 
+        success: true, 
+        uri: targetUri,
+        message: `ไฟล์ดาวน์โหลดสำเร็จ!\n\nชื่อไฟล์: ${safeFileName}\n\nไฟล์ถูกบันทึกในแอป\nเข้าถึงได้ผ่านแอปจัดการไฟล์ → Android/data/com.kanoop60.chatappnew/files/Downloads/\n\nหรือใช้แอปค้นหาไฟล์ค้นหา: "${safeFileName}"`
+      };
       
     } catch (error) {
       console.log('❌ App Downloads method failed:', error.message);
@@ -309,14 +334,17 @@ export class AndroidDownloads {
       message: ''
     };
 
-    // Check MediaLibrary permissions
+    // Check MediaLibrary permissions safely
     try {
       if (capabilities.hasMediaLibrary) {
+        // Use getPermissionsAsync to avoid requesting unnecessary permissions
         const permission = await MediaLibrary.getPermissionsAsync();
         capabilities.mediaLibraryPermission = permission.status;
       }
     } catch (error) {
+      console.log('⚠️ MediaLibrary permission check failed:', error.message);
       capabilities.mediaLibraryError = error.message;
+      capabilities.hasMediaLibrary = false; // Disable if checking fails
     }
 
     // Build informative message

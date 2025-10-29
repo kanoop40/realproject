@@ -64,13 +64,13 @@ const styles = StyleSheet.create({
   animationContainer: {
     width: 120,
     height: 120,
-    borderRadius: 60,
+    borderRadius: 0,
     backgroundColor: 'rgba(255, 255, 255, 0.0)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+   
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.0,
     shadowRadius: 6,
     elevation: 8,
   },
