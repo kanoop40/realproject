@@ -415,12 +415,12 @@ const EditGroupScreen = ({ route, navigation }) => {
               style={styles.addMemberButton}
               onPress={() => setShowUserSelection(true)}
             >
-              <Text style={styles.addMemberButtonText}>+ เพิ่มสมาชิก</Text>
+              <Text style={styles.addMemberButtonText1}>+ เพิ่มสมาชิก</Text>
             </TouchableOpacity>
 
             {(authUser.role === 'teacher' || authUser.role === 'อาจารย์') && (
               <TouchableOpacity
-                style={[styles.addMemberButton, { backgroundColor: '#4CAF50', borderColor: '#45a049' }]}
+                style={[styles.addMemberButton, { backgroundColor: '#000000ff', borderColor: '#ffffffff' }]}
                 onPress={() => setShowMajorSelection(true)}
               >
                 <Text style={styles.addMemberButtonText}>เพิ่มจากกลุ่มเรียน</Text>
@@ -521,7 +521,7 @@ const EditGroupScreen = ({ route, navigation }) => {
               onPress={() => setShowMajorSelection(false)}
               style={styles.closeButton}
             >
-              <Text style={styles.closeButtonText}>ยกเลิก</Text>
+              <Text style={styles.closeButtonText}>กลับ</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>เลือกสาขา</Text>
             <View style={styles.placeholder} />
@@ -538,7 +538,7 @@ const EditGroupScreen = ({ route, navigation }) => {
                 <View style={styles.majorTextContainer}>
                   <Text style={styles.majorText}>{item.major}</Text>
                   <Text style={styles.majorSubText}>
-                    {item.userCount} คน • {item.classCodeCount} กลุ่มเรียน
+                    {item.userCount} คน ในสาขานี้
                   </Text>
                 </View>
                 <Text style={styles.arrowText}>→</Text>
@@ -566,14 +566,14 @@ const EditGroupScreen = ({ route, navigation }) => {
               onPress={() => setShowClassSelection(false)}
               style={styles.closeButton}
             >
-              <Text style={styles.closeButtonText}>← กลับ</Text>
+              <Text style={styles.closeButtonText}>← </Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>เลือกกลุ่มเรียน - {selectedMajor}</Text>
             <TouchableOpacity 
               onPress={() => setShowClassSelection(false)}
               style={styles.closeButton}
             >
-              <Text style={styles.closeButtonText}>ยกเลิก</Text>
+              
             </TouchableOpacity>
           </View>
 
@@ -763,8 +763,14 @@ const styles = StyleSheet.create({
     borderColor: '#000000ff',
     flex: 1,
   },
+  addMemberButtonText1: {
+    color: '#000000ff',
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   addMemberButtonText: {
-    color: '#333',
+    color: '#ffffffff',
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
@@ -808,12 +814,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 16,
-    backgroundColor: '#2e2c2cff',
+    backgroundColor: '#ffffffff',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#ffffffff',
+    color: '#000000ff',
   },
   closeButton: {
     width: 40,
@@ -823,7 +829,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 16,
-    color: '#ffffffff',
+    color: '#000000ff',
     fontWeight: '600',
   },
   searchInput: {

@@ -28,6 +28,39 @@ import { downloadFileWithFallback } from '../../utils/fileDownload';
 import AndroidDownloads from '../../utils/androidDownloads';
 import TypingIndicator from '../../components/TypingIndicator';
 
+// Rate Limit Status Component
+const RateLimitStatus = () => {
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const retryTime = await AsyncStorage.getItem('rate_limit_retry_after');
+        if (retryTime) {
+          const remaining = Math.max(0, parseInt(retryTime) - Date.now());
+          setTimeLeft(Math.ceil(remaining / 1000));
+        } else {
+          setTimeLeft(0);
+        }
+      } catch (error) {
+        setTimeLeft(0);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (timeLeft <= 0) return null;
+
+  return (
+    <View style={styles.rateLimitContainer}>
+      <Text style={styles.rateLimitText}>⏳ รอ {timeLeft} วินาที เนื่องจาก Rate Limit</Text>
+    </View>
+  );
+};
+
 const GroupChatScreen = ({ route, navigation }) => {
   const { user: authUser } = useAuth();
   const { socket, joinChatroom } = useSocket();
@@ -1337,6 +1370,89 @@ const GroupChatScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันแสดงตัวเลือกไฟล์
+  const showFileOptions = (fileData) => {
+    console.log('🔧 showFileOptions called with:', fileData);
+    
+    // Extract data from fileData object
+    const fileUrl = fileData?.url || fileData?.fileUrl || fileData?.file_path;
+    const fileName = fileData?.fileName || fileData?.file_name || 'ไม่ทราบชื่อ';
+    
+    console.log('📁 File details:', { fileUrl, fileName });
+    
+    if (!fileUrl) {
+      Alert.alert(
+        'ไฟล์ไม่พร้อมใช้งาน',
+        `ไฟล์ "${fileName}" ถูกส่งเป็นข้อความเนื่องจากการอัปโหลดล้มเหลว\n\nกรุณาลองส่งไฟล์ใหม่อีกครั้ง`,
+        [{ text: 'ตกลง', style: 'default' }]
+      );
+      return;
+    }
+    
+    Alert.alert(
+      'ไฟล์แนบ',
+      `ชื่อไฟล์: ${fileName}`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'แชร์',
+          onPress: () => shareFile(fileUrl, fileName)
+        },
+        {
+          text: 'ดาวน์โหลด',
+          onPress: () => downloadFile(fileUrl, fileName),
+          style: 'default'
+        }
+      ]
+    );
+  };
+
+  // ฟังก์ชันแชร์ไฟล์ (behavior เดิม)
+  const shareFile = async (fileUrl, fileName) => {
+    try {
+      console.log('📤 Starting share process...');
+      console.log('📤 File URL:', fileUrl);
+      console.log('📁 File name:', fileName);
+      
+      if (!FileSystem.documentDirectory) {
+        throw new Error('FileSystem.documentDirectory is not available');
+      }
+      
+      const finalFileName = fileName || 'shared_file';
+      const token = await AsyncStorage.getItem('userToken');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      let fullUrl = fileUrl;
+      if (!fileUrl.startsWith('http')) {
+        fullUrl = fileUrl.startsWith('/') ? `${API_URL}${fileUrl}` : `${API_URL}/${fileUrl}`;
+      }
+      
+      const tempUri = `${FileSystem.documentDirectory}temp_share_${Date.now()}_${finalFileName}`;
+      
+      const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, { headers });
+      
+      if (downloadResult.status === 200) {
+        console.log('📤 Sharing file...');
+        const canShare = await Sharing.isAvailableAsync();
+        
+        if (canShare) {
+          await Sharing.shareAsync(downloadResult.uri, {
+            mimeType: 'application/octet-stream',
+            dialogTitle: 'แชร์ไฟล์'
+          });
+          console.log('✅ File shared successfully');
+        } else {
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแชร์ไฟล์ได้บนอุปกรณ์นี้');
+        }
+      } else {
+        throw new Error(`การดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+      }
+    } catch (error) {
+      console.error('❌ Error sharing file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแชร์ไฟล์ได้: ' + (error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'));
+    }
+  };
+
   // ฟังก์ชันแสดงการแจ้งเตือนสำเร็จด้วย Tick Animation
   const showSuccessNotification = (message) => {
     console.log('✅ Showing success animation for:', message);
@@ -2312,7 +2428,15 @@ const GroupChatScreen = ({ route, navigation }) => {
           onMessagePress={handleMessagePress}
           onLongPress={handleLongPress}
           onImagePress={openImageModal}
-          onFilePress={(fileUrl, fileName) => downloadFile(fileUrl, fileName || 'downloaded_file')}
+          onFilePress={(fileData) => {
+            if (typeof fileData === 'string') {
+              // Old format - just URL
+              showFileOptions({ url: fileData, fileName: 'downloaded_file' });
+            } else {
+              // New format - file data object
+              showFileOptions(fileData);
+            }
+          }}
           formatDateTime={formatDateTime}
           getFileIcon={getFileIcon}
           decodeFileName={decodeFileName}
@@ -2742,13 +2866,7 @@ const GroupChatScreen = ({ route, navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* แสดงข้อมูลผู้สร้างกลุ่ม */}
-            {(groupInfo?.admin || groupInfo?.creator) && (
-              <View style={styles.groupCreatorInfo}>
-                <Text style={styles.groupCreatorLabel}>👑 ผู้สร้างกลุ่ม:</Text>
-                <Text style={styles.groupCreatorName}>{getAdminName}</Text>
-              </View>
-            )}
+           
             <FlatList
               data={groupMembers}
               keyExtractor={(item) => item._id || item.user?._id}
@@ -2822,6 +2940,9 @@ const GroupChatScreen = ({ route, navigation }) => {
       />
 
       {/* Fullscreen Image Viewer */}
+      {/* Rate Limit Status */}
+      <RateLimitStatus />
+
       <FullscreenImageViewer
         visible={fullscreenImageVisible}
         imageUri={fullscreenImageUri}
@@ -2835,6 +2956,17 @@ const GroupChatScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5C842' },
+  rateLimitContainer: {
+    backgroundColor: '#ff9800',
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateLimitText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5C842' },
   loadingText: { color: '#333', fontSize: 16, marginTop: 10 },
 

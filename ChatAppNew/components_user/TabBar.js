@@ -104,11 +104,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   activeTab: {
-    backgroundColor: 'rgba(229, 182, 28, 0.1)', // สีเหลืองอ่อนสำหรับ active
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // สีเหลืองอ่อนสำหรับ active
     borderRadius: 8,
   },
   activeText: {
-    color: '#e5b61c', // สีเหลืองสำหรับ active text
+    color: '#ffffffff', // สีเหลืองสำหรับ active text
     fontWeight: '600',
   },
 });

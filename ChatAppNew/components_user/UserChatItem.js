@@ -74,7 +74,17 @@ const UserChatItem = ({
             styles.lastMessage,
             chatData.unreadCount > 0 && styles.lastMessageUnread
           ]} numberOfLines={1}>
-            {chatData.lastMessage.content}
+            {(() => {
+              const message = chatData.lastMessage;
+              // จัดรูปแบบข้อความตามประเภท
+              if (message.messageType === 'image') {
+                return '📷 รูปภาพ';
+              } else if (message.messageType === 'file') {
+                return '📎 ไฟล์แนบ';
+              } else {
+                return message.content || 'ข้อความ';
+              }
+            })()}
           </Text>
         )}
       </View>

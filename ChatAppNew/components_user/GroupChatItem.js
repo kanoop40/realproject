@@ -13,6 +13,18 @@ const GroupChatItem = ({
 
   // Update local state เมื่อ props เปลี่ยน
   useEffect(() => {
+    console.log('🏷️ GroupChatItem data:', {
+      id: item._id,
+      roomName: item.roomName,
+      groupName: item.groupName,
+      membersCount: item.participants?.length || 0,
+      lastMessage: item.lastMessage ? {
+        content: item.lastMessage.content,
+        sender: item.lastMessage.sender,
+        messageType: item.lastMessage.messageType
+      } : null,
+      unreadCount: item.unreadCount
+    });
     setGroupData(item);
   }, [item]);
 
@@ -41,46 +53,69 @@ const GroupChatItem = ({
       </View>
       
       <View style={styles.chatInfo}>
+        {/* บรรทัดแรก: ชื่อกลุ่มพร้อมจำนวนสมาชิก */}
         <Text style={[
           styles.chatName,
           groupData.unreadCount > 0 && styles.chatNameUnread
         ]}>
-          {groupData.roomName} ({groupData.participants?.length || 0})
+          {`${groupData.roomName || groupData.groupName || 'กลุ่มไม่มีชื่อ'} (${groupData.participants?.length || 0})`}
         </Text>
         
-        {/* แสดงรายชื่อสมาชิก */}
-        <Text style={styles.membersList} numberOfLines={1}>
-          {groupData.participants?.slice(0, 3).map((member, index) => {
-            const name = member.user ? 
-              `${member.user.firstName} ${member.user.lastName}` : 
-              `${member.firstName} ${member.lastName}`;
-            return index === 0 ? name : `, ${name}`;
-          }).join('') || 'ไม่มีสมาชิก'}
-          {groupData.participants?.length > 3 && ` และอีก ${groupData.participants.length - 3} คน`}
-        </Text>
-        
-        {groupData.lastMessage && (
-          <Text style={[
-            styles.lastMessage,
-            groupData.unreadCount > 0 && styles.lastMessageUnread
-          ]} numberOfLines={1}>
-            {groupData.lastMessage.sender && groupData.lastMessage.sender.firstName ? 
-              `${groupData.lastMessage.sender.firstName}: ${groupData.lastMessage.content}` : 
-              groupData.lastMessage.content
-            }
-          </Text>
-        )}
-      </View>
-      
-      <View style={styles.chatMeta}>
-        {groupData.lastMessage && (
-          <Text style={[
-            styles.timestamp,
-            groupData.unreadCount > 0 && styles.timestampUnread
-          ]}>
-            {formatTime(groupData.lastMessage.timestamp)}
-          </Text>
-        )}
+        {/* บรรทัดที่สง: ข้อความล่าสุดพร้อมเวลา */}
+        <View style={styles.lastMessageRow}>
+          {groupData.lastMessage ? (
+            <>
+              <Text style={[
+                styles.lastMessage,
+                groupData.unreadCount > 0 && styles.lastMessageUnread
+              ]} numberOfLines={1}>
+                {(() => {
+                  const message = groupData.lastMessage;
+                  console.log('🔍 Last message data:', {
+                    sender: message.sender,
+                    content: message.content,
+                    messageType: message.messageType,
+                    timestamp: message.timestamp
+                  });
+                  
+                  let senderName = 'ไม่ทราบชื่อ';
+                  
+                  // ดึงชื่อผู้ส่งจากหลายรูปแบบข้อมูล
+                  if (message.sender) {
+                    if (typeof message.sender === 'object' && message.sender !== null) {
+                      senderName = message.sender.firstName || message.sender.name || message.sender.username || 'ไม่ทราบชื่อ';
+                    } else if (typeof message.sender === 'string') {
+                      senderName = message.sender;
+                    }
+                  }
+                  
+                  // จัดรูปแบบข้อความตามประเภท
+                  let messageContent = '';
+                  if (message.messageType === 'image') {
+                    messageContent = '📷 รูปภาพ';
+                  } else if (message.messageType === 'file') {
+                    messageContent = '📎 ไฟล์แนบ';
+                  } else {
+                    messageContent = message.content || 'ข้อความ';
+                  }
+                  
+                  // รูปแบบ: "คนส่ง : ข้อความที่ส่ง"
+                  return `${senderName} : ${messageContent}`;
+                })()}
+              </Text>
+              <Text style={[
+                styles.timestamp,
+                groupData.unreadCount > 0 && styles.timestampUnread
+              ]}>
+                {formatTime(groupData.lastMessage.timestamp)}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.noMessage}>
+              ยังไม่มีข้อความในกลุ่ม
+            </Text>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -143,7 +178,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 2,
+    marginBottom: 6,
   },
   chatNameUnread: {
     fontWeight: 'bold',
@@ -154,6 +189,19 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 4,
   },
+  memberCount: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  lastMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+  },
   membersList: {
     fontSize: 12,
     color: COLORS.textSecondary,
@@ -163,20 +211,24 @@ const styles = StyleSheet.create({
   lastMessage: {
     fontSize: 14,
     color: COLORS.textSecondary,
+    flex: 1,
+    marginRight: 8,
+  },
+  noMessage: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
     marginTop: 2,
+    fontStyle: 'italic',
   },
   lastMessageUnread: {
     color: COLORS.text,
     fontWeight: '500',
   },
-  chatMeta: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
+
   timestamp: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    flexShrink: 0,
   },
   timestampUnread: {
     color: COLORS.primary,

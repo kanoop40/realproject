@@ -111,7 +111,7 @@ const FileMessage = ({
             // ใน selection mode ให้เรียก onMessagePress เพื่อเลือก/ยกเลิกการเลือก
             onMessagePress && onMessagePress(item._id);
           } else {
-            // โหมดปกติ ให้แสดงเวลา และเปิดไฟล์
+            // โหมดปกติ ให้แสดงเวลา และแสดงตัวเลือกไฟล์
             onMessagePress && onMessagePress(item._id);
             setTimeout(() => {
               const displayFileName = getDisplayFileName();
@@ -228,7 +228,7 @@ const FileMessage = ({
                   styles.readStatusIcon,
                   item.isRead ? styles.readStatusIconRead : styles.readStatusIconSent
                 ]}>
-                  {item.isRead ? '✓✓' : '✓'}
+                  {item.isRead ? '' : ''}
                 </Text>
                 <Text style={[
                   styles.readStatusBottom,
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor:'#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8

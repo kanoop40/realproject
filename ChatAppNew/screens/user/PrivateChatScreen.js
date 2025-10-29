@@ -38,6 +38,40 @@ import LoadingOverlay from '../../components/LoadingOverlay';
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import FullscreenImageViewer from '../../components/FullscreenImageViewer';
 import { downloadFileWithFallback } from '../../utils/fileDownload';
+import { AndroidDownloads } from '../../utils/androidDownloads';
+
+// Rate Limit Status Component
+const RateLimitStatus = () => {
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const retryTime = await AsyncStorage.getItem('rate_limit_retry_after');
+        if (retryTime) {
+          const remaining = Math.max(0, parseInt(retryTime) - Date.now());
+          setTimeLeft(Math.ceil(remaining / 1000));
+        } else {
+          setTimeLeft(0);
+        }
+      } catch (error) {
+        setTimeLeft(0);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (timeLeft <= 0) return null;
+
+  return (
+    <View style={styles.rateLimitContainer}>
+      <Text style={styles.rateLimitText}>⏳ รอ {timeLeft} วินาที เนื่องจาก Rate Limit</Text>
+    </View>
+  );
+};
 
 const PrivateChatScreen = ({ route, navigation }) => {
   const { socket, joinChatroom, leaveChatroom } = useSocket();
@@ -440,9 +474,10 @@ const PrivateChatScreen = ({ route, navigation }) => {
       } catch (error) {
         consecutiveFailures++;
         
-        if (error.response?.status === 429) {
+        if (error.response?.status === 429 || error.message === 'Rate limited, please wait') {
           // Rate limiting - exponential backoff
-          currentInterval = Math.min(30000, currentInterval * 2);
+          console.log('⚠️ Rate limited in adaptive sync, increasing interval');
+          currentInterval = Math.min(60000, currentInterval * 3); // ช้าลงมากขึ้นและช้าสูงสุด 1 นาที
           console.log(`⚠️ Rate limited - backing off to ${currentInterval/1000}s interval`);
         } else {
           console.log('🔄 Background sync failed:', error.message);
@@ -1950,6 +1985,53 @@ const PrivateChatScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันแชร์ไฟล์ (behavior เดิม)
+  const shareFile = async (fileUrl, fileName) => {
+    try {
+      console.log('📤 Starting share process...');
+      console.log('📤 File URL:', fileUrl);
+      console.log('📁 File name:', fileName);
+      
+      if (!FileSystem.documentDirectory) {
+        throw new Error('FileSystem.documentDirectory is not available');
+      }
+      
+      const finalFileName = fileName || 'shared_file';
+      const token = await AsyncStorage.getItem('userToken');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      let fullUrl = fileUrl;
+      if (!fileUrl.startsWith('http')) {
+        fullUrl = fileUrl.startsWith('/') ? `${API_URL}${fileUrl}` : `${API_URL}/${fileUrl}`;
+      }
+      
+      const tempUri = `${FileSystem.documentDirectory}temp_share_${Date.now()}_${finalFileName}`;
+      
+      const downloadResult = await FileSystem.downloadAsync(fullUrl, tempUri, { headers });
+      
+      if (downloadResult.status === 200) {
+        console.log('📤 Sharing file...');
+        const canShare = await Sharing.isAvailableAsync();
+        
+        if (canShare) {
+          await Sharing.shareAsync(downloadResult.uri, {
+            mimeType: 'application/octet-stream',
+            dialogTitle: 'แชร์ไฟล์'
+          });
+          console.log('✅ File shared successfully');
+        } else {
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแชร์ไฟล์ได้บนอุปกรณ์นี้');
+        }
+      } else {
+        throw new Error(`การดาวน์โหลดล้มเหลว: HTTP ${downloadResult.status}`);
+      }
+    } catch (error) {
+      console.error('❌ Error sharing file:', error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถแชร์ไฟล์ได้: ' + (error.message || 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'));
+    }
+  };
+
+  // ฟังก์ชันดาวน์โหลดไฟล์ (บันทึกลงเครื่อง)
   const downloadFile = async (fileUrl, fileName) => {
     try {
       console.log('📥 Starting download process...');
@@ -2130,18 +2212,52 @@ const PrivateChatScreen = ({ route, navigation }) => {
         if (downloadSuccess) {
           console.log('✅ Download successful');
           console.log(`📊 Successfully downloaded using attempt ${downloadResult.attemptNumber} with URL: ${downloadResult.successUrl?.substring(0, 50)}...`);
-          console.log('📤 Sharing downloaded file...');
           
-          const canShare = await Sharing.isAvailableAsync();
-          if (canShare) {
-            await Sharing.shareAsync(actualResult.uri, {
-              mimeType: 'application/octet-stream',
-              dialogTitle: 'บันทึกไฟล์'
-            });
-            console.log('✅ File shared successfully');
+          // บันทึกลงเครื่องโดยตรงสำหรับ Android
+          if (Platform.OS === 'android') {
+            console.log('� Saving to Downloads folder on Android...');
+            
+            const cleanFileName = AndroidDownloads.cleanFileName(
+              AndroidDownloads.generateUniqueFileName(finalFileName)
+            );
+            
+            const saveResult = await AndroidDownloads.saveToDownloads(actualResult.uri, cleanFileName);
+            
+            if (saveResult.success) {
+              console.log('✅ File saved to Downloads successfully');
+              Alert.alert('สำเร็จ', `ไฟล์ถูกดาวน์โหลดไปที่ Downloads แล้ว\n\nชื่อไฟล์: ${cleanFileName}`);
+              setShowSuccessAnimation(true);
+            } else {
+              console.log('⚠️ Direct Downloads save failed, falling back to sharing...');
+              
+              // Fallback to sharing if Downloads save fails
+              const canShare = await Sharing.isAvailableAsync();
+              if (canShare) {
+                await Sharing.shareAsync(actualResult.uri, {
+                  mimeType: 'application/octet-stream',
+                  dialogTitle: 'บันทึกไฟล์'
+                });
+                console.log('✅ File shared successfully (fallback)');
+              } else {
+                setShowSuccessAnimation(true);
+                console.log('✅ File downloaded (sharing not available)');
+              }
+            }
           } else {
-            setShowSuccessAnimation(true);
-            console.log('✅ File downloaded (sharing not available)');
+            // iOS: ใช้ sharing เหมือนเดิม
+            console.log('�📤 Sharing downloaded file on iOS...');
+            
+            const canShare = await Sharing.isAvailableAsync();
+            if (canShare) {
+              await Sharing.shareAsync(actualResult.uri, {
+                mimeType: 'application/octet-stream',
+                dialogTitle: 'บันทึกไฟล์'
+              });
+              console.log('✅ File shared successfully');
+            } else {
+              setShowSuccessAnimation(true);
+              console.log('✅ File downloaded (sharing not available)');
+            }
           }
         } else {
           let errorMessage = 'การดาวน์โหลดไม่สำเร็จ';
@@ -2206,8 +2322,13 @@ const PrivateChatScreen = ({ route, navigation }) => {
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
+          text: 'แชร์',
+          onPress: () => shareFile(fileUrl, fileName)
+        },
+        {
           text: 'ดาวน์โหลด',
-          onPress: () => downloadFile(fileUrl, fileName)
+          onPress: () => downloadFile(fileUrl, fileName),
+          style: 'default'
         }
       ]
     );
@@ -2390,7 +2511,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   setShowAttachmentMenu(false);
                 }}
               >
-                <Text style={{ fontSize: 16, color: "#333", fontWeight: 'bold' }}>📷</Text>
+                
                 <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
               </TouchableOpacity>
               
@@ -2401,7 +2522,7 @@ const PrivateChatScreen = ({ route, navigation }) => {
                   setShowAttachmentMenu(false);
                 }}
               >
-                <Text style={{ fontSize: 16, color: "#333", fontWeight: 'bold' }}>📁</Text>
+              
                 <Text style={styles.attachmentMenuText}>ไฟล์</Text>
               </TouchableOpacity>
             </View>
@@ -2429,6 +2550,9 @@ const PrivateChatScreen = ({ route, navigation }) => {
         visible={showSuccessAnimation}
         onComplete={handleSuccessAnimationComplete}
       />
+
+      {/* Rate Limit Status */}
+      <RateLimitStatus />
 
       {/* Fullscreen Image Viewer */}
       <FullscreenImageViewer
@@ -2468,6 +2592,17 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.sm,
     fontWeight: '600',
     textAlign: 'center'
+  },
+  rateLimitContainer: {
+    backgroundColor: '#ff9800',
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateLimitText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   verticalAttachmentMenu: {
     position: 'absolute',

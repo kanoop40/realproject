@@ -83,10 +83,7 @@ const StartupScreen = ({ onAnimationFinish }) => {
           />
         </View>
 
-        {/* Skip indicator - แสดงตลอด เพื่อให้รู้ว่ากดข้ามได้ */}
-        <View style={styles.skipIndicator}>
-          <Text style={styles.skipText}>แตะที่หน้าจอเพื่อข้าม</Text>
-        </View>
+        
       </View>
     </TouchableWithoutFeedback>
   );

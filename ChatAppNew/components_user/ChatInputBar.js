@@ -43,7 +43,7 @@ const ChatInputBar = ({
               </View>
               <View style={styles.fileInfoContainer}>
                 <Text style={styles.fileTitle}>
-                  📎 ไฟล์แนบ
+                   ไฟล์แนบ
                 </Text>
                 <Text style={styles.fileSubtitle} numberOfLines={1}>
                   {selectedFile.name || selectedFile.fileName || 'ไฟล์ที่เลือก'} • {selectedFile.size ? Math.round(selectedFile.size / 1024) + ' KB' : ''}
@@ -71,7 +71,6 @@ const ChatInputBar = ({
               setShowAttachmentMenu(false);
             }}
           >
-            <Text style={styles.attachmentMenuIcon}>🖼️</Text>
             <Text style={styles.attachmentMenuText}>รูปภาพ</Text>
           </TouchableOpacity>
           
@@ -82,7 +81,7 @@ const ChatInputBar = ({
               setShowAttachmentMenu(false);
             }}
           >
-            <Text style={styles.attachmentMenuIcon}>📁</Text>
+          
             <Text style={styles.attachmentMenuText}>ไฟล์</Text>
           </TouchableOpacity>
         </View>
@@ -139,7 +138,7 @@ const styles = StyleSheet.create({
     margin: 12,
     padding: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
+    borderLeftColor: '#000000ff',
     ...SHADOWS.small
   },
   selectedFileContent: {

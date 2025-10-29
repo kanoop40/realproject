@@ -3,6 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+// Rate limiting management
+const RATE_LIMIT_KEY = 'rate_limit_retry_after';
+const RATE_LIMIT_REQUESTS = 'rate_limit_requests';
+const MAX_REQUESTS_PER_MINUTE = 30;
+
 // Production API URL for mobile device testing
 export const BASE_URL = 'https://realproject-mg25.onrender.com';
 // export const BASE_URL = 'http://192.168.1.34:5000'; // Local development - works only on emulator
@@ -14,16 +19,66 @@ console.log('Environment:', {
 });
 console.log('🎯 API will connect to:', API_URL);
 
+// Rate limiting helper functions
+const handleRateLimit = async (retryAfter) => {
+  const retryTime = Date.now() + (retryAfter * 1000);
+  await AsyncStorage.setItem(RATE_LIMIT_KEY, retryTime.toString());
+  return retryTime;
+};
+
+const checkRateLimit = async () => {
+  try {
+    const retryTime = await AsyncStorage.getItem(RATE_LIMIT_KEY);
+    if (retryTime && Date.now() < parseInt(retryTime)) {
+      return true; // Still in rate limit period
+    }
+    await AsyncStorage.removeItem(RATE_LIMIT_KEY);
+    return false;
+  } catch (error) {
+    return false;
+  }
+};
+
+const trackRequest = async () => {
+  try {
+    const now = Date.now();
+    const requests = await AsyncStorage.getItem(RATE_LIMIT_REQUESTS);
+    const requestHistory = requests ? JSON.parse(requests) : [];
+    
+    // Remove requests older than 1 minute
+    const recent = requestHistory.filter(time => now - time < 60000);
+    recent.push(now);
+    
+    await AsyncStorage.setItem(RATE_LIMIT_REQUESTS, JSON.stringify(recent));
+    
+    return recent.length <= MAX_REQUESTS_PER_MINUTE;
+  } catch (error) {
+    return true; // Allow request if tracking fails
+  }
+};
+
 const api = axios.create({
   baseURL: `${BASE_URL}/api`,
   timeout: 60000, // เพิ่มเป็น 60 วินาทีสำหรับ file upload
   // ไม่ตั้ง default Content-Type ให้ axios จัดการเอง (สำหรับ FormData)
 });
 
-// Request interceptor สำหรับ debug
+// Request interceptor สำหรับ debug และ rate limiting
 api.interceptors.request.use(
   async (config) => {
     try {
+      // Check rate limit before making request
+      if (await checkRateLimit()) {
+        throw new Error('Rate limited, please wait');
+      }
+      
+      // Track this request
+      const canMakeRequest = await trackRequest();
+      if (!canMakeRequest) {
+        console.log('⚠️ Too many requests, throttling...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
       const token = await AsyncStorage.getItem('userToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -39,7 +94,10 @@ api.interceptors.request.use(
       
       console.log(`🔄 Making ${config.method?.toUpperCase()} request to:`, config.url);
     } catch (error) {
-      console.log('❌ Error getting token:', error.message || error);
+      console.log('❌ Error in request interceptor:', error.message || error);
+      if (error.message === 'Rate limited, please wait') {
+        return Promise.reject(error);
+      }
     }
     return config;
   },
@@ -81,6 +139,19 @@ api.interceptors.response.use(
       
       await new Promise(resolve => setTimeout(resolve, waitTime));
       return api(originalRequest);
+    }
+    
+    // Rate limiting handling
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'] || 60;
+      await handleRateLimit(parseInt(retryAfter));
+      
+      if (!originalRequest._rateLimitRetry) {
+        originalRequest._rateLimitRetry = true;
+        console.log(`⏳ Rate limited. Waiting ${retryAfter} seconds before retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        return api(originalRequest);
+      }
     }
     
     if (error.response?.status === 401) {

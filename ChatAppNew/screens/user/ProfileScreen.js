@@ -345,7 +345,7 @@ const ProfileScreen = ({ navigation }) => {
               onAnimationFinish={handleProfileAnimationFinish}
             />
           </TouchableOpacity>
-          <Text style={styles.skipHintText}>แตะเพื่อข้าม</Text>
+          
         </View>
       ) : showProfileContent ? (
 

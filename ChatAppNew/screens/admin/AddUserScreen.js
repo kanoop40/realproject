@@ -570,14 +570,12 @@ const AddUserScreen = ({ navigation }) => {
             )}
             {formData.role === 'staff' && (
               <View style={styles.disabledInput}>
-                <Text style={styles.disabledInputText}>
-                  อีเมลจะถูกสร้างให้อัตโนมัติสำหรับเจ้าหน้าที่
-                </Text>
+                
               </View>
             )}
             {formData.role === 'staff' && formData.faculty !== '1' && (
               <Text style={styles.previewText}>
-                💡 อีเมลที่จะสร้างอัตโนมัติ: {departments.find(d => d.value === formData.faculty)?.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
+                 อีเมลที่จะสร้างอัตโนมัติ: {departments.find(d => d.value === formData.faculty)?.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
               </Text>
             )}
             {errors.email && (
@@ -617,7 +615,7 @@ const AddUserScreen = ({ navigation }) => {
               </Text>
               {formData.role === 'staff' && (
                 <Text style={styles.helperText}>
-                  * ชื่อผู้ใช้จะถูกกำหนดตามหน่วยงานที่เลือก
+                   ชื่อผู้ใช้จะถูกกำหนดตามหน่วยงานที่เลือก
                 </Text>
               )}
               <TouchableOpacity

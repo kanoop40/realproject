@@ -10,7 +10,8 @@ import {
   Image,
   Alert,
   Animated,
-  Platform
+  Platform,
+  AppState
 } from 'react-native';
 import Lottie from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +29,39 @@ import ChatManager from '../../components_user/ChatManager';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../styles/theme';
 // Removed loading imports - no longer using loading functionality
 import LoadingOverlay from '../../components/LoadingOverlay';
+
+// Rate Limit Status Component
+const RateLimitStatus = () => {
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const retryTime = await AsyncStorage.getItem('rate_limit_retry_after');
+        if (retryTime) {
+          const remaining = Math.max(0, parseInt(retryTime) - Date.now());
+          setTimeLeft(Math.ceil(remaining / 1000));
+        } else {
+          setTimeLeft(0);
+        }
+      } catch (error) {
+        setTimeLeft(0);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (timeLeft <= 0) return null;
+
+  return (
+    <View style={styles.rateLimitContainer}>
+      <Text style={styles.rateLimitText}>⏳ รอ {timeLeft} วินาที เนื่องจาก Rate Limit</Text>
+    </View>
+  );
+};
 
 const ChatScreen = ({ route, navigation }) => {
   const { user: authUser, loading: authLoading, login, logout } = useAuth();
@@ -137,11 +171,24 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('🧹 ChatScreen unmounting, clearing joined chatrooms tracking');
       joinedChatroomsRef.current.clear();
       recentlyViewedChatsRef.current.clear(); // เคลียร์ recently viewed ด้วย
-      
-      // เคลียร์ animation flag เมื่อ ChatScreen unmount 
-      // เพื่อให้เล่น animation ใหม่ในครั้งถัดไปที่เปิดแอพ
-      AsyncStorage.removeItem('chatListAnimationShown');
-      console.log('🎬 Cleared animation flag for next session');
+    };
+  }, []);
+
+  // รีเซ็ต animation flag เมื่อแอปถูกเปิดครั้งใหม่ (App State Change)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'background') {
+        // เมื่อแอปไปอยู่เบื้องหลัง ให้รีเซ็ต animation flag สำหรับครั้งต่อไป
+        console.log('🎬 App went to background, preparing animation for next session');
+        AsyncStorage.removeItem('chatListAnimationShown');
+      }
+    };
+
+    // ฟังการเปลี่ยนแปลง App State
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
     };
   }, []);
 
@@ -157,12 +204,29 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [authLoading]);
 
-  // ปิด animation เพื่อความเร็วในการใช้งาน
+  // ตรวจสอบว่าเคยแสดง animation ในเซสชันนี้แล้วหรือไม่
   useEffect(() => {
-    console.log('⚡ Fast mode: Skipping animations for speed');
-    setHasShownInitialAnimation(true);
-    setShowChatListAnimation(false);
-    setShowChatListContent(true);
+    const checkAnimationStatus = async () => {
+      try {
+        const hasShown = await AsyncStorage.getItem('chatListAnimationShown');
+        if (hasShown === 'true') {
+          console.log('🎬 Animation already shown in this session, skipping');
+          setHasShownInitialAnimation(true);
+          setShowChatListAnimation(false);
+          setShowChatListContent(true);
+        } else {
+          console.log('🎬 First time in session, will show animation');
+          setHasShownInitialAnimation(false);
+          setShowChatListAnimation(false);
+          setShowChatListContent(false);
+        }
+      } catch (error) {
+        console.log('❌ Error checking animation status:', error);
+        setHasShownInitialAnimation(false);
+      }
+    };
+    
+    checkAnimationStatus();
   }, []);
 
   // Load chats when user is ready และจัดการ animation ครั้งแรก
@@ -170,17 +234,24 @@ const ChatScreen = ({ route, navigation }) => {
     if (!authLoading && currentUser && !loadChatsRef.current) {
       // ถ้ายังไม่เคยแสดง animation ในเซสชันนี้ ให้แสดงครั้งเดียว
       if (!hasShownInitialAnimation) {
+        console.log('🎬 Setting up chat list animation');
         setShowChatListAnimation(true);
         setShowChatListContent(false);
-        setHasShownInitialAnimation(true);
-        // บันทึกว่าได้แสดง animation แล้วในเซสชันนี้
-        AsyncStorage.setItem('chatListAnimationShown', 'true');
+        
+        // เริ่มโหลดข้อมูลพร้อมกับ animation
+        const timeoutId = setTimeout(() => {
+          loadChats();
+        }, 200);
+        
+        return () => clearTimeout(timeoutId);
+      } else {
+        // ถ้าแสดง animation แล้ว ให้โหลดข้อมูลเลย
+        const timeoutId = setTimeout(() => {
+          loadChats();
+        }, 50);
+        
+        return () => clearTimeout(timeoutId);
       }
-      
-      // เร่งการโหลดข้อมูลสำหรับความเร็ว
-      const timeoutId = setTimeout(() => {
-        loadChats();
-      }, 50);
       
       return () => clearTimeout(timeoutId);
     }
@@ -195,11 +266,11 @@ const ChatScreen = ({ route, navigation }) => {
 
     console.log('🔄 Starting ChatScreen real-time polling...');
     
-    // Polling ทุก 15 วินาที (ลด rate limiting สำหรับ multi-user testing)
+    // Polling ทุก 10 วินาที (ลดลงเพื่อลด rate limiting)
     const pollingInterval = setInterval(() => {
       console.log('🔄 ChatScreen: Polling for chat updates...');
       loadChatsQuietly();
-    }, 5999); // 15 วินาที
+    }, 10000); // 10 วินาที
 
     return () => {
       if (pollingInterval) {
@@ -562,7 +633,7 @@ const ChatScreen = ({ route, navigation }) => {
       console.error('ChatScreen: Error loading chats:', error);
       console.error('ChatScreen: Error response:', error.response?.data);
       
-      if (error.response?.status === 429) {
+      if (error.response?.status === 429 || error.message === 'Rate limited, please wait') {
         console.log('⚠️ Rate limited while loading chats, keeping existing data');
         // ไม่ต้องรีเซ็ตแชท เก็บข้อมูลเดิมไว้
       } else {
@@ -573,7 +644,7 @@ const ChatScreen = ({ route, navigation }) => {
         Alert.alert('เซสชันหมดอายุ', 'กรุณาเข้าสู่ระบบใหม่', [
           { text: 'ตกลง', onPress: () => navigation.replace('Login') }
         ]);
-      } else if (error.response?.status === 429) {
+      } else if (error.response?.status === 429 || error.message === 'Rate limited, please wait') {
         // ไม่แสดง alert สำหรับ rate limiting
         console.log('🚫 Skipping rate limit error alert');
       }
@@ -684,11 +755,20 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  // จัดการเมื่อ chat list animation เสร็จ - เร่งให้ทันที
-  const handleChatListAnimationFinish = () => {
-    console.log('⚡ Fast mode: Immediate content display');
+  // จัดการเมื่อ chat list animation เสร็จ
+  const handleChatListAnimationFinish = async () => {
+    console.log('🎬 Chat list animation finished');
     setShowChatListAnimation(false);
     setShowChatListContent(true);
+    setHasShownInitialAnimation(true);
+    
+    // บันทึกว่าได้แสดง animation แล้วในเซสชันนี้
+    try {
+      await AsyncStorage.setItem('chatListAnimationShown', 'true');
+      console.log('🎬 Animation status saved');
+    } catch (error) {
+      console.log('❌ Error saving animation status:', error);
+    }
   };
 
   // ฟังก์ชันโหลดแชทแบบเงียบๆ (ไม่แสดง loading)
@@ -979,7 +1059,7 @@ const ChatScreen = ({ route, navigation }) => {
               onAnimationFinish={handleChatListAnimationFinish}
             />
           </TouchableOpacity>
-          <Text style={styles.skipHintText}>แตะเพื่อข้าม</Text>
+          
         </View>
       ) : (
         <>
@@ -1026,7 +1106,7 @@ const ChatScreen = ({ route, navigation }) => {
                       style={styles.dropdownItem}
                       onPress={handleCreateGroup}
                     >
-                      <Text style={styles.dropdownItemIcon}>👥</Text>
+                    
                       <Text style={styles.dropdownItemText}>สร้างกลุ่ม</Text>
                     </TouchableOpacity>
                     
@@ -1034,8 +1114,8 @@ const ChatScreen = ({ route, navigation }) => {
                       style={styles.dropdownItem}
                       onPress={handleSelectChatsToDelete}
                     >
-                      <Text style={styles.dropdownItemIcon}>🗑️</Text>
-                      <Text style={styles.dropdownItemText}>เลือกแชทเพื่อลบ</Text>
+                     
+                      <Text style={styles.dropdownItemText}>จัดการห้องเเชท</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1069,6 +1149,9 @@ const ChatScreen = ({ route, navigation }) => {
       )}
 
 
+
+      {/* Rate Limit Status */}
+      <RateLimitStatus />
 
       <SuccessTickAnimation
         visible={showSuccess}
@@ -1312,6 +1395,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  rateLimitContainer: {
+    backgroundColor: '#ff9800',
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateLimitText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   deleteButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1339,21 +1433,21 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: '#000000ff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   checkboxText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#000000ff',
     fontWeight: 'bold',
   },
 
   // New message indicator styles
   chatItemWithUnread: {
     borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
+    borderLeftColor: '#000000ff',
     backgroundColor: 'rgba(0, 122, 255, 0.05)',
   },
   newMessageIndicator: {

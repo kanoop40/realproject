@@ -328,7 +328,7 @@ const CreateGroupScreen = ({ navigation }) => {
               <View style={styles.addMemberIcon}>
                 <Text style={styles.addMemberIconText}>+</Text>
               </View>
-              <Text style={styles.addMemberButtonLabel}>เพิ่มสมาชิก</Text>
+              <Text style={styles.addMemberButtonLabel1}>เพิ่มสมาชิก</Text>
             </TouchableOpacity>
 
             {/* ปุ่มสำหรับอาจารย์เท่านั้น */}
@@ -337,9 +337,9 @@ const CreateGroupScreen = ({ navigation }) => {
                 style={[styles.addMemberButton, styles.addClassButton]}
                 onPress={() => setShowMajorSelection(true)}
               >
-                <View style={[styles.addMemberIcon, styles.addClassIcon]}>
-                  <Text style={styles.addMemberIconText}>👥</Text>
-                </View>
+                 <View style={styles.addMemberIcon}>
+                <Text style={styles.addMemberIconText}>+</Text>
+              </View>
                 <Text style={styles.addMemberButtonLabel}>เพิ่มจากกลุ่มเรียน</Text>
               </TouchableOpacity>
             )}
@@ -434,7 +434,7 @@ const CreateGroupScreen = ({ navigation }) => {
                   <View style={styles.classCodeInfo}>
                     <Text style={styles.classCodeText}>{item.major}</Text>
                     <Text style={styles.classCodeCount}>
-                      รหัสกลุ่มเรียน {item.classCodeCount} กลุ่ม
+                      สมาชิก {item.userCount || 0} คน
                     </Text>
                   </View>
                   <Text style={styles.classCodeArrow}>→</Text>
@@ -460,13 +460,13 @@ const CreateGroupScreen = ({ navigation }) => {
               setShowClassSelection(false);
               setShowMajorSelection(true);
             }}>
-              <Text style={styles.modalHeaderButton}>← กลับ</Text>
+              <Text style={styles.modalHeaderButton}>← </Text>
             </TouchableOpacity>
             <Text style={styles.modalHeaderTitle}>
               {selectedMajor ? `${selectedMajor}` : 'เลือกกลุ่มเรียน'}
             </Text>
             <TouchableOpacity onPress={() => setShowClassSelection(false)}>
-              <Text style={styles.modalHeaderButton}>ยกเลิก</Text>
+              
             </TouchableOpacity>
           </View>
 
@@ -689,8 +689,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addClassButton: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#45a049',
+    backgroundColor: 'rgba(0, 0, 0, 1)ff',
+    borderColor: '#ffffffff',
   },
   addMemberIcon: {
     width: 30,
@@ -711,7 +711,13 @@ const styles = StyleSheet.create({
   },
   addMemberButtonLabel: {
     fontSize: 12,
-    color: '#333',
+    color: '#ffffffff',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  addMemberButtonLabel1: {
+    fontSize: 12,
+    color: '#000000ff',
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -803,13 +809,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffffff',
   },
   modalHeaderTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000000ff',
   },
   modalHeaderButton: {
     fontSize: 16,
-    color: '#333',
+    color: '#000000ff',
     fontWeight: '600',
   },
   placeholder: {
@@ -887,7 +893,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#000000ff',
+    backgroundColor: '#ffffffff',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -897,12 +903,12 @@ const styles = StyleSheet.create({
   classCodeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ffffffff',
+    color: '#000000ff',
     marginBottom: 2,
   },
   classCodeCount: {
     fontSize: 14,
-    color: '#666',
+    color: '#565656ff',
   },
   classCodeArrow: {
     fontSize: 18,
