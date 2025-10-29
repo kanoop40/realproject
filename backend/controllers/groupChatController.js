@@ -1477,7 +1477,7 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
             console.log('No lastId provided');
         }
         
-        // แปลงรูปแบบข้อความ (เพิ่ม null check)
+        // แปลงรูปแบบข้อความ (เพิ่ม null check และ file metadata)
         const formattedMessages = newMessages.map(message => {
             // ตรวจสอบว่า user_id ถูก populate หรือไม่
             if (!message.user_id) {
@@ -1493,7 +1493,11 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
                         avatar: null
                     },
                     timestamp: message.time,
-                    type: message.file_id ? 'file' : 'text'
+                    messageType: message.messageType || (message.file_id ? 'file' : 'text'),
+                    fileUrl: message.fileUrl,
+                    fileName: message.fileName,
+                    fileSize: message.fileSize,
+                    mimeType: message.mimeType
                 };
             }
             
@@ -1508,7 +1512,11 @@ const checkNewGroupMessages = asyncHandler(async (req, res) => {
                     avatar: message.user_id.avatar
                 },
                 timestamp: message.time,
-                type: message.file_id ? 'file' : 'text'
+                messageType: message.messageType || (message.file_id ? 'file' : 'text'),
+                fileUrl: message.fileUrl,
+                fileName: message.fileName,
+                fileSize: message.fileSize,
+                mimeType: message.mimeType
             };
         });
         
