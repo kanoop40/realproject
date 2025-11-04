@@ -298,6 +298,7 @@ const styles = StyleSheet.create({
     gap: 10
   },
   manageDataButton: {
+    width: '66%',
     backgroundColor: '#34C759',
     paddingVertical: 10,
     paddingHorizontal: 15,

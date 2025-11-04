@@ -91,7 +91,12 @@ const searchUsers = asyncHandler(async (req, res) => {
 });
 
 const getUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({}).select('-password');
+  const users = await User.find({})
+    .populate('department', 'name')
+    .populate('faculty', 'name')
+    .populate('major', 'name')
+    .populate('groupCode', 'name')
+    .select('-password');
   res.json(users);
 });
 const deleteUser = asyncHandler(async (req, res) => {
@@ -607,7 +612,12 @@ const createUser = asyncHandler(async (req, res) => {
   }
 });
 const getUserById = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findById(req.params.id)
+        .populate('department', 'name')
+        .populate('faculty', 'name')
+        .populate('major', 'name')
+        .populate('groupCode', 'name')
+        .select('-password');
     
     if (user) {
         res.json({
@@ -616,6 +626,7 @@ const getUserById = asyncHandler(async (req, res) => {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            department: user.department,
             faculty: user.faculty,
             major: user.major,
             groupCode: user.groupCode,
