@@ -981,35 +981,37 @@ const getClassCodesByMajor = asyncHandler(async (req, res) => {
                 }
             },
             {
-                $group: {
-                    _id: '$groupCode',
-                    userCount: { $sum: 1 }
-                }
-            },
-            {
-                $match: {
-                    _id: { $ne: null }
-                }
-            },
-            {
                 $lookup: {
                     from: 'groupcodes',
-                    localField: '_id',
+                    localField: 'groupCode',
                     foreignField: '_id',
                     as: 'groupCodeInfo'
                 }
             },
             {
-                $unwind: '$groupCodeInfo'
+                $unwind: {
+                    path: '$groupCodeInfo',
+                    preserveNullAndEmptyArrays: false
+                }
+            },
+            {
+                $group: {
+                    _id: '$groupCode',
+                    classCode: { $first: '$groupCodeInfo.name' },
+                    majorName: { $first: '$groupCodeInfo.majorName' },
+                    year: { $first: '$groupCodeInfo.year' },
+                    semester: { $first: '$groupCodeInfo.semester' },
+                    userCount: { $sum: 1 }
+                }
             },
             {
                 $project: {
-                    classCode: '$groupCodeInfo.name',
+                    classCode: 1,
                     classCodeId: '$_id',
                     userCount: 1,
-                    majorName: '$groupCodeInfo.majorName',
-                    year: '$groupCodeInfo.year',
-                    semester: '$groupCodeInfo.semester',
+                    majorName: 1,
+                    year: 1,
+                    semester: 1,
                     _id: 0
                 }
             },
