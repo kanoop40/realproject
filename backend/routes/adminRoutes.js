@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../Middleware/authMiddleware');
-const { roleMiddleware } = require('../Middleware/roleMiddleware');
+const { checkRole } = require('../Middleware/roleMiddleware');
 
 // ข้อมูลเริ่มต้น - จะถูกแทนที่ด้วยการโหลดจากไฟล์หรือฐานข้อมูล
 let systemData = {
@@ -56,7 +56,7 @@ const getNextId = (array) => {
 };
 
 // GET /api/admin/departments - รับรายการหน่วยงาน
-router.get('/departments', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.get('/departments', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     console.log('📁 Getting departments list');
     res.status(200).json({
@@ -73,7 +73,7 @@ router.get('/departments', authMiddleware, roleMiddleware(['admin']), (req, res)
 });
 
 // POST /api/admin/departments - เพิ่มหน่วยงานใหม่
-router.post('/departments', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.post('/departments', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { name } = req.body;
     
@@ -117,7 +117,7 @@ router.post('/departments', authMiddleware, roleMiddleware(['admin']), (req, res
 });
 
 // PUT /api/admin/departments/:id - แก้ไขหน่วยงาน
-router.put('/departments/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.put('/departments/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -167,7 +167,7 @@ router.put('/departments/:id', authMiddleware, roleMiddleware(['admin']), (req, 
 });
 
 // DELETE /api/admin/departments/:id - ลบหน่วยงาน
-router.delete('/departments/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.delete('/departments/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     
@@ -197,7 +197,7 @@ router.delete('/departments/:id', authMiddleware, roleMiddleware(['admin']), (re
 });
 
 // GET /api/admin/faculties - รับรายการคณะ
-router.get('/faculties', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.get('/faculties', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     console.log('📁 Getting faculties list');
     res.status(200).json({
@@ -214,7 +214,7 @@ router.get('/faculties', authMiddleware, roleMiddleware(['admin']), (req, res) =
 });
 
 // POST /api/admin/faculties - เพิ่มคณะใหม่
-router.post('/faculties', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.post('/faculties', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { name } = req.body;
     
@@ -261,7 +261,7 @@ router.post('/faculties', authMiddleware, roleMiddleware(['admin']), (req, res) 
 });
 
 // PUT /api/admin/faculties/:id - แก้ไขคณะ
-router.put('/faculties/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.put('/faculties/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -318,7 +318,7 @@ router.put('/faculties/:id', authMiddleware, roleMiddleware(['admin']), (req, re
 });
 
 // DELETE /api/admin/faculties/:id - ลบคณะ
-router.delete('/faculties/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.delete('/faculties/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     
@@ -358,7 +358,7 @@ router.delete('/faculties/:id', authMiddleware, roleMiddleware(['admin']), (req,
 });
 
 // GET /api/admin/majors - รับรายการสาขา
-router.get('/majors', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.get('/majors', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     console.log('📁 Getting majors list');
     res.status(200).json({
@@ -375,7 +375,7 @@ router.get('/majors', authMiddleware, roleMiddleware(['admin']), (req, res) => {
 });
 
 // POST /api/admin/majors - เพิ่มสาขาใหม่
-router.post('/majors', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.post('/majors', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { name, facultyId } = req.body;
     
@@ -448,7 +448,7 @@ router.post('/majors', authMiddleware, roleMiddleware(['admin']), (req, res) => 
 });
 
 // PUT /api/admin/majors/:id - แก้ไขสาขา
-router.put('/majors/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.put('/majors/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -517,7 +517,7 @@ router.put('/majors/:id', authMiddleware, roleMiddleware(['admin']), (req, res) 
 });
 
 // DELETE /api/admin/majors/:id - ลบสาขา
-router.delete('/majors/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.delete('/majors/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     
@@ -560,7 +560,7 @@ router.delete('/majors/:id', authMiddleware, roleMiddleware(['admin']), (req, re
 });
 
 // GET /api/admin/group-codes - รับรายการกลุ่มเรียน
-router.get('/group-codes', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.get('/group-codes', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     console.log('📁 Getting group codes list');
     res.status(200).json({
@@ -577,7 +577,7 @@ router.get('/group-codes', authMiddleware, roleMiddleware(['admin']), (req, res)
 });
 
 // POST /api/admin/group-codes - เพิ่มกลุ่มเรียนใหม่
-router.post('/group-codes', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.post('/group-codes', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { name, majorId } = req.body;
     
@@ -660,7 +660,7 @@ router.post('/group-codes', authMiddleware, roleMiddleware(['admin']), (req, res
 });
 
 // PUT /api/admin/group-codes/:id - แก้ไขกลุ่มเรียน
-router.put('/group-codes/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.put('/group-codes/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -722,7 +722,7 @@ router.put('/group-codes/:id', authMiddleware, roleMiddleware(['admin']), (req, 
 });
 
 // DELETE /api/admin/group-codes/:id - ลบกลุ่มเรียน
-router.delete('/group-codes/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+router.delete('/group-codes/:id', authMiddleware, checkRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     
