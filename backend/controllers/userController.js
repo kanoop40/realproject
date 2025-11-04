@@ -954,19 +954,25 @@ const getClassCodesByMajor = asyncHandler(async (req, res) => {
         const { major } = req.params;
         console.log('Getting class codes for major:', major);
         
-        // ใช้วิธีง่ายๆ: หา users ที่มี groupCode ก่อน แล้วค่อย populate
+        // หา users ที่มี major name ตรงกัน แล้ว populate ทั้ง major และ groupCode
         const users = await User.find({
-            major: major,
             groupCode: { $exists: true, $ne: null },
             role: { $ne: 'admin' }
-        }).populate('groupCode', 'name year semester majorName').lean();
+        }).populate('major', 'name')
+          .populate('groupCode', 'name year semester majorName')
+          .lean();
 
-        console.log('Found users with groupCode:', users.length);
+        // กรอง users ที่มี major name ตรงกัน
+        const filteredUsers = users.filter(user => 
+            user.major && user.major.name === major
+        );
+
+        console.log('Found users with groupCode:', filteredUsers.length);
         
         // Group by groupCode และนับจำนวน
         const classCodeMap = new Map();
         
-        users.forEach(user => {
+        filteredUsers.forEach(user => {
             if (user.groupCode && user.groupCode.name) {
                 const key = user.groupCode._id.toString();
                 if (classCodeMap.has(key)) {
