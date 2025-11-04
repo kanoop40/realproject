@@ -493,6 +493,7 @@ const CreateGroupScreen = ({ navigation }) => {
                       </Text>
                       <Text style={styles.classCodeCount}>
                         สมาชิก {item.userCount || 0} คน
+                        {item.year && item.semester && ` • ปี ${item.year} เทอม ${item.semester}`}
                       </Text>
                     </View>
                     <Text style={styles.classCodeArrow}>+</Text>

@@ -593,6 +593,7 @@ const EditGroupScreen = ({ route, navigation }) => {
                   </Text>
                   <Text style={styles.classSubText}>
                     {item.userCount} คน
+                    {item.year && item.semester && ` • ปี ${item.year} เทอม ${item.semester}`}
                   </Text>
                 </View>
                 <Text style={styles.addText}>+ เพิ่ม</Text>

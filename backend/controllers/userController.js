@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const User = require('../models/UserModel');
+const GroupCode = require('../models/GroupCodeModel');
 const generateToken = require('../utils/generateToken');
 const fs = require('fs').promises;
 const path = require('path');
@@ -969,18 +970,13 @@ const getClassCodesByMajor = asyncHandler(async (req, res) => {
     try {
         const { major } = req.params;
         // อนุญาตให้ทุกคนเข้าถึงได้ (ไม่จำกัดแค่ teacher)
-        // const currentUserRole = req.user.role;
         
-        // if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
-        //     return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลกลุ่มเรียนได้' });
-        // }
-
-        // หา groupCode ที่มีอยู่ในสาขานั้น
+        // หา groupCode ที่มีอยู่ในสาขานั้น พร้อม populate ชื่อจริง
         const classCodes = await User.aggregate([
             {
                 $match: {
                     major: major,
-                    groupCode: { $exists: true, $ne: null, $ne: '', $ne: '1' },
+                    groupCode: { $exists: true, $ne: null },
                     role: { $ne: 'admin' }
                 }
             },
@@ -992,13 +988,28 @@ const getClassCodesByMajor = asyncHandler(async (req, res) => {
             },
             {
                 $match: {
-                    _id: { $ne: null, $ne: '', $ne: '1' }
+                    _id: { $ne: null }
                 }
             },
             {
+                $lookup: {
+                    from: 'groupcodes',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'groupCodeInfo'
+                }
+            },
+            {
+                $unwind: '$groupCodeInfo'
+            },
+            {
                 $project: {
-                    classCode: '$_id',
+                    classCode: '$groupCodeInfo.name',
+                    classCodeId: '$_id',
                     userCount: 1,
+                    majorName: '$groupCodeInfo.majorName',
+                    year: '$groupCodeInfo.year',
+                    semester: '$groupCodeInfo.semester',
                     _id: 0
                 }
             },
@@ -1082,8 +1093,14 @@ const getUsersByClassCode = asyncHandler(async (req, res) => {
             return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถดึงผู้ใช้ตามกลุ่มเรียนได้' });
         }
 
+        // ค้นหา GroupCode ก่อนด้วยชื่อ
+        const groupCodeDoc = await GroupCode.findOne({ name: classCode });
+        if (!groupCodeDoc) {
+            return res.status(404).json({ message: 'ไม่พบกลุ่มเรียนที่ระบุ' });
+        }
+
         const users = await User.find({
-            groupCode: classCode,
+            groupCode: groupCodeDoc._id,
             _id: { $ne: currentUserId }, // ไม่รวมตัวเอง
             role: { $ne: 'admin' } // ไม่รวม admin
         }).populate('department', 'name')
