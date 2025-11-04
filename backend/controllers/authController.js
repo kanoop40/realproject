@@ -79,7 +79,12 @@ const logoutUser = async (req, res) => {
 // @access  Private
 const checkAuthStatus = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user.id)
+      .populate('department', 'name')
+      .populate('faculty', 'name')
+      .populate('major', 'name')
+      .populate('groupCode', 'name')
+      .select('-password');
     
     if (!user) {
       return res.status(401).json({ message: 'User not found' });
@@ -91,6 +96,10 @@ const checkAuthStatus = async (req, res) => {
       lastName: user.lastName,
       username: user.username,
       email: user.email,
+      department: user.department,
+      faculty: user.faculty,
+      major: user.major,
+      groupCode: user.groupCode,
       role: user.role,
       status: user.status,
       avatar: user.avatar
@@ -106,7 +115,11 @@ const checkAuthStatus = async (req, res) => {
 const getAllUsers = async (req, res) => {
   try {
     const users = await User.find({})
-      .select('firstName lastName name email avatar role')
+      .populate('department', 'name')
+      .populate('faculty', 'name')
+      .populate('major', 'name')
+      .populate('groupCode', 'name')
+      .select('firstName lastName name email department faculty major groupCode avatar role')
       .sort({ firstName: 1 });
 
     res.json({

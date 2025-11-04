@@ -192,9 +192,16 @@ const SearchUserScreen = ({ navigation }) => {
             {item.firstName || ''} {item.lastName || ''}
           </Text>
           <Text style={styles.userDetails}>
-            {item.faculty ? (typeof item.faculty === 'object' ? item.faculty.name : item.faculty) : ''} 
-            {item.faculty && item.major ? ' - ' : ''}
-            {item.major ? (typeof item.major === 'object' ? item.major.name : item.major) : ''}
+            {item.role === 'staff' 
+              ? (item.department ? (typeof item.department === 'object' ? item.department.name : item.department) : '')
+              : (
+                <>
+                  {item.faculty ? (typeof item.faculty === 'object' ? item.faculty.name : item.faculty) : ''} 
+                  {item.faculty && item.major ? ' - ' : ''}
+                  {item.major ? (typeof item.major === 'object' ? item.major.name : item.major) : ''}
+                </>
+              )
+            }
           </Text>
           {item.role && (
             <Text style={styles.userRole}>
@@ -327,6 +334,19 @@ const SearchUserScreen = ({ navigation }) => {
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>อีเมล</Text>
                     <Text style={styles.infoValue}>{selectedUser.email || 'ไม่ระบุ'}</Text>
+                  </View>
+                )}
+                
+                {/* แสดงหน่วยงานสำหรับเจ้าหน้าที่ */}
+                {selectedUser.role === 'staff' && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>หน่วยงาน</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedUser.department 
+                        ? (typeof selectedUser.department === 'object' ? selectedUser.department.name : selectedUser.department)
+                        : 'ไม่ระบุ'
+                      }
+                    </Text>
                   </View>
                 )}
                 

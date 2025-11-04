@@ -62,6 +62,10 @@ const searchUsers = asyncHandler(async (req, res) => {
         console.log('MongoDB query:', JSON.stringify(query, null, 2)); // Debug log
 
         const users = await User.find(query)
+            .populate('department', 'name')
+            .populate('faculty', 'name')
+            .populate('major', 'name')
+            .populate('groupCode', 'name')
             .select('-password')
             .sort({ firstName: 1, lastName: 1 }); // เรียงตามชื่อ
 
@@ -74,11 +78,15 @@ const searchUsers = asyncHandler(async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
+            department: user.department,
             faculty: user.faculty,
             major: user.major,
             groupCode: user.groupCode,
             role: user.role,
-            avatar: user.avatar
+            avatar: user.avatar,
+            studentId: user.studentId,
+            phone: user.phone,
+            bio: user.bio
         })));
 
     } catch (error) {
@@ -652,7 +660,12 @@ const getUserById = asyncHandler(async (req, res) => {
 // @route   GET /api/users/me
 // @access  Private
 const getCurrentUser = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user._id)
+        .populate('department', 'name')
+        .populate('faculty', 'name')
+        .populate('major', 'name')
+        .populate('groupCode', 'name')
+        .select('-password');
     
     if (user) {
         res.json({
@@ -661,6 +674,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            department: user.department,
             faculty: user.faculty,
             major: user.major,
             groupCode: user.groupCode,
@@ -1072,7 +1086,11 @@ const getUsersByClassCode = asyncHandler(async (req, res) => {
             groupCode: classCode,
             _id: { $ne: currentUserId }, // ไม่รวมตัวเอง
             role: { $ne: 'admin' } // ไม่รวม admin
-        }).select('firstName lastName avatar role groupCode')
+        }).populate('department', 'name')
+          .populate('faculty', 'name')
+          .populate('major', 'name')
+          .populate('groupCode', 'name')
+          .select('firstName lastName avatar role department faculty major groupCode')
           .sort({ firstName: 1, lastName: 1 });
 
         console.log(`Found ${users.length} users in class ${classCode}`);

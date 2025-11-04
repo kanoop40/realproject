@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { API_URL } from '../../service/api'; // ใช้ api และ API_URL เดียวกัน
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import LoadingOverlay from '../../components/LoadingOverlay';
-import { loadAllSystemData } from '../../utils/systemDataAPI';
+// import { loadAllSystemData } from '../../utils/systemDataAPI'; // ไม่ใช้แล้ว
 
 
 
@@ -28,9 +28,9 @@ const AddUserScreen = ({ navigation }) => {
     lastName: '',
     email: '',
     role: 'student',
-    faculty: '1',
-    major: '1',
-    groupCode: '1'
+    faculty: '',
+    major: '',
+    groupCode: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -54,8 +54,82 @@ const AddUserScreen = ({ navigation }) => {
       try {
         setIsLoadingData(true);
         console.log('📋 Loading system data for AddUserScreen...');
-        const data = await loadAllSystemData();
-        setSystemData(data);
+        
+        const token = await AsyncStorage.getItem('userToken');
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        };
+
+        // Load all data from backend
+        const [deptRes, facRes, majRes, groupRes] = await Promise.all([
+          axios.get(`${API_URL}/api/admin/departments`, config),
+          axios.get(`${API_URL}/api/admin/faculties`, config),
+          axios.get(`${API_URL}/api/admin/majors`, config),
+          axios.get(`${API_URL}/api/admin/group-codes`, config)
+        ]);
+
+        // Transform API data to match component structure
+        const majorsData = {};
+        const groupCodesData = {};
+
+        // Group majors by facultyId
+        (majRes.data.data || []).forEach(major => {
+          // Handle both string and populated object facultyId
+          let facultyId;
+          if (typeof major.facultyId === 'object' && major.facultyId !== null) {
+            facultyId = major.facultyId._id;
+          } else {
+            facultyId = major.facultyId;
+          }
+          
+          if (!majorsData[facultyId]) {
+            majorsData[facultyId] = [];
+          }
+          majorsData[facultyId].push({
+            label: major.name,
+            value: major._id,
+            id: major._id
+          });
+        });
+
+        // Group groupCodes by majorId
+        (groupRes.data.data || []).forEach(groupCode => {
+          // Handle both string and populated object majorId
+          let majorId;
+          if (typeof groupCode.majorId === 'object' && groupCode.majorId !== null) {
+            majorId = groupCode.majorId._id;
+          } else {
+            majorId = groupCode.majorId;
+          }
+          
+          if (!groupCodesData[majorId]) {
+            groupCodesData[majorId] = [];
+          }
+          groupCodesData[majorId].push({
+            label: groupCode.name,
+            value: groupCode._id,
+            id: groupCode._id
+          });
+        });
+
+        setSystemData({
+          departments: (deptRes.data.data || []).map(dept => ({
+            label: dept.name,
+            value: dept._id,
+            id: dept._id
+          })),
+          faculties: (facRes.data.data || []).map(faculty => ({
+            label: faculty.name,
+            value: faculty._id,
+            id: faculty._id
+          })),
+          majors: majorsData,
+          groupCodes: groupCodesData
+        });
+        
         console.log('✅ System data loaded successfully');
       } catch (error) {
         console.error('❌ Error loading system data:', error);
@@ -71,14 +145,14 @@ const AddUserScreen = ({ navigation }) => {
   const selectFaculty = (faculty) => {
     const newFormData = {
       ...formData,
-      faculty: faculty.value,
-      major: '1',
-      groupCode: '1'
+      faculty: faculty._id,
+      major: '',
+      groupCode: ''
     };
 
     // ถ้าเป็นเจ้าหน้าที่ ให้กำหนดชื่อตามหน่วยงาน
     if (formData.role === 'staff') {
-      newFormData.firstName = faculty.label; // ใช้ชื่อหน่วยงานเป็นชื่อ
+      newFormData.firstName = faculty.name; // ใช้ชื่อหน่วยงานเป็นชื่อ
       newFormData.lastName = ''; // นามสกุลเป็นค่าว่าง
       newFormData.email = '-'; // อีเมลเป็นค่าว่าง
     }
@@ -91,8 +165,8 @@ const AddUserScreen = ({ navigation }) => {
   const selectMajor = (major) => {
     setFormData({
       ...formData,
-      major: major.value,
-      groupCode: '1'
+      major: major._id,
+      groupCode: ''
     });
     if (errors.major) setErrors({...errors, major: ''});
     setShowMajorModal(false);
@@ -101,7 +175,7 @@ const AddUserScreen = ({ navigation }) => {
   const selectGroup = (group) => {
     setFormData({
       ...formData,
-      groupCode: group.value
+      groupCode: group._id
     });
     if (errors.groupCode) setErrors({...errors, groupCode: ''});
     setShowGroupModal(false);
@@ -109,33 +183,33 @@ const AddUserScreen = ({ navigation }) => {
 
   const getFacultyLabel = () => {
     if (formData.role === 'staff') {
-      const department = systemData.departments.find(d => d.value === formData.faculty);
-      return department ? department.label : 'เลือกหน่วยงาน';
+      const department = systemData.departments.find(d => d._id === formData.faculty);
+      return department ? department.name : 'เลือกหน่วยงาน';
     } else {
-      const faculty = systemData.faculties.find(f => f.value === formData.faculty);
-      return faculty ? faculty.label : 'เลือกคณะ';
+      const faculty = systemData.faculties.find(f => f._id === formData.faculty);
+      return faculty ? faculty.name : 'เลือกคณะ';
     }
   };
 
   const getMajorLabel = () => {
-    const availableMajors = systemData.majors[formData.faculty] || systemData.majors['1'];
-    const major = availableMajors.find(m => m.value === formData.major);
-    return major ? major.label : 'เลือกสาขา';
+    const availableMajors = systemData.majors[formData.faculty] || [];
+    const major = availableMajors.find(m => m._id === formData.major);
+    return major ? major.name : 'เลือกสาขา';
   };
 
   const getGroupLabel = () => {
-    const availableGroups = systemData.groupCodes[formData.major] || systemData.groupCodes['1'];
-    const group = availableGroups.find(g => g.value === formData.groupCode);
-    return group ? group.label : 'เลือกกลุ่มเรียน';
+    const availableGroups = systemData.groupCodes[formData.major] || [];
+    const group = availableGroups.find(g => g._id === formData.groupCode);
+    return group ? group.name : 'เลือกกลุ่มเรียน';
   };
 
   const handleRoleChange = (role) => {
     const newFormData = {
       ...formData,
       role,
-      faculty: '1',
-      major: '1',
-      groupCode: '1'
+      faculty: '',
+      major: '',
+      groupCode: ''
     };
 
     // ถ้าเปลี่ยนจากเจ้าหน้าที่เป็น role อื่น ให้รีเซ็ตชื่อและนามสกุล
@@ -208,26 +282,26 @@ const AddUserScreen = ({ navigation }) => {
     // ตรวจสอบเงื่อนไขตาม role
     if (formData.role === 'student') {
       // นักศึกษา: ต้องกรอกคณะ สาขา และกลุ่มเรียน
-      if (formData.faculty === '1') {
+      if (!formData.faculty) {
         newErrors.faculty = '• กรุณาเลือกคณะ (สำหรับนักศึกษา)';
       }
-      if (formData.major === '1') {
+      if (!formData.major) {
         newErrors.major = '• กรุณาเลือกสาขา (สำหรับนักศึกษา)';
       }
-      if (formData.groupCode === '1') {
+      if (!formData.groupCode) {
         newErrors.groupCode = '• กรุณาเลือกกลุ่มเรียน (สำหรับนักศึกษา)';
       }
     } else if (formData.role === 'teacher') {
       // อาจารย์: ต้องกรอกคณะ และสาขา (ไม่ต้องกลุ่มเรียน)
-      if (formData.faculty === '1') {
+      if (!formData.faculty) {
         newErrors.faculty = '• กรุณาเลือกคณะ (สำหรับอาจารย์)';
       }
-      if (formData.major === '1') {
+      if (!formData.major) {
         newErrors.major = '• กรุณาเลือกสาขา (สำหรับอาจารย์)';
       }
     } else if (formData.role === 'staff') {
       // เจ้าหน้าที่: ต้องกรอกเฉพาะหน่วยงาน
-      if (!formData.faculty || formData.faculty === '1') {
+      if (!formData.faculty) {
         newErrors.faculty = '• กรุณาเลือกหน่วยงาน (สำหรับเจ้าหน้าที่)';
       }
       console.log('Staff validation - faculty check:', formData.faculty);
@@ -335,39 +409,27 @@ const AddUserScreen = ({ navigation }) => {
 
       if (formData.role === 'admin') {
         // ผู้ดูแลระบบ: ไม่ต้องกรอกข้อมูลเพิ่ม
-        dataToSend = {
-          ...dataToSend,
-          faculty: '1',
-          department: '1',
-          major: '1',
-          groupCode: '1'
-        };
+        // ไม่ส่งข้อมูล faculty, department, major, groupCode
       } else if (formData.role === 'teacher') {
         // อาจารย์: กรอกคณะและสาขา
         dataToSend = {
           ...dataToSend,
-          faculty: formData.faculty,
-          department: formData.faculty, // ใช้ค่าเดียวกับ faculty
-          major: formData.major,
-          groupCode: '1'
+          facultyId: formData.faculty,
+          majorId: formData.major
         };
       } else if (formData.role === 'staff') {
         // เจ้าหน้าที่: กรอกเฉพาะหน่วยงาน
         dataToSend = {
           ...dataToSend,
-          faculty: formData.faculty, // หน่วยงานที่เลือก
-          department: formData.faculty, // ใช้ค่าเดียวกับ faculty
-          major: '1',
-          groupCode: '1'
+          departmentId: formData.faculty
         };
       } else if (formData.role === 'student') {
         // นักศึกษา: กรอกครบทุกข้อมูล
         dataToSend = {
           ...dataToSend,
-          faculty: formData.faculty,
-          department: formData.faculty, // ใช้ค่าเดียวกับ faculty
-          major: formData.major,
-          groupCode: formData.groupCode
+          facultyId: formData.faculty,
+          majorId: formData.major,
+          groupCodeId: formData.groupCode
         };
       }
 
@@ -389,9 +451,9 @@ const AddUserScreen = ({ navigation }) => {
         lastName: '',
         email: '',
         role: 'student',
-        faculty: '1',
-        major: '1',
-        groupCode: '1'
+        faculty: '',
+        major: '',
+        groupCode: ''
       });
       setErrors({});
 
@@ -559,9 +621,9 @@ const AddUserScreen = ({ navigation }) => {
                 
               </View>
             )}
-            {formData.role === 'staff' && formData.faculty !== '1' && (
+            {formData.role === 'staff' && formData.faculty && (
               <Text style={styles.previewText}>
-                 อีเมลที่จะสร้างอัตโนมัติ: {systemData.departments.find(d => d.value === formData.faculty)?.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
+                 อีเมลที่จะสร้างอัตโนมัติ: {systemData.departments.find(d => d._id === formData.faculty)?.name.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
               </Text>
             )}
             {errors.email && (
@@ -608,13 +670,13 @@ const AddUserScreen = ({ navigation }) => {
                 style={[styles.dropdown, errors.faculty && styles.inputError]}
                 onPress={() => setShowFacultyModal(true)}
               >
-                <Text style={[styles.dropdownText, formData.faculty === '1' && styles.placeholderText]}>
+                <Text style={[styles.dropdownText, !formData.faculty && styles.placeholderText]}>
                   {getFacultyLabel()}
                 </Text>
                 <Text style={styles.dropdownArrow}>▼</Text>
               </TouchableOpacity>
               {errors.faculty && <Text style={styles.errorText}>{errors.faculty}</Text>}
-              {formData.role === 'staff' && formData.faculty !== '1' && (
+              {formData.role === 'staff' && formData.faculty && (
                 <Text style={styles.previewText}>
                   👤 ชื่อ: {getFacultyLabel()} | นามสกุล: (ไม่มี) | อีเมล: สร้างอัตโนมัติ
                 </Text>
@@ -626,11 +688,11 @@ const AddUserScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>สาขา</Text>
               <TouchableOpacity
-                style={[styles.dropdown, errors.major && styles.inputError, formData.faculty === '1' && styles.dropdownDisabled]}
-                onPress={() => formData.faculty !== '1' && setShowMajorModal(true)}
-                disabled={formData.faculty === '1'}
+                style={[styles.dropdown, errors.major && styles.inputError, !formData.faculty && styles.dropdownDisabled]}
+                onPress={() => formData.faculty && setShowMajorModal(true)}
+                disabled={!formData.faculty}
               >
-                <Text style={[styles.dropdownText, formData.major === '1' && styles.placeholderText]}>
+                <Text style={[styles.dropdownText, !formData.major && styles.placeholderText]}>
                   {getMajorLabel()}
                 </Text>
                 <Text style={styles.dropdownArrow}>▼</Text>
@@ -643,11 +705,11 @@ const AddUserScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>กลุ่มเรียน</Text>
               <TouchableOpacity
-                style={[styles.dropdown, errors.groupCode && styles.inputError, formData.major === '1' && styles.dropdownDisabled]}
-                onPress={() => formData.major !== '1' && setShowGroupModal(true)}
-                disabled={formData.major === '1'}
+                style={[styles.dropdown, errors.groupCode && styles.inputError, !formData.major && styles.dropdownDisabled]}
+                onPress={() => formData.major && setShowGroupModal(true)}
+                disabled={!formData.major}
               >
-                <Text style={[styles.dropdownText, formData.groupCode === '1' && styles.placeholderText]}>
+                <Text style={[styles.dropdownText, !formData.groupCode && styles.placeholderText]}>
                   {getGroupLabel()}
                 </Text>
                 <Text style={styles.dropdownArrow}>▼</Text>
@@ -687,16 +749,16 @@ const AddUserScreen = ({ navigation }) => {
             </View>
             <FlatList
               data={formData.role === 'staff' ? 
-                systemData.departments.filter(d => d.value !== '1') : 
-                systemData.faculties.filter(f => f.value !== '1')
+                systemData.departments : 
+                systemData.faculties
               }
-              keyExtractor={(item) => item.value}
+              keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => selectFaculty(item)}
                 >
-                  <Text style={styles.modalItemText}>{item.label}</Text>
+                  <Text style={styles.modalItemText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -720,14 +782,14 @@ const AddUserScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={(systemData.majors[formData.faculty] || systemData.majors['1']).filter(m => m.value !== '1')}
-              keyExtractor={(item) => item.value}
+              data={systemData.majors[formData.faculty] || []}
+              keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => selectMajor(item)}
                 >
-                  <Text style={styles.modalItemText}>{item.label}</Text>
+                  <Text style={styles.modalItemText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -751,14 +813,14 @@ const AddUserScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={(systemData.groupCodes[formData.major] || systemData.groupCodes['1']).filter(g => g.value !== '1')}
-              keyExtractor={(item) => item.value}
+              data={systemData.groupCodes[formData.major] || []}
+              keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => selectGroup(item)}
                 >
-                  <Text style={styles.modalItemText}>{item.label}</Text>
+                  <Text style={styles.modalItemText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
             />
