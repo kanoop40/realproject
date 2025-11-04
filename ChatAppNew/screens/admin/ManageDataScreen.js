@@ -83,27 +83,45 @@ const ManageDataScreen = ({ navigation }) => {
 
       // Group majors by facultyId
       (majRes.data.data || []).forEach(major => {
-        const facultyId = major.facultyId || major.facultyId?._id;
+        // Handle both string and populated object facultyId
+        let facultyId;
+        if (typeof major.facultyId === 'object' && major.facultyId !== null) {
+          facultyId = major.facultyId._id;
+        } else {
+          facultyId = major.facultyId;
+        }
+        
+        console.log('Processing major:', major.name, 'facultyId:', facultyId);
+        
         if (!majorsData[facultyId]) {
           majorsData[facultyId] = [];
         }
         majorsData[facultyId].push({
           ...major,
           id: major._id, // Convert _id to id for compatibility
-          facultyId: facultyId
+          facultyId: facultyId // Use clean facultyId
         });
       });
 
-      console.log('📊 Majors by faculty:', majorsData);
+      console.log('📊 Majors by faculty (fixed):', majorsData);
 
       // Group groupCodes by majorId
       (groupRes.data.data || []).forEach(groupCode => {
-        if (!groupCodesData[groupCode.majorId]) {
-          groupCodesData[groupCode.majorId] = [];
+        // Handle both string and populated object majorId
+        let majorId;
+        if (typeof groupCode.majorId === 'object' && groupCode.majorId !== null) {
+          majorId = groupCode.majorId._id;
+        } else {
+          majorId = groupCode.majorId;
         }
-        groupCodesData[groupCode.majorId].push({
+        
+        if (!groupCodesData[majorId]) {
+          groupCodesData[majorId] = [];
+        }
+        groupCodesData[majorId].push({
           ...groupCode,
           id: groupCode._id, // Convert _id to id for compatibility
+          majorId: majorId // Use clean majorId
         });
       });
 
@@ -518,7 +536,13 @@ const ManageDataScreen = ({ navigation }) => {
             <Text style={styles.label}>เลือกสาขา</Text>
             <TouchableOpacity
               style={[styles.dropdown, !formData.facultyId && styles.dropdownDisabled]}
-              onPress={() => formData.facultyId && setShowMajorModal(true)}
+              onPress={() => {
+                if (formData.facultyId) {
+                  console.log('Opening major modal for faculty:', formData.facultyId);
+                  console.log('Available majors:', data.majors[formData.facultyId]);
+                  setShowMajorModal(true);
+                }
+              }}
               disabled={!formData.facultyId}
             >
               <Text style={[styles.dropdownText, !formData.majorId && styles.placeholderText]}>
@@ -700,39 +724,47 @@ const ManageDataScreen = ({ navigation }) => {
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.content}>
         {/* Form Section */}
-        <View style={styles.formSection}>
-          {renderFormFields()}
-          
-          <View style={styles.buttonContainer}>
-            {editingItem && (
+        <ScrollView 
+          style={styles.formScrollView} 
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formSection}>
+            {renderFormFields()}
+            
+            <View style={styles.buttonContainer}>
+              {editingItem && (
+                <TouchableOpacity
+                  style={[styles.submitButton, styles.cancelButton]}
+                  onPress={cancelEdit}
+                >
+                  <Text style={[styles.submitButtonText, styles.cancelButtonText]}>
+                    ยกเลิก
+                  </Text>
+                </TouchableOpacity>
+              )}
+              
               <TouchableOpacity
-                style={[styles.submitButton, styles.cancelButton]}
-                onPress={cancelEdit}
+                style={[styles.submitButton, (isLoading || isUpdating) && styles.submitButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={isLoading || isUpdating}
               >
-                <Text style={[styles.submitButtonText, styles.cancelButtonText]}>
-                  ยกเลิก
+                <Text style={styles.submitButtonText}>
+                  {(isLoading || isUpdating) ? 'กำลังบันทึก...' : 
+                   editingItem ? 'อัปเดต' : 'เพิ่มข้อมูล'}
                 </Text>
               </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity
-              style={[styles.submitButton, (isLoading || isUpdating) && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={isLoading || isUpdating}
-            >
-              <Text style={styles.submitButtonText}>
-                {(isLoading || isUpdating) ? 'กำลังบันทึก...' : 
-                 editingItem ? 'อัปเดต' : 'เพิ่มข้อมูล'}
-              </Text>
-            </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Data List Section */}
-        {renderDataList()}
-      </ScrollView>
+        <View style={styles.listSection}>
+          {renderDataList()}
+        </View>
+      </View>
 
       {/* Faculty Modal */}
       <Modal
@@ -804,10 +836,13 @@ const ManageDataScreen = ({ navigation }) => {
                     ไม่พบสาขาในคณะนี้
                   </Text>
                   <Text style={styles.emptyModalSubtext}>
-                    Faculty ID: {formData.facultyId}
+                    Selected Faculty ID: {formData.facultyId}
                   </Text>
                   <Text style={styles.emptyModalSubtext}>
-                    Available majors: {Object.keys(data.majors).length}
+                    Available Faculty Keys: {Object.keys(data.majors).join(', ')}
+                  </Text>
+                  <Text style={styles.emptyModalSubtext}>
+                    Majors for this faculty: {(data.majors[formData.facultyId] || []).length}
                   </Text>
                 </View>
               }
@@ -972,8 +1007,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold'
   },
   content: {
+    flex: 1
+  },
+  formScrollView: {
+    maxHeight: 400,
+    padding: 15,
+    paddingBottom: 0
+  },
+  listSection: {
     flex: 1,
-    padding: 15
+    paddingHorizontal: 15,
+    paddingTop: 0,
+    paddingBottom: 15
   },
   formSection: {
     backgroundColor: '#fff',
