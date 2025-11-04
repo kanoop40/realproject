@@ -583,19 +583,11 @@ const ManageDataScreen = ({ navigation }) => {
         break;
       case 'groups':
         items = Object.values(data.groupCodes).flat();
-        // Apply filters for group codes
+        // Apply filter for group codes by major only
         if (filterMajorId) {
           items = items.filter(item => 
             (item.majorId === filterMajorId) || 
             (item.majorId?._id === filterMajorId)
-          );
-        } else if (filterFacultyId) {
-          // Filter by faculty - show all groups in majors of this faculty
-          const majorsInFaculty = data.majors[filterFacultyId] || [];
-          const majorIds = majorsInFaculty.map(m => m._id || m.id);
-          items = items.filter(item => 
-            majorIds.includes(item.majorId) || 
-            majorIds.includes(item.majorId?._id)
           );
         }
         break;
@@ -612,43 +604,24 @@ const ManageDataScreen = ({ navigation }) => {
         {/* Filter controls for groups */}
         {currentTab === 'groups' && (
           <View style={styles.filterContainer}>
-            <Text style={styles.filterLabel}>กรองตามคณะ:</Text>
+            <Text style={styles.filterLabel}>กรองตามสาขา:</Text>
             <TouchableOpacity
               style={styles.filterDropdown}
-              onPress={() => setShowFilterFacultyModal(true)}
+              onPress={() => setShowFilterMajorModal(true)}
             >
-              <Text style={[styles.filterDropdownText, !filterFacultyId && styles.placeholderText]}>
-                {filterFacultyId ? 
-                  data.faculties.find(f => f.id === filterFacultyId || f._id === filterFacultyId)?.name || 'ทั้งหมด' : 
+              <Text style={[styles.filterDropdownText, !filterMajorId && styles.placeholderText]}>
+                {filterMajorId ? 
+                  Object.values(data.majors).flat().find(m => m.id === filterMajorId || m._id === filterMajorId)?.name || 'ทั้งหมด' : 
                   'ทั้งหมด'
                 }
               </Text>
               <Text style={styles.dropdownArrow}>▼</Text>
             </TouchableOpacity>
             
-            {filterFacultyId && (
-              <>
-                <Text style={styles.filterLabel}>กรองตามสาขา:</Text>
-                <TouchableOpacity
-                  style={styles.filterDropdown}
-                  onPress={() => setShowFilterMajorModal(true)}
-                >
-                  <Text style={[styles.filterDropdownText, !filterMajorId && styles.placeholderText]}>
-                    {filterMajorId ? 
-                      (data.majors[filterFacultyId] || []).find(m => m.id === filterMajorId || m._id === filterMajorId)?.name || 'ทั้งหมด' : 
-                      'ทั้งหมด'
-                    }
-                  </Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            
-            {(filterFacultyId || filterMajorId) && (
+            {filterMajorId && (
               <TouchableOpacity
                 style={styles.clearFilterButton}
                 onPress={() => {
-                  setFilterFacultyId('');
                   setFilterMajorId('');
                 }}
               >
@@ -661,13 +634,9 @@ const ManageDataScreen = ({ navigation }) => {
         {items.length === 0 ? (
           <Text style={styles.emptyText}>ยังไม่มีข้อมูล</Text>
         ) : (
-          <FlatList
-            key={`${currentTab}-${refreshKey}`}
-            data={items}
-            extraData={[data, refreshKey]}
-            keyExtractor={(item) => (item._id || item.id)?.toString() || item.value}
-            renderItem={({ item }) => (
-              <View style={styles.listItem}>
+          <View>
+            {items.map((item, index) => (
+              <View key={(item._id || item.id)?.toString() || item.value || index} style={styles.listItem}>
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName}>{item.name || item.label}</Text>
                   {(currentTab === 'majors' || currentTab === 'groups') && (item.facultyName || item.facultyId?.name) && (
@@ -694,8 +663,8 @@ const ManageDataScreen = ({ navigation }) => {
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
-          />
+            ))}
+          </View>
         )}
       </View>
     );
@@ -724,47 +693,43 @@ const ManageDataScreen = ({ navigation }) => {
         </ScrollView>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content} 
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Form Section */}
-        <ScrollView 
-          style={styles.formScrollView} 
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.formSection}>
-            {renderFormFields()}
-            
-            <View style={styles.buttonContainer}>
-              {editingItem && (
-                <TouchableOpacity
-                  style={[styles.submitButton, styles.cancelButton]}
-                  onPress={cancelEdit}
-                >
-                  <Text style={[styles.submitButtonText, styles.cancelButtonText]}>
-                    ยกเลิก
-                  </Text>
-                </TouchableOpacity>
-              )}
-              
+        <View style={styles.formSection}>
+          {renderFormFields()}
+          
+          <View style={styles.buttonContainer}>
+            {editingItem && (
               <TouchableOpacity
-                style={[styles.submitButton, (isLoading || isUpdating) && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
-                disabled={isLoading || isUpdating}
+                style={[styles.submitButton, styles.cancelButton]}
+                onPress={cancelEdit}
               >
-                <Text style={styles.submitButtonText}>
-                  {(isLoading || isUpdating) ? 'กำลังบันทึก...' : 
-                   editingItem ? 'อัปเดต' : 'เพิ่มข้อมูล'}
+                <Text style={[styles.submitButtonText, styles.cancelButtonText]}>
+                  ยกเลิก
                 </Text>
               </TouchableOpacity>
-            </View>
+            )}
+            
+            <TouchableOpacity
+              style={[styles.submitButton, (isLoading || isUpdating) && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isLoading || isUpdating}
+            >
+              <Text style={styles.submitButtonText}>
+                {(isLoading || isUpdating) ? 'กำลังบันทึก...' : 
+                 editingItem ? 'อัปเดต' : 'เพิ่มข้อมูล'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
 
         {/* Data List Section */}
-        <View style={styles.listSection}>
-          {renderDataList()}
-        </View>
-      </View>
+        {renderDataList()}
+      </ScrollView>
 
       {/* Faculty Modal */}
       <Modal
@@ -857,50 +822,7 @@ const ManageDataScreen = ({ navigation }) => {
         onComplete={() => setShowSuccess(false)}
       />
 
-      {/* Filter Faculty Modal */}
-      <Modal
-        visible={showFilterFacultyModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowFilterFacultyModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>กรองตามคณะ</Text>
-              <TouchableOpacity onPress={() => setShowFilterFacultyModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.modalItem}
-              onPress={() => {
-                setFilterFacultyId('');
-                setFilterMajorId('');
-                setShowFilterFacultyModal(false);
-              }}
-            >
-              <Text style={styles.modalItemText}>ทั้งหมด</Text>
-            </TouchableOpacity>
-            <FlatList
-              data={data.faculties}
-              keyExtractor={(item) => (item._id || item.id)?.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => {
-                    setFilterFacultyId(item._id || item.id);
-                    setFilterMajorId(''); // Reset major filter
-                    setShowFilterFacultyModal(false);
-                  }}
-                >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </View>
-      </Modal>
+
 
       {/* Filter Major Modal */}
       <Modal
@@ -927,7 +849,7 @@ const ManageDataScreen = ({ navigation }) => {
               <Text style={styles.modalItemText}>ทั้งหมด</Text>
             </TouchableOpacity>
             <FlatList
-              data={data.majors[filterFacultyId] || []}
+              data={Object.values(data.majors).flat()}
               keyExtractor={(item) => (item._id || item.id)?.toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -937,7 +859,12 @@ const ManageDataScreen = ({ navigation }) => {
                     setShowFilterMajorModal(false);
                   }}
                 >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
+                  <Text style={styles.modalItemText}>
+                    {item.name}
+                    {item.facultyName && (
+                      <Text style={styles.modalSubtext}> ({item.facultyName})</Text>
+                    )}
+                  </Text>
                 </TouchableOpacity>
               )}
             />
@@ -1007,18 +934,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold'
   },
   content: {
-    flex: 1
-  },
-  formScrollView: {
-    maxHeight: 400,
-    padding: 15,
-    paddingBottom: 0
-  },
-  listSection: {
     flex: 1,
-    paddingHorizontal: 15,
-    paddingTop: 0,
-    paddingBottom: 15
+    padding: 15
   },
   formSection: {
     backgroundColor: '#fff',
@@ -1211,6 +1128,11 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 16,
     color: '#333'
+  },
+  modalSubtext: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic'
   },
   // Filter styles
   filterContainer: {
