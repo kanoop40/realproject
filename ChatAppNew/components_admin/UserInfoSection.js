@@ -56,24 +56,31 @@ const UserInfoSection = ({ user }) => {
         <Text style={styles.infoValue}>{translateRole(user.role)}</Text>
       </View>
 
+      {user.department && (
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>หน่วยงาน:</Text>
+          <Text style={styles.infoValue}>{typeof user.department === 'object' ? user.department.name : user.department}</Text>
+        </View>
+      )}
+
       {user.faculty && (
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>คณะ:</Text>
-          <Text style={styles.infoValue}>{user.faculty}</Text>
+          <Text style={styles.infoValue}>{typeof user.faculty === 'object' ? user.faculty.name : user.faculty}</Text>
         </View>
       )}
 
       {user.major && (
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>สาขา:</Text>
-          <Text style={styles.infoValue}>{user.major}</Text>
+          <Text style={styles.infoValue}>{typeof user.major === 'object' ? user.major.name : user.major}</Text>
         </View>
       )}
 
       {user.groupCode && (
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>กลุ่มเรียน:</Text>
-          <Text style={styles.infoValue}>{user.groupCode}</Text>
+          <Text style={styles.infoValue}>{typeof user.groupCode === 'object' ? user.groupCode.name : user.groupCode}</Text>
         </View>
       )}
 
