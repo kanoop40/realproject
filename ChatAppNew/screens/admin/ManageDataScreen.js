@@ -40,6 +40,13 @@ const ManageDataScreen = ({ navigation }) => {
   const [showMajorModal, setShowMajorModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  
+  // Filter states for group list
+  // Filter states for group list
+  const [filterFacultyId, setFilterFacultyId] = useState('');
+  const [filterMajorId, setFilterMajorId] = useState('');
+  const [showFilterFacultyModal, setShowFilterFacultyModal] = useState(false);
+  const [showFilterMajorModal, setShowFilterMajorModal] = useState(false);
 
   // Load data from backend
   useEffect(() => {
@@ -76,14 +83,18 @@ const ManageDataScreen = ({ navigation }) => {
 
       // Group majors by facultyId
       (majRes.data.data || []).forEach(major => {
-        if (!majorsData[major.facultyId]) {
-          majorsData[major.facultyId] = [];
+        const facultyId = major.facultyId || major.facultyId?._id;
+        if (!majorsData[facultyId]) {
+          majorsData[facultyId] = [];
         }
-        majorsData[major.facultyId].push({
+        majorsData[facultyId].push({
           ...major,
           id: major._id, // Convert _id to id for compatibility
+          facultyId: facultyId
         });
       });
+
+      console.log('📊 Majors by faculty:', majorsData);
 
       // Group groupCodes by majorId
       (groupRes.data.data || []).forEach(groupCode => {
@@ -548,6 +559,21 @@ const ManageDataScreen = ({ navigation }) => {
         break;
       case 'groups':
         items = Object.values(data.groupCodes).flat();
+        // Apply filters for group codes
+        if (filterMajorId) {
+          items = items.filter(item => 
+            (item.majorId === filterMajorId) || 
+            (item.majorId?._id === filterMajorId)
+          );
+        } else if (filterFacultyId) {
+          // Filter by faculty - show all groups in majors of this faculty
+          const majorsInFaculty = data.majors[filterFacultyId] || [];
+          const majorIds = majorsInFaculty.map(m => m._id || m.id);
+          items = items.filter(item => 
+            majorIds.includes(item.majorId) || 
+            majorIds.includes(item.majorId?._id)
+          );
+        }
         break;
     }
 
@@ -558,6 +584,55 @@ const ManageDataScreen = ({ navigation }) => {
                  currentTab === 'faculties' ? 'คณะ' : 
                  currentTab === 'majors' ? 'สาขา' : 'กลุ่มเรียน'}
         </Text>
+        
+        {/* Filter controls for groups */}
+        {currentTab === 'groups' && (
+          <View style={styles.filterContainer}>
+            <Text style={styles.filterLabel}>กรองตามคณะ:</Text>
+            <TouchableOpacity
+              style={styles.filterDropdown}
+              onPress={() => setShowFilterFacultyModal(true)}
+            >
+              <Text style={[styles.filterDropdownText, !filterFacultyId && styles.placeholderText]}>
+                {filterFacultyId ? 
+                  data.faculties.find(f => f.id === filterFacultyId || f._id === filterFacultyId)?.name || 'ทั้งหมด' : 
+                  'ทั้งหมด'
+                }
+              </Text>
+              <Text style={styles.dropdownArrow}>▼</Text>
+            </TouchableOpacity>
+            
+            {filterFacultyId && (
+              <>
+                <Text style={styles.filterLabel}>กรองตามสาขา:</Text>
+                <TouchableOpacity
+                  style={styles.filterDropdown}
+                  onPress={() => setShowFilterMajorModal(true)}
+                >
+                  <Text style={[styles.filterDropdownText, !filterMajorId && styles.placeholderText]}>
+                    {filterMajorId ? 
+                      (data.majors[filterFacultyId] || []).find(m => m.id === filterMajorId || m._id === filterMajorId)?.name || 'ทั้งหมด' : 
+                      'ทั้งหมด'
+                    }
+                  </Text>
+                  <Text style={styles.dropdownArrow}>▼</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            
+            {(filterFacultyId || filterMajorId) && (
+              <TouchableOpacity
+                style={styles.clearFilterButton}
+                onPress={() => {
+                  setFilterFacultyId('');
+                  setFilterMajorId('');
+                }}
+              >
+                <Text style={styles.clearFilterText}>ล้างการกรอง</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
         
         {items.length === 0 ? (
           <Text style={styles.emptyText}>ยังไม่มีข้อมูล</Text>
@@ -715,6 +790,7 @@ const ManageDataScreen = ({ navigation }) => {
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
+                    console.log('Selected major:', item);
                     setFormData({...formData, majorId: item._id || item.id});
                     setShowMajorModal(false);
                   }}
@@ -722,6 +798,19 @@ const ManageDataScreen = ({ navigation }) => {
                   <Text style={styles.modalItemText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
+              ListEmptyComponent={
+                <View style={styles.emptyModalItem}>
+                  <Text style={styles.emptyModalText}>
+                    ไม่พบสาขาในคณะนี้
+                  </Text>
+                  <Text style={styles.emptyModalSubtext}>
+                    Faculty ID: {formData.facultyId}
+                  </Text>
+                  <Text style={styles.emptyModalSubtext}>
+                    Available majors: {Object.keys(data.majors).length}
+                  </Text>
+                </View>
+              }
             />
           </View>
         </View>
@@ -732,6 +821,94 @@ const ManageDataScreen = ({ navigation }) => {
         visible={showSuccess}
         onComplete={() => setShowSuccess(false)}
       />
+
+      {/* Filter Faculty Modal */}
+      <Modal
+        visible={showFilterFacultyModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowFilterFacultyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>กรองตามคณะ</Text>
+              <TouchableOpacity onPress={() => setShowFilterFacultyModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.modalItem}
+              onPress={() => {
+                setFilterFacultyId('');
+                setFilterMajorId('');
+                setShowFilterFacultyModal(false);
+              }}
+            >
+              <Text style={styles.modalItemText}>ทั้งหมด</Text>
+            </TouchableOpacity>
+            <FlatList
+              data={data.faculties}
+              keyExtractor={(item) => (item._id || item.id)?.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setFilterFacultyId(item._id || item.id);
+                    setFilterMajorId(''); // Reset major filter
+                    setShowFilterFacultyModal(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Filter Major Modal */}
+      <Modal
+        visible={showFilterMajorModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowFilterMajorModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>กรองตามสาขา</Text>
+              <TouchableOpacity onPress={() => setShowFilterMajorModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.modalItem}
+              onPress={() => {
+                setFilterMajorId('');
+                setShowFilterMajorModal(false);
+              }}
+            >
+              <Text style={styles.modalItemText}>ทั้งหมด</Text>
+            </TouchableOpacity>
+            <FlatList
+              data={data.majors[filterFacultyId] || []}
+              keyExtractor={(item) => (item._id || item.id)?.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setFilterMajorId(item._id || item.id);
+                    setShowFilterMajorModal(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Loading Overlay */}
       <LoadingOverlay
@@ -989,6 +1166,63 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 16,
     color: '#333'
+  },
+  // Filter styles
+  filterContainer: {
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 15
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8
+  },
+  filterDropdown: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    padding: 10,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  filterDropdownText: {
+    fontSize: 14,
+    color: '#333'
+  },
+  clearFilterButton: {
+    backgroundColor: '#ff6b6b',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginTop: 5
+  },
+  clearFilterText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  // Empty state styles
+  emptyModalItem: {
+    padding: 20,
+    alignItems: 'center'
+  },
+  emptyModalText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 10
+  },
+  emptyModalSubtext: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 5
   }
 });
 
