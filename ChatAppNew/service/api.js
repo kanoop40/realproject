@@ -9,8 +9,8 @@ const RATE_LIMIT_REQUESTS = 'rate_limit_requests';
 const MAX_REQUESTS_PER_MINUTE = 30;
 
 // Production API URL for mobile device testing
-//export const BASE_URL = 'https://realproject-mg25.onrender.com';
- export const BASE_URL = 'http://192.168.2.40:5000'; // Local development - works only on emulator
+export const BASE_URL = 'https://realproject-mg25.onrender.com';
+ //export const BASE_URL = 'http://192.168.2.40:5000'; // Local development - works only on emulator
 export const API_URL = BASE_URL; // Export API_URL for compatibility
 console.log('Environment:', { 
   isDevice: Constants.isDevice, 

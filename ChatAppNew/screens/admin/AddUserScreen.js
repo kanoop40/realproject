@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,64 +16,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { API_URL } from '../../service/api'; // ใช้ api และ API_URL เดียวกัน
 import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 import LoadingOverlay from '../../components/LoadingOverlay';
+import { loadAllSystemData } from '../../utils/systemDataAPI';
 
-const faculties = [
-  { label: 'เลือกคณะ', value: '1' },
-  { label: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', value: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ' },
- 
-];
 
-// หน่วยงานสำหรับเจ้าหน้าที่
-const departments = [
-  { label: 'เลือกหน่วยงาน', value: '1' },
-  { label: 'งานการเงิน', value: 'งานการเงิน' },
-  { label: 'งานบุคลากร', value: 'งานบุคลากร' },
-  { label: 'งานทะเบียน', value: 'งานทะเบียน' },
-  { label: 'กองทุนเงินกู้ กยศ', value: 'กองทุนเงินกู้ กยศ' }
-];
-
-const majors = {
-  '1': [
-    { label: 'เลือกสาขา', value: '1' }
-  ],
-  'บริหารธุรกิจและเทคโนโลยีสารสนเทศ': [
-    { label: 'เลือกสาขา', value: '1' },
-    { label: '345 เทคโนโลยีธุรกิจดิจิทัล', value: '345 เทคโนโลยีธุรกิจดิจิทัล' },
-    { label: '346 การบัญชี', value: '346 การบัญชี' },
-    { label: '347 การจัดการ', value: '347 การจัดการ' },
-    { label: '348 การตลาด', value: '348 การตลาด' },
-    
-  ]
-  
-};
-
-const groupCodes = {
-  '1': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' }
-  ],
-  '345 เทคโนโลยีธุรกิจดิจิทัล': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'DT26721N', value: 'DT26721N' },
-    { label: 'DT26722N', value: 'DT26722N' },
-    { label: 'DT26723N', value: 'DT26723N' }
-  ],
-  '346 การบัญชี': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'ACC26701', value: 'ACC26701' },
-    { label: 'ACC26702', value: 'ACC26702' }
-  ],
-  '347 การจัดการ': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'MGT26701', value: 'MGT26701' },
-    { label: 'MGT26702', value: 'MGT26702' }
-  ],
-  '348 การตลาด': [
-    { label: 'เลือกกลุ่มเรียน', value: '1' },
-    { label: 'MKT26701', value: 'MKT26701' },
-    { label: 'MKT26702', value: 'MKT26702' }
-  ]
-  
-};
 
 const AddUserScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -93,6 +38,35 @@ const AddUserScreen = ({ navigation }) => {
   const [showMajorModal, setShowMajorModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  
+  // System data states
+  const [systemData, setSystemData] = useState({
+    departments: [],
+    faculties: [],
+    majors: {},
+    groupCodes: {}
+  });
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Load system data on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoadingData(true);
+        console.log('📋 Loading system data for AddUserScreen...');
+        const data = await loadAllSystemData();
+        setSystemData(data);
+        console.log('✅ System data loaded successfully');
+      } catch (error) {
+        console.error('❌ Error loading system data:', error);
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลระบบได้ กรุณาลองใหม่อีกครั้ง');
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   const selectFaculty = (faculty) => {
     const newFormData = {
@@ -135,22 +109,22 @@ const AddUserScreen = ({ navigation }) => {
 
   const getFacultyLabel = () => {
     if (formData.role === 'staff') {
-      const department = departments.find(d => d.value === formData.faculty);
+      const department = systemData.departments.find(d => d.value === formData.faculty);
       return department ? department.label : 'เลือกหน่วยงาน';
     } else {
-      const faculty = faculties.find(f => f.value === formData.faculty);
+      const faculty = systemData.faculties.find(f => f.value === formData.faculty);
       return faculty ? faculty.label : 'เลือกคณะ';
     }
   };
 
   const getMajorLabel = () => {
-    const availableMajors = majors[formData.faculty] || majors['1'];
+    const availableMajors = systemData.majors[formData.faculty] || systemData.majors['1'];
     const major = availableMajors.find(m => m.value === formData.major);
     return major ? major.label : 'เลือกสาขา';
   };
 
   const getGroupLabel = () => {
-    const availableGroups = groupCodes[formData.major] || groupCodes['1'];
+    const availableGroups = systemData.groupCodes[formData.major] || systemData.groupCodes['1'];
     const group = availableGroups.find(g => g.value === formData.groupCode);
     return group ? group.label : 'เลือกกลุ่มเรียน';
   };
@@ -330,7 +304,7 @@ const AddUserScreen = ({ navigation }) => {
 
       // สำหรับเจ้าหน้าที่ ใช้ชื่อหน่วยงานเป็นชื่อ และนามสกุลเป็นค่าว่าง
       if (formData.role === 'staff') {
-        const selectedDepartment = departments.find(d => d.value === formData.faculty);
+        const selectedDepartment = systemData.departments.find(d => d.value === formData.faculty);
         dataToSend.firstName = selectedDepartment ? selectedDepartment.label : '';
         dataToSend.lastName = ''; // ส่งค่าว่าง เพราะ model แก้ไขแล้ว
         
@@ -466,6 +440,18 @@ const AddUserScreen = ({ navigation }) => {
     }
   };
 
+  // Show loading while loading system data
+  if (isLoadingData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LoadingOverlay
+          visible={true}
+          message="กำลังโหลดข้อมูลระบบ..."
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -575,7 +561,7 @@ const AddUserScreen = ({ navigation }) => {
             )}
             {formData.role === 'staff' && formData.faculty !== '1' && (
               <Text style={styles.previewText}>
-                 อีเมลที่จะสร้างอัตโนมัติ: {departments.find(d => d.value === formData.faculty)?.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
+                 อีเมลที่จะสร้างอัตโนมัติ: {systemData.departments.find(d => d.value === formData.faculty)?.label.replace(/\s+/g, '').replace(/[^a-zA-Zก-๙]/g, '').toLowerCase()}.xxxxxxxxxx@organization.local
               </Text>
             )}
             {errors.email && (
@@ -701,8 +687,8 @@ const AddUserScreen = ({ navigation }) => {
             </View>
             <FlatList
               data={formData.role === 'staff' ? 
-                departments.filter(d => d.value !== '1') : 
-                faculties.filter(f => f.value !== '1')
+                systemData.departments.filter(d => d.value !== '1') : 
+                systemData.faculties.filter(f => f.value !== '1')
               }
               keyExtractor={(item) => item.value}
               renderItem={({ item }) => (
@@ -734,7 +720,7 @@ const AddUserScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={(majors[formData.faculty] || majors['1']).filter(m => m.value !== '1')}
+              data={(systemData.majors[formData.faculty] || systemData.majors['1']).filter(m => m.value !== '1')}
               keyExtractor={(item) => item.value}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -765,7 +751,7 @@ const AddUserScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={(groupCodes[formData.major] || groupCodes['1']).filter(g => g.value !== '1')}
+              data={(systemData.groupCodes[formData.major] || systemData.groupCodes['1']).filter(g => g.value !== '1')}
               keyExtractor={(item) => item.value}
               renderItem={({ item }) => (
                 <TouchableOpacity

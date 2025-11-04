@@ -11,6 +11,7 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import AdminScreen from './screens/admin/AdminScreen';
 import AddUserScreen from './screens/admin/AddUserScreen';
+import ManageDataScreen from './screens/admin/ManageDataScreen';
 import UserDetailScreen from './screens/admin/UserDetailScreen';
 import ChatScreenWithTabBar from './screens/user/ChatScreen';
 import PrivateChatScreen from './screens/user/PrivateChatScreen';
@@ -90,6 +91,7 @@ export default function App() {
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Admin" component={AdminScreen} />
               <Stack.Screen name="AddUser" component={AddUserScreen} />
+              <Stack.Screen name="ManageData" component={ManageDataScreen} />
               <Stack.Screen name="UserDetail" component={UserDetailScreen} />
               <Stack.Screen name="Chat" component={ChatScreenWithTabBar} />
               <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />

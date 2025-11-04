@@ -19,6 +19,7 @@ const authRoutes = require('./routes/authRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const fileRoutes = require('./routes/fileRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 // Middleware imports
 const { errorHandler } = require('./Middleware/errorMiddleware');
@@ -270,6 +271,7 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

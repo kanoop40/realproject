@@ -177,7 +177,16 @@ const AdminScreen = ({ navigation, route }) => {
       </ScrollView>
     )}
 
-    <AddButton onPress={() => navigation.navigate('AddUser')} />
+    <View style={styles.actionButtonsContainer}>
+      <AddButton onPress={() => navigation.navigate('AddUser')} />
+      
+      <TouchableOpacity 
+        style={styles.manageDataButton}
+        onPress={() => navigation.navigate('ManageData')}
+      >
+        <Text style={styles.manageDataButtonText}>🔧 จัดการข้อมูลระบบ</Text>
+      </TouchableOpacity>
+    </View>
 
     <UserActionsModal
       visible={showUserActions}
@@ -282,6 +291,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center'
+  },
+  actionButtonsContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 10
+  },
+  manageDataButton: {
+    backgroundColor: '#34C759',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  manageDataButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold'
   },
   actionIcon: {
     fontSize: 18,
