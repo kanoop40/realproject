@@ -36,8 +36,8 @@ let systemData = {
       { id: '6', name: 'MGT26701', majorId: '3', majorName: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
       { id: '7', name: 'MGT26702', majorId: '3', majorName: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
     ],
-    '4': [ // MKT
-      { id: '8', name: 'MKT26701', majorId: '4', majorName: '348 การตลาد', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+    '4': [ // MKT - การตลาด
+      { id: '8', name: 'MKT26701', majorId: '4', majorName: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
       { id: '9', name: 'MKT26702', majorId: '4', majorName: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
     ]
   }

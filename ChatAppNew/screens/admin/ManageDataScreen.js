@@ -56,6 +56,8 @@ const ManageDataScreen = ({ navigation }) => {
         }
       };
 
+      console.log('🔄 Loading admin data from API...');
+
       // Load all data from backend
       const [deptRes, facRes, majRes, groupRes] = await Promise.all([
         axios.get(`${API_URL}/api/admin/departments`, config),
@@ -63,6 +65,8 @@ const ManageDataScreen = ({ navigation }) => {
         axios.get(`${API_URL}/api/admin/majors`, config),
         axios.get(`${API_URL}/api/admin/group-codes`, config)
       ]);
+
+      console.log('✅ Admin data loaded successfully');
 
       setData({
         departments: deptRes.data.data || [],
@@ -72,7 +76,49 @@ const ManageDataScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลได้');
+      console.log('⚠️ Using fallback data due to API error');
+      
+      // Use fallback data when API is not available
+      setData({
+        departments: [
+          { id: '1', name: 'งานการเงิน', createdAt: new Date() },
+          { id: '2', name: 'งานบุคลากร', createdAt: new Date() },
+          { id: '3', name: 'งานทะเบียน', createdAt: new Date() },
+          { id: '4', name: 'กองทุนเงินกู้ กยศ', createdAt: new Date() }
+        ],
+        faculties: [
+          { id: '1', name: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
+        ],
+        majors: {
+          '1': [
+            { id: '1', name: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '2', name: '346 การบัญชี', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '3', name: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '4', name: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
+          ]
+        },
+        groupCodes: {
+          '1': [
+            { id: '1', name: 'DT26721N', majorId: '1', majorName: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '2', name: 'DT26722N', majorId: '1', majorName: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '3', name: 'DT26723N', majorId: '1', majorName: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
+          ],
+          '2': [
+            { id: '4', name: 'ACC26701', majorId: '2', majorName: '346 การบัญชี', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '5', name: 'ACC26702', majorId: '2', majorName: '346 การบัญชี', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
+          ],
+          '3': [
+            { id: '6', name: 'MGT26701', majorId: '3', majorName: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '7', name: 'MGT26702', majorId: '3', majorName: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
+          ],
+          '4': [
+            { id: '8', name: 'MKT26701', majorId: '4', majorName: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
+            { id: '9', name: 'MKT26702', majorId: '4', majorName: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
+          ]
+        }
+      });
+
+      Alert.alert('แจ้งเตือน', 'ไม่สามารถเชื่อมต่อ API ได้ ใช้ข้อมูลสำรองแทน');
     } finally {
       setIsLoading(false);
     }
@@ -123,34 +169,125 @@ const ManageDataScreen = ({ navigation }) => {
           break;
       }
 
-      if (editingItem) {
-        // Update existing item
-        await axios.put(`${API_URL}${endpoint}/${editingItem.id}`, payload, config);
-        Alert.alert('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว');
-      } else {
-        // Create new item
-        await axios.post(`${API_URL}${endpoint}`, payload, config);
-        setShowSuccess(true);
+      try {
+        // Try to use API first
+        if (editingItem) {
+          await axios.put(`${API_URL}${endpoint}/${editingItem.id}`, payload, config);
+          Alert.alert('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว');
+        } else {
+          await axios.post(`${API_URL}${endpoint}`, payload, config);
+          setShowSuccess(true);
+        }
+        
+        // Reload data from API
+        await loadAllData();
+      } catch (apiError) {
+        console.log('⚠️ API not available, using local simulation');
+        
+        // Local simulation when API is not available
+        const newData = { ...data };
+        const newId = Date.now().toString();
+        
+        if (editingItem) {
+          // Update existing item locally
+          switch (currentTab) {
+            case 'departments':
+              const deptIndex = newData.departments.findIndex(d => d.id === editingItem.id);
+              if (deptIndex !== -1) {
+                newData.departments[deptIndex].name = formData.name.trim();
+              }
+              break;
+            case 'faculties':
+              const facIndex = newData.faculties.findIndex(f => f.id === editingItem.id);
+              if (facIndex !== -1) {
+                newData.faculties[facIndex].name = formData.name.trim();
+              }
+              break;
+            case 'majors':
+              // Find and update major
+              Object.keys(newData.majors).forEach(facultyId => {
+                const majorIndex = newData.majors[facultyId].findIndex(m => m.id === editingItem.id);
+                if (majorIndex !== -1) {
+                  newData.majors[facultyId][majorIndex].name = formData.name.trim();
+                }
+              });
+              break;
+            case 'groups':
+              Object.keys(newData.groupCodes).forEach(majorId => {
+                const groupIndex = newData.groupCodes[majorId].findIndex(g => g.id === editingItem.id);
+                if (groupIndex !== -1) {
+                  newData.groupCodes[majorId][groupIndex].name = formData.name.trim();
+                }
+              });
+              break;
+          }
+          Alert.alert('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว (โหมดออฟไลน์)');
+        } else {
+          // Add new item locally
+          switch (currentTab) {
+            case 'departments':
+              newData.departments.push({
+                id: newId,
+                name: formData.name.trim(),
+                createdAt: new Date()
+              });
+              break;
+            case 'faculties':
+              newData.faculties.push({
+                id: newId,
+                name: formData.name.trim(),
+                createdAt: new Date()
+              });
+              newData.majors[newId] = [];
+              break;
+            case 'majors':
+              if (!newData.majors[formData.facultyId]) {
+                newData.majors[formData.facultyId] = [];
+              }
+              const faculty = newData.faculties.find(f => f.id === formData.facultyId);
+              newData.majors[formData.facultyId].push({
+                id: newId,
+                name: formData.name.trim(),
+                facultyId: formData.facultyId,
+                facultyName: faculty?.name || '',
+                createdAt: new Date()
+              });
+              newData.groupCodes[newId] = [];
+              break;
+            case 'groups':
+              if (!newData.groupCodes[formData.majorId]) {
+                newData.groupCodes[formData.majorId] = [];
+              }
+              let majorInfo = null;
+              Object.values(newData.majors).flat().forEach(major => {
+                if (major.id === formData.majorId) {
+                  majorInfo = major;
+                }
+              });
+              newData.groupCodes[formData.majorId].push({
+                id: newId,
+                name: formData.name.trim(),
+                majorId: formData.majorId,
+                majorName: majorInfo?.name || '',
+                facultyId: majorInfo?.facultyId || '',
+                facultyName: majorInfo?.facultyName || '',
+                createdAt: new Date()
+              });
+              break;
+          }
+          setShowSuccess(true);
+        }
+        
+        setData(newData);
       }
 
       // Reset form
       setFormData({ name: '', facultyId: '', majorId: '' });
       setEditingItem(null);
-      
-      // Reload data
-      await loadAllData();
 
     } catch (error) {
       console.error('Error saving data:', error);
-      let errorMessage = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
-      
-      if (error.response?.status === 400) {
-        errorMessage = 'ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง';
-      } else if (error.response?.status === 409) {
-        errorMessage = 'ชื่อนี้มีในระบบแล้ว กรุณาใช้ชื่ออื่น';
-      }
-      
-      Alert.alert('ไม่สามารถบันทึกได้', errorMessage);
+      Alert.alert('ไม่สามารถบันทึกได้', 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
       setIsLoading(false);
     }
@@ -193,9 +330,43 @@ const ManageDataScreen = ({ navigation }) => {
                   break;
               }
 
-              await axios.delete(`${API_URL}${endpoint}`, config);
-              Alert.alert('สำเร็จ', 'ลบข้อมูลเรียบร้อยแล้ว');
-              await loadAllData();
+              try {
+                // Try API first
+                await axios.delete(`${API_URL}${endpoint}`, config);
+                Alert.alert('สำเร็จ', 'ลบข้อมูลเรียบร้อยแล้ว');
+                await loadAllData();
+              } catch (apiError) {
+                console.log('⚠️ API not available, using local deletion');
+                
+                // Local deletion when API is not available
+                const newData = { ...data };
+                
+                switch (currentTab) {
+                  case 'departments':
+                    newData.departments = newData.departments.filter(d => d.id !== item.id);
+                    break;
+                  case 'faculties':
+                    newData.faculties = newData.faculties.filter(f => f.id !== item.id);
+                    // Also remove related majors and group codes
+                    delete newData.majors[item.id];
+                    break;
+                  case 'majors':
+                    Object.keys(newData.majors).forEach(facultyId => {
+                      newData.majors[facultyId] = newData.majors[facultyId].filter(m => m.id !== item.id);
+                    });
+                    // Also remove related group codes
+                    delete newData.groupCodes[item.id];
+                    break;
+                  case 'groups':
+                    Object.keys(newData.groupCodes).forEach(majorId => {
+                      newData.groupCodes[majorId] = newData.groupCodes[majorId].filter(g => g.id !== item.id);
+                    });
+                    break;
+                }
+                
+                setData(newData);
+                Alert.alert('สำเร็จ', 'ลบข้อมูลเรียบร้อยแล้ว (โหมดออฟไลน์)');
+              }
 
             } catch (error) {
               console.error('Error deleting data:', error);

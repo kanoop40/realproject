@@ -299,21 +299,21 @@ const styles = StyleSheet.create({
   },
   manageDataButton: {
     backgroundColor: '#34C759',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2
   },
   manageDataButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold'
+    fontSize: 14,
+    fontWeight: '600'
   },
   actionIcon: {
     fontSize: 18,
