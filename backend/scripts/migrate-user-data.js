@@ -58,40 +58,59 @@ const migrateUsersWithMissingData = async () => {
         let needsUpdate = false;
         const updateData = {};
 
-        // Check and fix department
-        if (!user.department || typeof user.department === 'string') {
-          if (typeof user.department === 'string') {
-            // Try to find matching department
-            const dept = await Department.findOne({ 
-              name: { $regex: new RegExp(user.department, 'i') }
-            });
-            updateData.department = dept ? dept._id : defaultDepartment._id;
-            console.log(`🔄 User ${user.email}: Migrating department '${user.department}' -> ${dept ? dept.name : defaultDepartment.name}`);
-          } else {
-            updateData.department = defaultDepartment._id;
-            console.log(`🔄 User ${user.email}: Setting default department -> ${defaultDepartment.name}`);
+        // Check and fix department (only for staff)
+        if (user.role === 'staff') {
+          if (!user.department || typeof user.department === 'string') {
+            if (typeof user.department === 'string') {
+              // Try to find matching department
+              const dept = await Department.findOne({ 
+                name: { $regex: new RegExp(user.department, 'i') }
+              });
+              updateData.department = dept ? dept._id : defaultDepartment._id;
+              console.log(`🔄 User ${user.email}: Migrating department '${user.department}' -> ${dept ? dept.name : defaultDepartment.name}`);
+            } else {
+              updateData.department = defaultDepartment._id;
+              console.log(`🔄 User ${user.email}: Setting default department -> ${defaultDepartment.name}`);
+            }
+            needsUpdate = true;
           }
-          needsUpdate = true;
+        } else {
+          // Remove department from non-staff users
+          if (user.department) {
+            updateData.$unset = { department: 1 };
+            console.log(`🔄 User ${user.email}: Removing department (role: ${user.role})`);
+            needsUpdate = true;
+          }
         }
 
-        // Check and fix faculty
-        if (!user.faculty || typeof user.faculty === 'string') {
-          if (typeof user.faculty === 'string') {
-            // Try to find matching faculty
-            const faculty = await Faculty.findOne({ 
-              name: { $regex: new RegExp(user.faculty, 'i') }
-            });
-            updateData.faculty = faculty ? faculty._id : defaultFaculty._id;
-            console.log(`🔄 User ${user.email}: Migrating faculty '${user.faculty}' -> ${faculty ? faculty.name : defaultFaculty.name}`);
-          } else {
-            updateData.faculty = defaultFaculty._id;
-            console.log(`🔄 User ${user.email}: Setting default faculty -> ${defaultFaculty.name}`);
+        // Check and fix faculty (for students and teachers only)
+        if (user.role === 'student' || user.role === 'teacher') {
+          if (!user.faculty || typeof user.faculty === 'string') {
+            if (typeof user.faculty === 'string') {
+              // Try to find matching faculty
+              const faculty = await Faculty.findOne({ 
+                name: { $regex: new RegExp(user.faculty, 'i') }
+              });
+              updateData.faculty = faculty ? faculty._id : defaultFaculty._id;
+              console.log(`🔄 User ${user.email}: Migrating faculty '${user.faculty}' -> ${faculty ? faculty.name : defaultFaculty.name}`);
+            } else {
+              updateData.faculty = defaultFaculty._id;
+              console.log(`🔄 User ${user.email}: Setting default faculty -> ${defaultFaculty.name}`);
+            }
+            needsUpdate = true;
           }
-          needsUpdate = true;
+        } else {
+          // Remove faculty from staff users
+          if (user.faculty) {
+            if (!updateData.$unset) updateData.$unset = {};
+            updateData.$unset.faculty = 1;
+            console.log(`🔄 User ${user.email}: Removing faculty (role: ${user.role})`);
+            needsUpdate = true;
+          }
         }
 
-        // Check and fix major (only for students)
-        if (user.role === 'student') {
+        // Check and fix major (for students and teachers)
+        if (user.role === 'student' || user.role === 'teacher') {
           if (!user.major || typeof user.major === 'string') {
             if (typeof user.major === 'string') {
               // Try to find matching major
@@ -106,8 +125,18 @@ const migrateUsersWithMissingData = async () => {
             }
             needsUpdate = true;
           }
+        } else {
+          // Remove major from staff users
+          if (user.major) {
+            if (!updateData.$unset) updateData.$unset = {};
+            updateData.$unset.major = 1;
+            console.log(`🔄 User ${user.email}: Removing major (role: ${user.role})`);
+            needsUpdate = true;
+          }
+        }
 
-          // Check and fix groupCode (only for students)
+        // Check and fix groupCode (only for students)
+        if (user.role === 'student') {
           if (!user.groupCode || typeof user.groupCode === 'string') {
             if (typeof user.groupCode === 'string') {
               // Try to find matching group code
@@ -120,6 +149,14 @@ const migrateUsersWithMissingData = async () => {
               updateData.groupCode = defaultGroupCode._id;
               console.log(`🔄 User ${user.email}: Setting default groupCode -> ${defaultGroupCode.name}`);
             }
+            needsUpdate = true;
+          }
+        } else {
+          // Remove groupCode from non-student users
+          if (user.groupCode) {
+            if (!updateData.$unset) updateData.$unset = {};
+            updateData.$unset.groupCode = 1;
+            console.log(`🔄 User ${user.email}: Removing groupCode (role: ${user.role})`);
             needsUpdate = true;
           }
         }

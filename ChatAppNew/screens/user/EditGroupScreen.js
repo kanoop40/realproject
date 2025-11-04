@@ -536,7 +536,9 @@ const EditGroupScreen = ({ route, navigation }) => {
                 onPress={() => loadClassCodesByMajor(item.major)}
               >
                 <View style={styles.majorTextContainer}>
-                  <Text style={styles.majorText}>{item.major}</Text>
+                  <Text style={styles.majorText}>
+                    {typeof item.major === 'object' ? item.major.name : item.major}
+                  </Text>
                   <Text style={styles.majorSubText}>
                     {item.userCount} คน ในสาขานี้
                   </Text>

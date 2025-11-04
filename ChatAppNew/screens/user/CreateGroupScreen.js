@@ -432,7 +432,9 @@ const CreateGroupScreen = ({ navigation }) => {
                   onPress={() => loadClassCodesByMajor(item.major)}
                 >
                   <View style={styles.classCodeInfo}>
-                    <Text style={styles.classCodeText}>{item.major}</Text>
+                    <Text style={styles.classCodeText}>
+                      {typeof item.major === 'object' ? item.major.name : item.major}
+                    </Text>
                     <Text style={styles.classCodeCount}>
                       สมาชิก {item.userCount || 0} คน
                     </Text>

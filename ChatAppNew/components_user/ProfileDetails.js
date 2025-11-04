@@ -15,7 +15,9 @@ const ProfileDetails = ({ currentUser }) => {
         <View style={styles.detailItem}>
           <Text style={styles.schoolIcon}></Text>
           <Text style={styles.detailLabel}>คณะ</Text>
-          <Text style={styles.detailValue}>{currentUser.faculty}</Text>
+          <Text style={styles.detailValue}>
+            {typeof currentUser.faculty === 'object' ? currentUser.faculty.name : currentUser.faculty}
+          </Text>
         </View>
       )}
 
@@ -23,7 +25,9 @@ const ProfileDetails = ({ currentUser }) => {
         <View style={styles.detailItem}>
           <Text style={styles.bookIcon}></Text>
           <Text style={styles.detailLabel}>สาขา</Text>
-          <Text style={styles.detailValue}>{currentUser.major}</Text>
+          <Text style={styles.detailValue}>
+            {typeof currentUser.major === 'object' ? currentUser.major.name : currentUser.major}
+          </Text>
         </View>
       )}
 
@@ -31,7 +35,9 @@ const ProfileDetails = ({ currentUser }) => {
         <View style={styles.detailItem}>
           <Text style={styles.groupIcon}></Text>
           <Text style={styles.detailLabel}>รหัสกลุ่ม</Text>
-          <Text style={styles.detailValue}>{currentUser.groupCode}</Text>
+          <Text style={styles.detailValue}>
+            {typeof currentUser.groupCode === 'object' ? currentUser.groupCode.name : currentUser.groupCode}
+          </Text>
         </View>
       )}
     </View>

@@ -192,7 +192,9 @@ const SearchUserScreen = ({ navigation }) => {
             {item.firstName || ''} {item.lastName || ''}
           </Text>
           <Text style={styles.userDetails}>
-            {item.faculty || ''} {item.faculty && item.major ? ' - ' : ''}{item.major || ''}
+            {item.faculty ? (typeof item.faculty === 'object' ? item.faculty.name : item.faculty) : ''} 
+            {item.faculty && item.major ? ' - ' : ''}
+            {item.major ? (typeof item.major === 'object' ? item.major.name : item.major) : ''}
           </Text>
           {item.role && (
             <Text style={styles.userRole}>
@@ -332,7 +334,12 @@ const SearchUserScreen = ({ navigation }) => {
                 {selectedUser.role !== 'staff' && (
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>คณะ</Text>
-                    <Text style={styles.infoValue}>{selectedUser.faculty || 'ไม่ระบุ'}</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedUser.faculty 
+                        ? (typeof selectedUser.faculty === 'object' ? selectedUser.faculty.name : selectedUser.faculty)
+                        : 'ไม่ระบุ'
+                      }
+                    </Text>
                   </View>
                 )}
                 
@@ -340,7 +347,12 @@ const SearchUserScreen = ({ navigation }) => {
                 {selectedUser.role !== 'staff' && (
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>สาขา</Text>
-                    <Text style={styles.infoValue}>{selectedUser.major || 'ไม่ระบุ'}</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedUser.major 
+                        ? (typeof selectedUser.major === 'object' ? selectedUser.major.name : selectedUser.major)
+                        : 'ไม่ระบุ'
+                      }
+                    </Text>
                   </View>
                 )}
                 
@@ -348,7 +360,12 @@ const SearchUserScreen = ({ navigation }) => {
                 {selectedUser.role !== 'staff' && selectedUser.role !== 'teacher' && (
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>รหัสกลุ่ม</Text>
-                    <Text style={styles.infoValue}>{selectedUser.groupCode || 'ไม่ระบุ'}</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedUser.groupCode 
+                        ? (typeof selectedUser.groupCode === 'object' ? selectedUser.groupCode.name : selectedUser.groupCode)
+                        : 'ไม่ระบุ'
+                      }
+                    </Text>
                   </View>
                 )}
 

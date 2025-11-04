@@ -21,6 +21,7 @@ import LoadingOverlay from '../../components/LoadingOverlay';
 const ManageDataScreen = ({ navigation }) => {
   const [currentTab, setCurrentTab] = useState('departments');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [data, setData] = useState({
     departments: [],
@@ -38,6 +39,7 @@ const ManageDataScreen = ({ navigation }) => {
   const [showFacultyModal, setShowFacultyModal] = useState(false);
   const [showMajorModal, setShowMajorModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Load data from backend
   useEffect(() => {
@@ -131,7 +133,7 @@ const ManageDataScreen = ({ navigation }) => {
     }
 
     try {
-      setIsLoading(true);
+      setIsUpdating(true);
       const token = await AsyncStorage.getItem('userToken');
       
       const config = {
@@ -173,14 +175,24 @@ const ManageDataScreen = ({ navigation }) => {
         // Try to use API first
         if (editingItem) {
           await axios.put(`${API_URL}${endpoint}/${editingItem._id || editingItem.id}`, payload, config);
+          console.log('✅ Update successful, reloading data...');
           Alert.alert('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว');
         } else {
           await axios.post(`${API_URL}${endpoint}`, payload, config);
+          console.log('✅ Create successful, reloading data...');
           setShowSuccess(true);
         }
         
-        // Reload data from API
+        // Clear form first
+        setFormData({ name: '', facultyId: '', majorId: '' });
+        setEditingItem(null);
+        
+        // Force reload data from API
         await loadAllData();
+        console.log('✅ Data reloaded successfully');
+        
+        // Force re-render
+        setRefreshKey(prev => prev + 1);
       } catch (apiError) {
         console.log('⚠️ API not available, using local simulation');
         
@@ -289,7 +301,7 @@ const ManageDataScreen = ({ navigation }) => {
       console.error('Error saving data:', error);
       Alert.alert('ไม่สามารถบันทึกได้', 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
-      setIsLoading(false);
+      setIsUpdating(false);
     }
   };
 
@@ -551,7 +563,9 @@ const ManageDataScreen = ({ navigation }) => {
           <Text style={styles.emptyText}>ยังไม่มีข้อมูล</Text>
         ) : (
           <FlatList
+            key={`${currentTab}-${refreshKey}`}
             data={items}
+            extraData={[data, refreshKey]}
             keyExtractor={(item) => (item._id || item.id)?.toString() || item.value}
             renderItem={({ item }) => (
               <View style={styles.listItem}>
@@ -629,12 +643,12 @@ const ManageDataScreen = ({ navigation }) => {
             )}
             
             <TouchableOpacity
-              style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (isLoading || isUpdating) && styles.submitButtonDisabled]}
               onPress={handleSubmit}
-              disabled={isLoading}
+              disabled={isLoading || isUpdating}
             >
               <Text style={styles.submitButtonText}>
-                {isLoading ? 'กำลังบันทึก...' : 
+                {(isLoading || isUpdating) ? 'กำลังบันทึก...' : 
                  editingItem ? 'อัปเดต' : 'เพิ่มข้อมูล'}
               </Text>
             </TouchableOpacity>
