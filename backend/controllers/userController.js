@@ -908,57 +908,40 @@ const getUsersForGroupCreation = asyncHandler(async (req, res) => {
 
 const getMajors = asyncHandler(async (req, res) => {
     try {
-        // อนุญาตให้ทุก user เข้าถึงได้ (ไม่จำกัดแค่ teacher)
-        // const currentUserRole = req.user.role;
+        console.log('Getting majors list...');
         
-        // if (currentUserRole !== 'อาจารย์' && currentUserRole !== 'teacher') {
-        //     return res.status(403).json({ message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงข้อมูลสาขาได้' });
-        // }
+        // ใช้วิธีง่ายๆ: หา users ที่มี major แล้ว populate
+        const users = await User.find({
+            major: { $exists: true, $ne: null },
+            role: { $ne: 'admin' }
+        }).populate('major', 'name').lean();
 
-        // หาสาขาที่มีอยู่และนับจำนวนรหัสกลุ่มเรียนในแต่ละสาขา
-        const majors = await User.aggregate([
-            {
-                $match: {
-                    major: { $exists: true, $ne: null, $ne: '', $ne: '1' },
-                    role: { $ne: 'admin' }
+        console.log('Found users with major:', users.length);
+        
+        // Group by major และนับจำนวน
+        const majorMap = new Map();
+        
+        users.forEach(user => {
+            if (user.major && user.major.name) {
+                const key = user.major._id.toString();
+                if (majorMap.has(key)) {
+                    majorMap.get(key).userCount += 1;
+                } else {
+                    majorMap.set(key, {
+                        major: user.major.name,
+                        majorId: user.major._id,
+                        userCount: 1
+                    });
                 }
-            },
-            {
-                $group: {
-                    _id: '$major',
-                    users: { $addToSet: '$_id' },
-                    classCodes: { 
-                        $addToSet: {
-                            $cond: [
-                                { $ne: ['$classCode', null] },
-                                '$classCode',
-                                '$groupCode'
-                            ]
-                        }
-                    }
-                }
-            },
-            {
-                $project: {
-                    major: '$_id',
-                    userCount: { $size: '$users' },
-                    classCodeCount: { 
-                        $size: {
-                            $filter: {
-                                input: '$classCodes',
-                                cond: { $and: [{ $ne: ['$$this', null] }, { $ne: ['$$this', ''] }, { $ne: ['$$this', '1'] }] }
-                            }
-                        }
-                    },
-                    _id: 0
-                }
-            },
-            {
-                $sort: { major: 1 }
             }
-        ]);
+        });
 
-        console.log(`Found ${majors.length} majors`);
+        // Convert Map to Array และ sort
+        const majors = Array.from(majorMap.values()).sort((a, b) => 
+            a.major.localeCompare(b.major)
+        );
+
+        console.log('Majors result:', majors);
         res.json(majors);
     } catch (error) {
         console.error('Error getting majors:', error);
