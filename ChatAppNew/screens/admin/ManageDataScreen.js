@@ -68,57 +68,57 @@ const ManageDataScreen = ({ navigation }) => {
 
       console.log('✅ Admin data loaded successfully');
 
+      // Transform API data to match component structure
+      const majorsData = {};
+      const groupCodesData = {};
+
+      // Group majors by facultyId
+      (majRes.data.data || []).forEach(major => {
+        if (!majorsData[major.facultyId]) {
+          majorsData[major.facultyId] = [];
+        }
+        majorsData[major.facultyId].push({
+          ...major,
+          id: major._id, // Convert _id to id for compatibility
+        });
+      });
+
+      // Group groupCodes by majorId
+      (groupRes.data.data || []).forEach(groupCode => {
+        if (!groupCodesData[groupCode.majorId]) {
+          groupCodesData[groupCode.majorId] = [];
+        }
+        groupCodesData[groupCode.majorId].push({
+          ...groupCode,
+          id: groupCode._id, // Convert _id to id for compatibility
+        });
+      });
+
       setData({
-        departments: deptRes.data.data || [],
-        faculties: facRes.data.data || [],
-        majors: majRes.data.data || {},
-        groupCodes: groupRes.data.data || {}
+        departments: (deptRes.data.data || []).map(dept => ({
+          ...dept,
+          id: dept._id, // Convert _id to id for compatibility
+        })),
+        faculties: (facRes.data.data || []).map(faculty => ({
+          ...faculty,
+          id: faculty._id, // Convert _id to id for compatibility
+        })),
+        majors: majorsData,
+        groupCodes: groupCodesData
       });
     } catch (error) {
       console.error('Error loading data:', error);
-      console.log('⚠️ Using fallback data due to API error');
+      console.log('⚠️ API not available, using empty state');
       
-      // Use fallback data when API is not available
+      // Set empty state when API is not available
       setData({
-        departments: [
-          { id: '1', name: 'งานการเงิน', createdAt: new Date() },
-          { id: '2', name: 'งานบุคลากร', createdAt: new Date() },
-          { id: '3', name: 'งานทะเบียน', createdAt: new Date() },
-          { id: '4', name: 'กองทุนเงินกู้ กยศ', createdAt: new Date() }
-        ],
-        faculties: [
-          { id: '1', name: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
-        ],
-        majors: {
-          '1': [
-            { id: '1', name: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '2', name: '346 การบัญชี', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '3', name: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '4', name: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
-          ]
-        },
-        groupCodes: {
-          '1': [
-            { id: '1', name: 'DT26721N', majorId: '1', majorName: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '2', name: 'DT26722N', majorId: '1', majorName: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '3', name: 'DT26723N', majorId: '1', majorName: '345 เทคโนโลยีธุรกิจดิจิทัล', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
-          ],
-          '2': [
-            { id: '4', name: 'ACC26701', majorId: '2', majorName: '346 การบัญชี', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '5', name: 'ACC26702', majorId: '2', majorName: '346 การบัญชี', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
-          ],
-          '3': [
-            { id: '6', name: 'MGT26701', majorId: '3', majorName: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '7', name: 'MGT26702', majorId: '3', majorName: '347 การจัดการ', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
-          ],
-          '4': [
-            { id: '8', name: 'MKT26701', majorId: '4', majorName: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() },
-            { id: '9', name: 'MKT26702', majorId: '4', majorName: '348 การตลาด', facultyId: '1', facultyName: 'บริหารธุรกิจและเทคโนโลยีสารสนเทศ', createdAt: new Date() }
-          ]
-        }
+        departments: [],
+        faculties: [],
+        majors: {},
+        groupCodes: {}
       });
 
-      Alert.alert('แจ้งเตือน', 'ไม่สามารถเชื่อมต่อ API ได้ ใช้ข้อมูลสำรองแทน');
+      Alert.alert('แจ้งเตือน', 'ไม่สามารถเชื่อมต่อ API ได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsLoading(false);
     }
@@ -172,7 +172,7 @@ const ManageDataScreen = ({ navigation }) => {
       try {
         // Try to use API first
         if (editingItem) {
-          await axios.put(`${API_URL}${endpoint}/${editingItem.id}`, payload, config);
+          await axios.put(`${API_URL}${endpoint}/${editingItem._id || editingItem.id}`, payload, config);
           Alert.alert('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว');
         } else {
           await axios.post(`${API_URL}${endpoint}`, payload, config);
@@ -317,16 +317,16 @@ const ManageDataScreen = ({ navigation }) => {
               let endpoint = '';
               switch (currentTab) {
                 case 'departments':
-                  endpoint = `/api/admin/departments/${item.id}`;
+                  endpoint = `/api/admin/departments/${item._id || item.id}`;
                   break;
                 case 'faculties':
-                  endpoint = `/api/admin/faculties/${item.id}`;
+                  endpoint = `/api/admin/faculties/${item._id || item.id}`;
                   break;
                 case 'majors':
-                  endpoint = `/api/admin/majors/${item.id}`;
+                  endpoint = `/api/admin/majors/${item._id || item.id}`;
                   break;
                 case 'groups':
-                  endpoint = `/api/admin/group-codes/${item.id}`;
+                  endpoint = `/api/admin/group-codes/${item._id || item.id}`;
                   break;
               }
 
@@ -455,7 +455,7 @@ const ManageDataScreen = ({ navigation }) => {
             >
               <Text style={[styles.dropdownText, !formData.facultyId && styles.placeholderText]}>
                 {formData.facultyId ? 
-                  data.faculties.find(f => f.id === formData.facultyId)?.name || 'เลือกคณะ' : 
+                  data.faculties.find(f => f.id === formData.facultyId || f._id === formData.facultyId)?.name || 'เลือกคณะ' : 
                   'เลือกคณะ'
                 }
               </Text>
@@ -485,7 +485,7 @@ const ManageDataScreen = ({ navigation }) => {
             >
               <Text style={[styles.dropdownText, !formData.facultyId && styles.placeholderText]}>
                 {formData.facultyId ? 
-                  data.faculties.find(f => f.id === formData.facultyId)?.name || 'เลือกคณะ' : 
+                  data.faculties.find(f => f.id === formData.facultyId || f._id === formData.facultyId)?.name || 'เลือกคณะ' : 
                   'เลือกคณะ'
                 }
               </Text>
@@ -500,7 +500,7 @@ const ManageDataScreen = ({ navigation }) => {
             >
               <Text style={[styles.dropdownText, !formData.majorId && styles.placeholderText]}>
                 {formData.majorId ? 
-                  (data.majors[formData.facultyId] || []).find(m => m.id === formData.majorId)?.name || 'เลือกสาขา' : 
+                  (data.majors[formData.facultyId] || []).find(m => m.id === formData.majorId || m._id === formData.majorId)?.name || 'เลือกสาขา' : 
                   'เลือกสาขา'
                 }
               </Text>
@@ -552,16 +552,16 @@ const ManageDataScreen = ({ navigation }) => {
         ) : (
           <FlatList
             data={items}
-            keyExtractor={(item) => item.id?.toString() || item.value}
+            keyExtractor={(item) => (item._id || item.id)?.toString() || item.value}
             renderItem={({ item }) => (
               <View style={styles.listItem}>
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName}>{item.name || item.label}</Text>
-                  {(currentTab === 'majors' || currentTab === 'groups') && item.facultyName && (
-                    <Text style={styles.itemSubtext}>คณะ: {item.facultyName}</Text>
+                  {(currentTab === 'majors' || currentTab === 'groups') && (item.facultyName || item.facultyId?.name) && (
+                    <Text style={styles.itemSubtext}>คณะ: {item.facultyName || item.facultyId?.name}</Text>
                   )}
-                  {currentTab === 'groups' && item.majorName && (
-                    <Text style={styles.itemSubtext}>สาขา: {item.majorName}</Text>
+                  {currentTab === 'groups' && (item.majorName || item.majorId?.name) && (
+                    <Text style={styles.itemSubtext}>สาขา: {item.majorName || item.majorId?.name}</Text>
                   )}
                 </View>
                 
@@ -662,12 +662,12 @@ const ManageDataScreen = ({ navigation }) => {
             </View>
             <FlatList
               data={data.faculties}
-              keyExtractor={(item) => item.id?.toString()}
+              keyExtractor={(item) => (item._id || item.id)?.toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
-                    setFormData({...formData, facultyId: item.id, majorId: ''});
+                    setFormData({...formData, facultyId: item._id || item.id, majorId: ''});
                     setShowFacultyModal(false);
                   }}
                 >
@@ -696,12 +696,12 @@ const ManageDataScreen = ({ navigation }) => {
             </View>
             <FlatList
               data={data.majors[formData.facultyId] || []}
-              keyExtractor={(item) => item.id?.toString()}
+              keyExtractor={(item) => (item._id || item.id)?.toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
-                    setFormData({...formData, majorId: item.id});
+                    setFormData({...formData, majorId: item._id || item.id});
                     setShowMajorModal(false);
                   }}
                 >
