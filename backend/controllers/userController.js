@@ -969,58 +969,44 @@ const getMajors = asyncHandler(async (req, res) => {
 const getClassCodesByMajor = asyncHandler(async (req, res) => {
     try {
         const { major } = req.params;
-        // อนุญาตให้ทุกคนเข้าถึงได้ (ไม่จำกัดแค่ teacher)
+        console.log('Getting class codes for major:', major);
         
-        // หา groupCode ที่มีอยู่ในสาขานั้น พร้อม populate ชื่อจริง
-        const classCodes = await User.aggregate([
-            {
-                $match: {
-                    major: major,
-                    groupCode: { $exists: true, $ne: null },
-                    role: { $ne: 'admin' }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'groupcodes',
-                    localField: 'groupCode',
-                    foreignField: '_id',
-                    as: 'groupCodeInfo'
-                }
-            },
-            {
-                $unwind: {
-                    path: '$groupCodeInfo',
-                    preserveNullAndEmptyArrays: false
-                }
-            },
-            {
-                $group: {
-                    _id: '$groupCode',
-                    classCode: { $first: '$groupCodeInfo.name' },
-                    majorName: { $first: '$groupCodeInfo.majorName' },
-                    year: { $first: '$groupCodeInfo.year' },
-                    semester: { $first: '$groupCodeInfo.semester' },
-                    userCount: { $sum: 1 }
-                }
-            },
-            {
-                $project: {
-                    classCode: 1,
-                    classCodeId: '$_id',
-                    userCount: 1,
-                    majorName: 1,
-                    year: 1,
-                    semester: 1,
-                    _id: 0
-                }
-            },
-            {
-                $sort: { classCode: 1 }
-            }
-        ]);
+        // ใช้วิธีง่ายๆ: หา users ที่มี groupCode ก่อน แล้วค่อย populate
+        const users = await User.find({
+            major: major,
+            groupCode: { $exists: true, $ne: null },
+            role: { $ne: 'admin' }
+        }).populate('groupCode', 'name year semester majorName').lean();
 
-        console.log(`Found ${classCodes.length} class codes for major: ${major}`);
+        console.log('Found users with groupCode:', users.length);
+        
+        // Group by groupCode และนับจำนวน
+        const classCodeMap = new Map();
+        
+        users.forEach(user => {
+            if (user.groupCode && user.groupCode.name) {
+                const key = user.groupCode._id.toString();
+                if (classCodeMap.has(key)) {
+                    classCodeMap.get(key).userCount += 1;
+                } else {
+                    classCodeMap.set(key, {
+                        classCode: user.groupCode.name,
+                        classCodeId: user.groupCode._id,
+                        userCount: 1,
+                        majorName: user.groupCode.majorName,
+                        year: user.groupCode.year,
+                        semester: user.groupCode.semester
+                    });
+                }
+            }
+        });
+
+        // Convert Map to Array และ sort
+        const classCodes = Array.from(classCodeMap.values()).sort((a, b) => 
+            a.classCode.localeCompare(b.classCode)
+        );
+
+        console.log('Class codes result:', classCodes);
         res.json(classCodes);
     } catch (error) {
         console.error('Error getting class codes by major:', error);
