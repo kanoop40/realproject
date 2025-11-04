@@ -33,19 +33,23 @@ const userSchema = new mongoose.Schema({
         default: ''
     },
     faculty: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Faculty',
         required: true
     },
     department: { // หน่วยงาน/คณะ
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department',
         required: true
     },
     major: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Major',
         required: false // ไม่บังคับสำหรับอาจารย์/เจ้าหน้าที่
     },
     groupCode: { // ห้องเรียน
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GroupCode',
         required: false
     },
     avatar: {
