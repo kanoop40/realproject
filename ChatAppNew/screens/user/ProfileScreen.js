@@ -29,8 +29,17 @@ import ImagePickerModal from '../../components_user/ImagePickerModal';
 import PasswordChangeModal from '../../components_user/PasswordChangeModal';
 
 const ProfileScreen = ({ navigation }) => {
-  const { logout } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
+
+  // ตรวจสอบว่าเป็น admin หรือไม่ - ถ้าใช่ให้ redirect ไปหน้า admin
+  useEffect(() => {
+    if (authUser && authUser.role === 'admin') {
+      console.log('🚫 Admin cannot access user profile - redirecting to admin panel');
+      navigation.replace('Admin');
+      return;
+    }
+  }, [authUser, navigation]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // เพิ่ม loading state
   const [showProfileAnimation, setShowProfileAnimation] = useState(false); // สำหรับ profile animation

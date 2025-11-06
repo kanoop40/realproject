@@ -67,6 +67,15 @@ const ChatScreen = ({ route, navigation }) => {
   const { user: authUser, loading: authLoading, login, logout } = useAuth();
   const { socket, joinChatroom } = useSocket();
   const [currentUser, setCurrentUser] = useState(null);
+
+  // ตรวจสอบว่าเป็น admin หรือไม่ - ถ้าใช่ให้ redirect ไปหน้า admin
+  useEffect(() => {
+    if (authUser && authUser.role === 'admin') {
+      console.log('🚫 Admin cannot access user chat - redirecting to admin panel');
+      navigation.replace('Admin');
+      return;
+    }
+  }, [authUser, navigation]);
   const [chats, setChats] = useState([]);
   const [isLoadingChats, setIsLoadingChats] = useState(true); // เพิ่ม loading state สำหรับแชท
 

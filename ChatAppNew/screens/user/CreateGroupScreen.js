@@ -21,6 +21,15 @@ import SuccessTickAnimation from '../../components/SuccessTickAnimation';
 const CreateGroupScreen = ({ navigation }) => {
   const { user: authUser } = useAuth();
   const [groupName, setGroupName] = useState('');
+
+  // ตรวจสอบว่าเป็น admin หรือไม่ - ถ้าใช่ให้ redirect ไปหน้า admin
+  useEffect(() => {
+    if (authUser && authUser.role === 'admin') {
+      console.log('🚫 Admin cannot access create group - redirecting to admin panel');
+      navigation.replace('Admin');
+      return;
+    }
+  }, [authUser, navigation]);
   const [description, setDescription] = useState('');
   const [groupAvatar, setGroupAvatar] = useState(null);
   const [isLoading, setIsLoading] = useState(false);

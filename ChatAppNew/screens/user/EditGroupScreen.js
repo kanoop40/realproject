@@ -24,6 +24,15 @@ const EditGroupScreen = ({ route, navigation }) => {
   const { groupId } = route.params;
   const { user: authUser } = useAuth();
   const [groupInfo, setGroupInfo] = useState(null);
+
+  // ตรวจสอบว่าเป็น admin หรือไม่ - ถ้าใช่ให้ redirect ไปหน้า admin
+  useEffect(() => {
+    if (authUser && authUser.role === 'admin') {
+      console.log('🚫 Admin cannot access edit group - redirecting to admin panel');
+      navigation.replace('Admin');
+      return;
+    }
+  }, [authUser, navigation]);
   const [groupName, setGroupName] = useState('');
   const [groupAvatar, setGroupAvatar] = useState(null);
   const [isLoading, setIsLoading] = useState(false);

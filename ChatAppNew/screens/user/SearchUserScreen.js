@@ -27,6 +27,15 @@ import TabBar from '../../components_user/TabBar';
 const SearchUserScreen = ({ navigation }) => {
   const { user: currentUser } = useAuth();
   const [query, setQuery] = useState('');
+
+  // ตรวจสอบว่าเป็น admin หรือไม่ - ถ้าใช่ให้ redirect ไปหน้า admin
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'admin') {
+      console.log('🚫 Admin cannot access user search - redirecting to admin panel');
+      navigation.replace('Admin');
+      return;
+    }
+  }, [currentUser, navigation]);
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
