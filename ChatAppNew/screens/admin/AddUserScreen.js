@@ -117,11 +117,15 @@ const AddUserScreen = ({ navigation }) => {
 
         setSystemData({
           departments: (deptRes.data.data || []).map(dept => ({
+            _id: dept._id,
+            name: dept.name,
             label: dept.name,
             value: dept._id,
             id: dept._id
           })),
           faculties: (facRes.data.data || []).map(faculty => ({
+            _id: faculty._id,
+            name: faculty.name,
             label: faculty.name,
             value: faculty._id,
             id: faculty._id
@@ -131,6 +135,10 @@ const AddUserScreen = ({ navigation }) => {
         });
         
         console.log('✅ System data loaded successfully');
+        console.log('📊 Departments:', (deptRes.data.data || []).length);
+        console.log('📊 Faculties:', (facRes.data.data || []).length);
+        console.log('📊 Majors:', Object.keys(majorsData).length, 'faculty groups');
+        console.log('📊 GroupCodes:', Object.keys(groupCodesData).length, 'major groups');
       } catch (error) {
         console.error('❌ Error loading system data:', error);
         Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลระบบได้ กรุณาลองใหม่อีกครั้ง');
@@ -143,9 +151,10 @@ const AddUserScreen = ({ navigation }) => {
   }, []);
 
   const selectFaculty = (faculty) => {
+    const facultyId = faculty.value || faculty._id;
     const newFormData = {
       ...formData,
-      faculty: faculty._id,
+      faculty: facultyId,
       major: '',
       groupCode: ''
     };
@@ -165,7 +174,7 @@ const AddUserScreen = ({ navigation }) => {
   const selectMajor = (major) => {
     setFormData({
       ...formData,
-      major: major._id,
+      major: major.value || major._id,
       groupCode: ''
     });
     if (errors.major) setErrors({...errors, major: ''});
@@ -175,7 +184,7 @@ const AddUserScreen = ({ navigation }) => {
   const selectGroup = (group) => {
     setFormData({
       ...formData,
-      groupCode: group._id
+      groupCode: group.value || group._id
     });
     if (errors.groupCode) setErrors({...errors, groupCode: ''});
     setShowGroupModal(false);
@@ -183,24 +192,24 @@ const AddUserScreen = ({ navigation }) => {
 
   const getFacultyLabel = () => {
     if (formData.role === 'staff') {
-      const department = systemData.departments.find(d => d._id === formData.faculty);
+      const department = systemData.departments.find(d => (d.value || d._id) === formData.faculty);
       return department ? department.name : 'เลือกหน่วยงาน';
     } else {
-      const faculty = systemData.faculties.find(f => f._id === formData.faculty);
+      const faculty = systemData.faculties.find(f => (f.value || f._id) === formData.faculty);
       return faculty ? faculty.name : 'เลือกคณะ';
     }
   };
 
   const getMajorLabel = () => {
     const availableMajors = systemData.majors[formData.faculty] || [];
-    const major = availableMajors.find(m => m._id === formData.major);
-    return major ? major.name : 'เลือกสาขา';
+    const major = availableMajors.find(m => (m.value || m._id) === formData.major);
+    return major ? (major.label || major.name) : 'เลือกสาขา';
   };
 
   const getGroupLabel = () => {
     const availableGroups = systemData.groupCodes[formData.major] || [];
-    const group = availableGroups.find(g => g._id === formData.groupCode);
-    return group ? group.name : 'เลือกกลุ่มเรียน';
+    const group = availableGroups.find(g => (g.value || g._id) === formData.groupCode);
+    return group ? (group.label || group.name) : 'เลือกกลุ่มเรียน';
   };
 
   const handleRoleChange = (role) => {
@@ -752,7 +761,7 @@ const AddUserScreen = ({ navigation }) => {
                 systemData.departments : 
                 systemData.faculties
               }
-              keyExtractor={(item) => item._id}
+              keyExtractor={(item, index) => item._id || item.id || `faculty-${index}`}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
@@ -783,13 +792,13 @@ const AddUserScreen = ({ navigation }) => {
             </View>
             <FlatList
               data={systemData.majors[formData.faculty] || []}
-              keyExtractor={(item) => item._id}
+              keyExtractor={(item, index) => item._id || item.value || item.id || `major-${index}`}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => selectMajor(item)}
                 >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
+                  <Text style={styles.modalItemText}>{item.label || item.name}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -814,13 +823,13 @@ const AddUserScreen = ({ navigation }) => {
             </View>
             <FlatList
               data={systemData.groupCodes[formData.major] || []}
-              keyExtractor={(item) => item._id}
+              keyExtractor={(item, index) => item._id || item.value || item.id || `group-${index}`}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => selectGroup(item)}
                 >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
+                  <Text style={styles.modalItemText}>{item.label || item.name}</Text>
                 </TouchableOpacity>
               )}
             />
